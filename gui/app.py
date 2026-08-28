@@ -1,5 +1,8 @@
 import customtkinter as ctk
 
+from gui.views.input_view import InputView
+from gui.views.reader_view import ReaderView
+
 
 class RSVPApp(ctk.CTk):
     """Main application window for the RSVP reader."""
@@ -7,4 +10,20 @@ class RSVPApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("RSVP Reader")
-        self.geometry("600x400")
+        self.geometry("700x500")
+
+        self.input_view = InputView(self, on_start=self._start_reading)
+        self.reader_view = ReaderView(self, on_back=self._show_input)
+
+        self._show_input()
+
+    def _show_input(self) -> None:
+        self.reader_view.pack_forget()
+        self.input_view.pack(fill="both", expand=True)
+
+    def _start_reading(self, raw_text: str) -> None:
+        self.input_view.pack_forget()
+        self.reader_view.pack(fill="both", expand=True)
+        # Placeholder proof the text arrived — real session wiring is next step
+        preview = raw_text.strip()[:40]
+        self.reader_view.set_word(preview if preview else "(no text entered)")
