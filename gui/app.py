@@ -2,6 +2,7 @@ import customtkinter as ctk
 
 from gui.views.input_view import InputView
 from gui.views.reader_view import ReaderView
+from core.reader import ReaderSession
 
 
 class RSVPApp(ctk.CTk):
@@ -22,8 +23,7 @@ class RSVPApp(ctk.CTk):
         self.input_view.pack(fill="both", expand=True)
 
     def _start_reading(self, raw_text: str) -> None:
+        session = ReaderSession(raw_text, wpm=300)  # WPM slider comes in step 5
         self.input_view.pack_forget()
         self.reader_view.pack(fill="both", expand=True)
-        # Placeholder proof the text arrived — real session wiring is next step
-        preview = raw_text.strip()[:40]
-        self.reader_view.set_word(preview if preview else "(no text entered)")
+        self.reader_view.load_session(session)
