@@ -10,12 +10,24 @@ class TranscriptList(ctk.CTkFrame):
 
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=10, pady=10)
-
         ctk.CTkLabel(header, text="List of Transcripts").pack(side="left")
         ctk.CTkButton(header, text="+", width=28, command=self._handle_add).pack(side="right")
 
+        self.entries_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.entries_frame.pack(fill="both", expand=True, padx=5, pady=(0, 5))
+
+    def add_entry(self, transcript) -> None:
+        """Render one transcript as a row in the list."""
+        row = ctk.CTkLabel(
+            self.entries_frame,
+            text=transcript.title,
+            anchor="w",
+            fg_color="#34495E",
+            corner_radius=4,
+        )
+        row.pack(fill="x", pady=2, padx=2, ipady=6)
+
     def _handle_add(self) -> None:
-        # Placeholder — real "add transcript" flow gets wired once we decide where it lives
         if self.on_add:
             self.on_add()
         else:

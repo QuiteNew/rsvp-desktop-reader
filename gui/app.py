@@ -5,6 +5,7 @@ from gui.components.spaces import Spaces
 from gui.components.reading_panel import ReadingPanel
 from gui.components.footer import Footer
 from gui.components.add_transcript_dialog import AddTranscriptDialog
+from core.transcript_store import TranscriptStore
 
 
 class RSVPApp(ctk.CTk):
@@ -17,6 +18,8 @@ class RSVPApp(ctk.CTk):
         super().__init__()
         self.title("RSVP Reader")
         self.geometry("1000x650")
+
+        self.store = TranscriptStore()
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=0, minsize=self.BOTTOM_BAND_HEIGHT)
@@ -38,11 +41,11 @@ class RSVPApp(ctk.CTk):
     def _open_add_transcript_dialog(self) -> None:
         AddTranscriptDialog(
             self,
-            spaces=["General"],  # placeholder until real Space data exists
-            default_space="General",
+            spaces=self.store.spaces,
+            default_space=self.store.default_space,
             on_submit=self._handle_new_transcript,
         )
 
     def _handle_new_transcript(self, title: str, space: str) -> None:
-        # Placeholder — actually appending to a stored transcript list is next step
-        print(f"New transcript created: title={title!r}, space={space!r}")
+        transcript = self.store.add_transcript(title, space)
+        self.transcript_list.add_entry(transcript)

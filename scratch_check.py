@@ -1,9 +1,10 @@
-from core.reader import ReaderSession
+from core.transcript_store import TranscriptStore
 
-raw = "[00:00:01] Welcome to the show. (1:23) Today we're talking about RSVP."
-session = ReaderSession(raw, wpm=400)
+store = TranscriptStore()
+print("Default space:", store.default_space)
 
-while not session.is_finished:
-    f = session.current_frame()
-    print(f"{f.before}[{f.focus}]{f.after}  ({session.current_delay_ms()}ms)")
-    session.advance()
+store.add_transcript("Lecture 3 notes", store.default_space)
+store.add_transcript("Podcast transcript", store.default_space)
+
+for t in store.transcripts:
+    print(t)
