@@ -27,6 +27,17 @@ class TranscriptList(ctk.CTkFrame):
         )
         row.pack(fill="x", pady=2, padx=2, ipady=6)
 
+    def clear(self) -> None:
+        """Remove every rendered row, without touching underlying data."""
+        for widget in self.entries_frame.winfo_children():
+            widget.destroy()
+
+    def render_transcripts(self, transcripts) -> None:
+        """Replace the displayed rows with exactly this set of transcripts."""
+        self.clear()
+        for t in transcripts:
+            self.add_entry(t)
+
     def _handle_add(self) -> None:
         if self.on_add:
             self.on_add()

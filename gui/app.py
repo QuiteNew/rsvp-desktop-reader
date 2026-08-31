@@ -36,6 +36,8 @@ class RSVPApp(ctk.CTk):
         self.spaces = Spaces(
             self,
             current_space=self.store.current_space,
+            on_previous=self._handle_previous_space,
+            on_next=self._handle_next_space,
             on_add=self._open_add_space_dialog,
         )
         self.spaces.grid(row=1, column=0, sticky="nsew")
@@ -47,13 +49,13 @@ class RSVPApp(ctk.CTk):
         AddTranscriptDialog(
             self,
             spaces=self.store.spaces,
-            default_space=self.store.current_space,  # was default_space — now the real active one
+            default_space=self.store.current_space,
             on_submit=self._handle_new_transcript,
         )
 
     def _handle_new_transcript(self, title: str, space: str) -> None:
-        transcript = self.store.add_transcript(title, space)
-        self.transcript_list.add_entry(transcript)
+        self.store.add_transcript(title, space)
+        self._refresh_transcript_list()
 
     def _open_add_space_dialog(self) -> None:
         AddSpaceDialog(self, on_submit=self._handle_new_space)
@@ -61,3 +63,17 @@ class RSVPApp(ctk.CTk):
     def _handle_new_space(self, name: str) -> None:
         current = self.store.add_space(name)
         self.spaces.set_current_space(current)
+        self._refresh_transcript_list()
+
+    def _handle_previous_space(self) -> None:
+        current = self.store.previous_space()
+        self.spaces.set_current_space(current)
+        self._refresh_transcript_list()
+
+    def _handle_next_space(self) -> None:
+        current = self.store.next_space()
+        self.spaces.set_current_space(current)
+        self._refresh_transcript_list()
+
+    def _refresh_transcript_list(self) -> None:
+        self.transcript_list.render_transcripts(self.store.transcripts_in_current_space)
