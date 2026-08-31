@@ -35,9 +35,9 @@ class RSVPApp(ctk.CTk):
 
         self.spaces = Spaces(
             self,
+            spaces=self.store.spaces,
             current_space=self.store.current_space,
-            on_previous=self._handle_previous_space,
-            on_next=self._handle_next_space,
+            on_select=self._handle_space_selected,
             on_add=self._open_add_space_dialog,
         )
         self.spaces.grid(row=1, column=0, sticky="nsew")
@@ -62,16 +62,12 @@ class RSVPApp(ctk.CTk):
 
     def _handle_new_space(self, name: str) -> None:
         current = self.store.add_space(name)
+        self.spaces.update_spaces(self.store.spaces)
         self.spaces.set_current_space(current)
         self._refresh_transcript_list()
 
-    def _handle_previous_space(self) -> None:
-        current = self.store.previous_space()
-        self.spaces.set_current_space(current)
-        self._refresh_transcript_list()
-
-    def _handle_next_space(self) -> None:
-        current = self.store.next_space()
+    def _handle_space_selected(self, name: str) -> None:
+        current = self.store.switch_to_space(name)
         self.spaces.set_current_space(current)
         self._refresh_transcript_list()
 
