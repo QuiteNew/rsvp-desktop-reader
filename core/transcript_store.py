@@ -4,15 +4,11 @@ DEFAULT_SPACE = "General"
 
 
 class TranscriptStore:
-    """In-memory store for spaces and transcripts.
-
-    Backed by nothing but Python lists for now — this will be swapped for
-    real persistence later, but callers (the GUI) go through this interface
-    only, so nothing above it should need to change when that happens.
-    """
+    """In-memory store for spaces and transcripts."""
 
     def __init__(self):
         self._spaces: list[str] = [DEFAULT_SPACE]
+        self._current_space_index = 0
         self._transcripts: list[Transcript] = []
         self._next_id = 1
 
@@ -22,26 +18,28 @@ class TranscriptStore:
 
     @property
     def default_space(self) -> str:
-        """The space used when none is explicitly chosen — always the first one."""
+        """The very first space that ever existed — a fixed anchor."""
         return self._spaces[0]
+
+    @property
+    def current_space(self) -> str:
+        """Whichever space is currently active."""
+        return self._spaces[self._current_space_index]
 
     @property
     def transcripts(self) -> list[Transcript]:
         return list(self._transcripts)
+
+    def add_space(self, name: str) -> str:
+        """Add a new space and switch to it. Ignored if blank or a duplicate."""
+        name = name.strip()
+        if name and name not in self._spaces:
+            self._spaces.append(name)
+            self._current_space_index = len(self._spaces) - 1
+        return self.current_space
 
     def add_transcript(self, title: str, space: str) -> Transcript:
         transcript = Transcript(id=self._next_id, title=title, space=space)
         self._next_id += 1
         self._transcripts.append(transcript)
         return transcript
-
-
-if __name__ == "__main__":
-    store = TranscriptStore()
-    print("Default space:", store.default_space)
-
-    store.add_transcript("Lecture 3 notes", store.default_space)
-    store.add_transcript("Podcast transcript", store.default_space)
-
-    for t in store.transcripts:
-        print(t)
