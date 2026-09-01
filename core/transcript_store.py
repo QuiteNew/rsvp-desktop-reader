@@ -40,7 +40,6 @@ class TranscriptStore:
         return self.current_space
 
     def switch_to_space(self, name: str) -> str:
-        """Switch directly to a space by name, if it exists."""
         if name in self._spaces:
             self._current_space_index = self._spaces.index(name)
         return self.current_space
@@ -50,3 +49,10 @@ class TranscriptStore:
         self._next_id += 1
         self._transcripts.append(transcript)
         return transcript
+
+    def set_transcript_text(self, transcript_id: int, raw_text: str) -> None:
+        """Save pasted text onto an existing transcript, found by id."""
+        for t in self._transcripts:
+            if t.id == transcript_id:
+                t.raw_text = raw_text
+                return

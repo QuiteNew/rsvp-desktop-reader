@@ -27,10 +27,14 @@ class RSVPApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=0, minsize=self.SIDEBAR_WIDTH)
         self.grid_columnconfigure(1, weight=1)
 
-        self.transcript_list = TranscriptList(self, on_add=self._open_add_transcript_dialog)
+        self.transcript_list = TranscriptList(
+            self,
+            on_add=self._open_add_transcript_dialog,
+            on_select=self._handle_open_transcript,
+        )
         self.transcript_list.grid(row=0, column=0, sticky="nsew")
 
-        self.reading_panel = ReadingPanel(self)
+        self.reading_panel = ReadingPanel(self, on_text_submitted=self._handle_text_submitted)
         self.reading_panel.grid(row=0, column=1, sticky="nsew")
 
         self.spaces = Spaces(
@@ -70,6 +74,13 @@ class RSVPApp(ctk.CTk):
         current = self.store.switch_to_space(name)
         self.spaces.set_current_space(current)
         self._refresh_transcript_list()
+
+    def _handle_open_transcript(self, transcript) -> None:
+        self.reading_panel.load_transcript(transcript)
+
+    def _handle_text_submitted(self, transcript, raw_text: str) -> None:
+        self.store.set_transcript_text(transcript.id, raw_text)
+        self.reading_panel.load_transcript(transcript)
 
     def _refresh_transcript_list(self) -> None:
         self.transcript_list.render_transcripts(self.store.transcripts_in_current_space)
