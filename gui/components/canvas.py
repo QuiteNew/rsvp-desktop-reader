@@ -47,6 +47,9 @@ class Canvas(ctk.CTkFrame):
             self._show_reader()
             self.reader_display.load_session(ReaderSession(transcript.raw_text, wpm=transcript.wpm))
         else:
+            # Always start from a clean box — this shared widget otherwise still
+            # holds whatever was left in it from the last transcript that used it.
+            self.input_view.set_text("")
             self._show_input()
 
     def set_maximized(self, is_maximized: bool) -> None:
@@ -65,7 +68,6 @@ class Canvas(ctk.CTkFrame):
             return
         self._detached_transcript_id = self.current_transcript.id
 
-        # Carry over whatever's typed but not yet submitted, so nothing is lost on detach
         draft_text = ""
         if not self.current_transcript.raw_text.strip():
             draft_text = self.input_view.get_text().strip()

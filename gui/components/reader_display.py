@@ -35,6 +35,7 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def _schedule_next(self) -> None:
         if self.session is None or self.session.is_finished:
+            self._after_id = None  # nothing genuinely pending once finished — keep this honest
             return
         delay = self.session.current_delay_ms()
         self._after_id = self.after(delay, self._advance)
@@ -49,4 +50,4 @@ class ReaderDisplay(ctk.CTkFrame):
     def _cancel_pending(self) -> None:
         if self._after_id is not None:
             self.after_cancel(self._after_id)
-            self._after_id = Nones
+            self._after_id = None
