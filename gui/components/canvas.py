@@ -50,7 +50,6 @@ class Canvas(ctk.CTkFrame):
             self._show_input()
 
     def set_maximized(self, is_maximized: bool) -> None:
-        """Called by the app once it's finished showing/hiding the surrounding panels."""
         self.toolbar.set_maximized(is_maximized)
 
     def _handle_text_submitted(self, raw_text: str) -> None:
@@ -65,9 +64,16 @@ class Canvas(ctk.CTkFrame):
         if not self.current_transcript:
             return
         self._detached_transcript_id = self.current_transcript.id
+
+        # Carry over whatever's typed but not yet submitted, so nothing is lost on detach
+        draft_text = ""
+        if not self.current_transcript.raw_text.strip():
+            draft_text = self.input_view.get_text().strip()
+
         self._detached_window = DetachedTranscriptWindow(
             self,
             self.current_transcript,
+            initial_draft_text=draft_text,
             on_text_submitted=self._handle_detached_text_submitted,
             on_closed=self._handle_detached_closed,
         )
@@ -77,18 +83,18 @@ class Canvas(ctk.CTkFrame):
         if self.on_text_submitted:
             self.on_text_submitted(transcript, raw_text)
 
-    def _handle_detached_closed(self) -> None:
+    def _handle_detached_closed(self, draft_text: str = "") -> None:
         self._detached_transcript_id = None
         self._detached_window = None
         if self.current_transcript:
             self.load_transcript(self.current_transcript)
+            if not self.current_transcript.raw_text.strip():
+                self.input_view.set_text(draft_text)
 
     def _handle_reattach(self) -> None:
         if self._detached_window:
             self._detached_window.close()
 
-    # Pack order matters: the toolbar must be (re)packed before content_area,
-    # since content_area's expand=True would otherwise claim all the space first.
     def _layout(self, show_toolbar: bool) -> None:
         self.toolbar.pack_forget()
         self.content_area.pack_forget()
