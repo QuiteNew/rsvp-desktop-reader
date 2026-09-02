@@ -21,6 +21,7 @@ class RSVPApp(ctk.CTk):
         self.geometry("1000x650")
 
         self.store = TranscriptStore()
+        self._focus_mode = False
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=0, minsize=self.BOTTOM_BAND_HEIGHT)
@@ -34,7 +35,11 @@ class RSVPApp(ctk.CTk):
         )
         self.transcript_list.grid(row=0, column=0, sticky="nsew")
 
-        self.reading_panel = ReadingPanel(self, on_text_submitted=self._handle_text_submitted)
+        self.reading_panel = ReadingPanel(
+            self,
+            on_text_submitted=self._handle_text_submitted,
+            on_maximize_toggle=self._toggle_focus_mode,
+        )
         self.reading_panel.grid(row=0, column=1, sticky="nsew")
 
         self.spaces = Spaces(
@@ -84,3 +89,21 @@ class RSVPApp(ctk.CTk):
 
     def _refresh_transcript_list(self) -> None:
         self.transcript_list.render_transcripts(self.store.transcripts_in_current_space)
+
+    def _toggle_focus_mode(self) -> None:
+        self._focus_mode = not self._focus_mode
+
+        if self._focus_mode:
+            self.transcript_list.grid_remove()
+            self.spaces.grid_remove()
+            self.footer.grid_remove()
+            self.grid_columnconfigure(0, minsize=0)
+            self.grid_rowconfigure(1, minsize=0)
+        else:
+            self.transcript_list.grid()
+            self.spaces.grid()
+            self.footer.grid()
+            self.grid_columnconfigure(0, minsize=self.SIDEBAR_WIDTH)
+            self.grid_rowconfigure(1, minsize=self.BOTTOM_BAND_HEIGHT)
+
+        self.reading_panel.set_focus_mode(self._focus_mode)

@@ -3,49 +3,116 @@ import customtkinter as ctk
 from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
+from gui.components.canvas_toolbar import CanvasToolbar
+from gui.components.detached_window import DetachedTranscriptWindow
 
 
 class Canvas(ctk.CTkFrame):
-    """Main reading area: paste-in prompt for empty transcripts, flashing display once text exists."""
+    """Main reading area: toolbar row (when relevant) above whichever content state applies."""
 
-    def __init__(self, master, on_text_submitted=None):
+    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None):
         super().__init__(master, fg_color="#2ECC71", corner_radius=0)
         self.on_text_submitted = on_text_submitted
+        self.on_maximize_toggle = on_maximize_toggle
         self.current_transcript = None
+        self._detached_transcript_id = None
+        self._detached_window = None
 
-        self.empty_label = ctk.CTkLabel(self, text="Select or create a transcript to begin")
-        self.input_view = TranscriptInput(self, on_submit=self._handle_text_submitted)
-        self.reader_display = ReaderDisplay(self)
+        self.toolbar = CanvasToolbar(
+            self, on_maximize_toggle=self._handle_maximize_toggle, on_detach=self._handle_detach
+        )
+        self.content_area = ctk.CTkFrame(self, fg_color="transparent")
+
+        self.empty_label = ctk.CTkLabel(self.content_area, text="Select or create a transcript to begin")
+        self.input_view = TranscriptInput(self.content_area, on_submit=self._handle_text_submitted)
+        self.reader_display = ReaderDisplay(self.content_area)
+
+        self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
+        ctk.CTkLabel(
+            self.detached_placeholder, text="Transcript window detached", text_color="gray60"
+        ).pack(expand=True, pady=(0, 10))
+        ctk.CTkButton(
+            self.detached_placeholder, text="✕  Bring back", width=130, command=self._handle_reattach
+        ).pack()
 
         self._show_empty()
 
     def load_transcript(self, transcript) -> None:
-        """Show the right state — paste-in or reading — for the given transcript."""
         self.reader_display.stop()
         self.current_transcript = transcript
 
-        if transcript.raw_text.strip():
+        if transcript.id == self._detached_transcript_id:
+            self._show_detached_placeholder()
+        elif transcript.raw_text.strip():
             self._show_reader()
-            session = ReaderSession(transcript.raw_text, wpm=transcript.wpm)
-            self.reader_display.load_session(session)
+            self.reader_display.load_session(ReaderSession(transcript.raw_text, wpm=transcript.wpm))
         else:
             self._show_input()
+
+    def set_maximized(self, is_maximized: bool) -> None:
+        """Called by the app once it's finished showing/hiding the surrounding panels."""
+        self.toolbar.set_maximized(is_maximized)
 
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.on_text_submitted and self.current_transcript:
             self.on_text_submitted(self.current_transcript, raw_text)
 
+    def _handle_maximize_toggle(self) -> None:
+        if self.on_maximize_toggle:
+            self.on_maximize_toggle()
+
+    def _handle_detach(self) -> None:
+        if not self.current_transcript:
+            return
+        self._detached_transcript_id = self.current_transcript.id
+        self._detached_window = DetachedTranscriptWindow(
+            self,
+            self.current_transcript,
+            on_text_submitted=self._handle_detached_text_submitted,
+            on_closed=self._handle_detached_closed,
+        )
+        self._show_detached_placeholder()
+
+    def _handle_detached_text_submitted(self, transcript, raw_text: str) -> None:
+        if self.on_text_submitted:
+            self.on_text_submitted(transcript, raw_text)
+
+    def _handle_detached_closed(self) -> None:
+        self._detached_transcript_id = None
+        self._detached_window = None
+        if self.current_transcript:
+            self.load_transcript(self.current_transcript)
+
+    def _handle_reattach(self) -> None:
+        if self._detached_window:
+            self._detached_window.close()
+
+    # Pack order matters: the toolbar must be (re)packed before content_area,
+    # since content_area's expand=True would otherwise claim all the space first.
+    def _layout(self, show_toolbar: bool) -> None:
+        self.toolbar.pack_forget()
+        self.content_area.pack_forget()
+        if show_toolbar:
+            self.toolbar.pack(anchor="ne", padx=10, pady=10)
+        self.content_area.pack(fill="both", expand=True)
+
+    def _show_content(self, widget) -> None:
+        for other in (self.empty_label, self.input_view, self.reader_display, self.detached_placeholder):
+            other.pack_forget()
+        widget.pack(fill="both", expand=True)
+
     def _show_empty(self) -> None:
-        self.input_view.pack_forget()
-        self.reader_display.pack_forget()
-        self.empty_label.pack(expand=True)
+        self._layout(show_toolbar=False)
+        self._show_content(self.empty_label)
 
     def _show_input(self) -> None:
-        self.empty_label.pack_forget()
-        self.reader_display.pack_forget()
-        self.input_view.pack(fill="both", expand=True)
+        self._layout(show_toolbar=True)
+        self._show_content(self.input_view)
 
     def _show_reader(self) -> None:
-        self.empty_label.pack_forget()
-        self.input_view.pack_forget()
-        self.reader_display.pack(fill="both", expand=True)
+        self._layout(show_toolbar=True)
+        self._show_content(self.reader_display)
+
+    def _show_detached_placeholder(self) -> None:
+        self._layout(show_toolbar=False)
+        self._show_content(self.detached_placeholder)
