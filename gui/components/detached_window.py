@@ -8,11 +8,12 @@ from gui.components.reader_display import ReaderDisplay
 class DetachedTranscriptWindow(ctk.CTkToplevel):
     """A standalone window showing one transcript, separate from the main app window."""
 
-    def __init__(self, master, transcript, on_text_submitted, on_closed, initial_draft_text=""):
+    def __init__(self, master, transcript, on_text_submitted, on_closed, on_position_changed=None, initial_draft_text=""):
         super().__init__(master)
         self.transcript = transcript
         self.on_text_submitted = on_text_submitted
         self.on_closed = on_closed
+        self.on_position_changed = on_position_changed
 
         self.title(transcript.title)
         self.geometry("500x350")
@@ -21,12 +22,11 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.input_view = TranscriptInput(
             self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text
         )
-        self.reader_display = ReaderDisplay(self)
+        self.reader_display = ReaderDisplay(self, on_position_changed=self._handle_position_changed)
 
         self._render_current_state()
 
     def get_draft_text(self) -> str:
-        """Whatever's currently typed in this window's paste box, submitted or not."""
         return self.input_view.get_text()
 
     def _render_current_state(self) -> None:
@@ -34,7 +34,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self.input_view.pack_forget()
             self.reader_display.pack(fill="both", expand=True)
             self.reader_display.load_session(
-                ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm)
+                ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position)
             )
         else:
             self.reader_display.pack_forget()
@@ -43,6 +43,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _handle_text_submitted(self, raw_text: str) -> None:
         self.on_text_submitted(self.transcript, raw_text)
         self._render_current_state()
+
+    def _handle_position_changed(self, index: int) -> None:
+        if self.on_position_changed:
+            self.on_position_changed(self.transcript, index)
 
     def close(self) -> None:
         draft_text = ""

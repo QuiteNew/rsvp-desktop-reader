@@ -7,12 +7,14 @@ from core.timing import wpm_to_delay_ms
 class ReaderSession:
     """Holds a tokenized, ORP-split transcript and tracks playback position."""
 
-    def __init__(self, raw_text: str, wpm: int = 300):
+    def __init__(self, raw_text: str, wpm: int = 300, start_index: int = 0):
         clean = clean_transcript(raw_text)
         words = tokenize(clean)
         self.frames: list[ORPWord] = [split_at_orp(w) for w in words]
         self.wpm = wpm
-        self.index = 0
+        # Clamped defensively — guards against a stale saved position ever
+        # exceeding the word count (not currently reachable, but cheap to guard)
+        self.index = min(start_index, len(self.frames))
 
     @property
     def total_words(self) -> int:
@@ -23,26 +25,19 @@ class ReaderSession:
         return self.index >= self.total_words
 
     def current_frame(self) -> ORPWord | None:
-        """Return the ORPWord at the current position, or None if finished."""
         if self.is_finished:
             return None
         return self.frames[self.index]
 
     def current_delay_ms(self) -> int:
-        """Delay before advancing, based on the live WPM setting."""
         return wpm_to_delay_ms(self.wpm)
 
     def advance(self) -> None:
-        """Move to the next word."""
         if not self.is_finished:
             self.index += 1
 
     def reset(self) -> None:
-        """Return to the first word."""
         self.index = 0
 
     def set_wpm(self, new_wpm: int) -> None:
-        """Update reading speed live (e.g. from a GUI slider)."""
         self.wpm = new_wpm
-
-

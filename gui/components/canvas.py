@@ -10,10 +10,11 @@ from gui.components.detached_window import DetachedTranscriptWindow
 class Canvas(ctk.CTkFrame):
     """Main reading area: toolbar row (when relevant) above whichever content state applies."""
 
-    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None):
+    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None):
         super().__init__(master, fg_color="#2ECC71", corner_radius=0)
         self.on_text_submitted = on_text_submitted
         self.on_maximize_toggle = on_maximize_toggle
+        self.on_position_changed = on_position_changed
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_window = None
@@ -25,7 +26,7 @@ class Canvas(ctk.CTkFrame):
 
         self.empty_label = ctk.CTkLabel(self.content_area, text="Select or create a transcript to begin")
         self.input_view = TranscriptInput(self.content_area, on_submit=self._handle_text_submitted)
-        self.reader_display = ReaderDisplay(self.content_area)
+        self.reader_display = ReaderDisplay(self.content_area, on_position_changed=self._handle_position_changed)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -45,10 +46,10 @@ class Canvas(ctk.CTkFrame):
             self._show_detached_placeholder()
         elif transcript.raw_text.strip():
             self._show_reader()
-            self.reader_display.load_session(ReaderSession(transcript.raw_text, wpm=transcript.wpm))
+            self.reader_display.load_session(
+                ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position)
+            )
         else:
-            # Always start from a clean box — this shared widget otherwise still
-            # holds whatever was left in it from the last transcript that used it.
             self.input_view.set_text("")
             self._show_input()
 
@@ -58,6 +59,10 @@ class Canvas(ctk.CTkFrame):
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.on_text_submitted and self.current_transcript:
             self.on_text_submitted(self.current_transcript, raw_text)
+
+    def _handle_position_changed(self, index: int) -> None:
+        if self.on_position_changed and self.current_transcript:
+            self.on_position_changed(self.current_transcript, index)
 
     def _handle_maximize_toggle(self) -> None:
         if self.on_maximize_toggle:
@@ -78,6 +83,7 @@ class Canvas(ctk.CTkFrame):
             initial_draft_text=draft_text,
             on_text_submitted=self._handle_detached_text_submitted,
             on_closed=self._handle_detached_closed,
+            on_position_changed=self.on_position_changed,  # same (transcript, index) shape — passed straight through
         )
         self._show_detached_placeholder()
 

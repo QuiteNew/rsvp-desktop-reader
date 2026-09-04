@@ -51,8 +51,14 @@ class TranscriptStore:
         return transcript
 
     def set_transcript_text(self, transcript_id: int, raw_text: str) -> None:
-        """Save pasted text onto an existing transcript, found by id."""
         for t in self._transcripts:
             if t.id == transcript_id:
                 t.raw_text = raw_text
+                return
+
+    def set_transcript_position(self, transcript_id: int, position: int) -> None:
+        """Save the current reading position onto an existing transcript, found by id."""
+        for t in self._transcripts:
+            if t.id == transcript_id:
+                t.position = position
                 return

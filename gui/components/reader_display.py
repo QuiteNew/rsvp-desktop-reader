@@ -5,10 +5,11 @@ from core.reader import ReaderSession
 class ReaderDisplay(ctk.CTkFrame):
     """Displays the flashing word for a loaded ReaderSession."""
 
-    def __init__(self, master):
+    def __init__(self, master, on_position_changed=None):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
         self._after_id: str | None = None
+        self.on_position_changed = on_position_changed
 
         self.word_label = ctk.CTkLabel(self, text="", font=("Arial", 32))
         self.word_label.pack(expand=True)
@@ -20,7 +21,6 @@ class ReaderDisplay(ctk.CTkFrame):
         self._schedule_next()
 
     def stop(self) -> None:
-        """Cancel any pending timer without destroying the widget — call before navigating away."""
         self._cancel_pending()
         self.session = None
 
@@ -35,7 +35,7 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def _schedule_next(self) -> None:
         if self.session is None or self.session.is_finished:
-            self._after_id = None  # nothing genuinely pending once finished — keep this honest
+            self._after_id = None
             return
         delay = self.session.current_delay_ms()
         self._after_id = self.after(delay, self._advance)
@@ -45,7 +45,12 @@ class ReaderDisplay(ctk.CTkFrame):
             return
         self.session.advance()
         self._show_current_frame()
+        self._report_position()
         self._schedule_next()
+
+    def _report_position(self) -> None:
+        if self.on_position_changed and self.session:
+            self.on_position_changed(self.session.index)
 
     def _cancel_pending(self) -> None:
         if self._after_id is not None:

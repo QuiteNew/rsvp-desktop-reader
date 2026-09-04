@@ -9,3 +9,4 @@ class Transcript:
     space: str
     raw_text: str = ""
     wpm: int = 300
+    position: int = 0
