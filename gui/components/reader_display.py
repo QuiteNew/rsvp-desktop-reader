@@ -9,6 +9,7 @@ class ReaderDisplay(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
         self._after_id: str | None = None
+        self._is_paused = False
         self.on_position_changed = on_position_changed
 
         self.word_label = ctk.CTkLabel(self, text="", font=("Arial", 32))
@@ -17,12 +18,37 @@ class ReaderDisplay(ctk.CTkFrame):
     def load_session(self, session: ReaderSession) -> None:
         self._cancel_pending()
         self.session = session
+        self._is_paused = False
         self._show_current_frame()
         self._schedule_next()
 
     def stop(self) -> None:
+        """Cancel any pending timer without destroying the widget — call before navigating away."""
         self._cancel_pending()
         self.session = None
+        self._is_paused = False
+
+    def toggle_pause(self) -> bool:
+        """Toggle between playing and paused. Returns the new paused state."""
+        if self.session is None or self.session.is_finished:
+            return self._is_paused
+        self._is_paused = not self._is_paused
+        if self._is_paused:
+            self._cancel_pending()
+        else:
+            self._schedule_next()
+        return self._is_paused
+
+    def restart(self) -> None:
+        """Jump back to the first word and resume playing, regardless of prior pause state."""
+        if self.session is None:
+            return
+        self._cancel_pending()
+        self.session.reset()
+        self._is_paused = False
+        self._show_current_frame()
+        self._report_position()
+        self._schedule_next()
 
     def _show_current_frame(self) -> None:
         if self.session is None:
@@ -34,7 +60,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self.word_label.configure(text=f"{frame.before}{frame.focus}{frame.after}")
 
     def _schedule_next(self) -> None:
-        if self.session is None or self.session.is_finished:
+        if self.session is None or self.session.is_finished or self._is_paused:
             self._after_id = None
             return
         delay = self.session.current_delay_ms()

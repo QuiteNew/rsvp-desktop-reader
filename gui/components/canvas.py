@@ -20,7 +20,11 @@ class Canvas(ctk.CTkFrame):
         self._detached_window = None
 
         self.toolbar = CanvasToolbar(
-            self, on_maximize_toggle=self._handle_maximize_toggle, on_detach=self._handle_detach
+            self,
+            on_pause_toggle=self._handle_pause_toggle,
+            on_restart=self._handle_restart,
+            on_maximize_toggle=self._handle_maximize_toggle,
+            on_detach=self._handle_detach,
         )
         self.content_area = ctk.CTkFrame(self, fg_color="transparent")
 
@@ -46,6 +50,7 @@ class Canvas(ctk.CTkFrame):
             self._show_detached_placeholder()
         elif transcript.raw_text.strip():
             self._show_reader()
+            self.toolbar.set_paused(False)
             self.reader_display.load_session(
                 ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position)
             )
@@ -63,6 +68,14 @@ class Canvas(ctk.CTkFrame):
     def _handle_position_changed(self, index: int) -> None:
         if self.on_position_changed and self.current_transcript:
             self.on_position_changed(self.current_transcript, index)
+
+    def _handle_pause_toggle(self) -> None:
+        is_paused = self.reader_display.toggle_pause()
+        self.toolbar.set_paused(is_paused)
+
+    def _handle_restart(self) -> None:
+        self.reader_display.restart()
+        self.toolbar.set_paused(False)
 
     def _handle_maximize_toggle(self) -> None:
         if self.on_maximize_toggle:
@@ -83,7 +96,7 @@ class Canvas(ctk.CTkFrame):
             initial_draft_text=draft_text,
             on_text_submitted=self._handle_detached_text_submitted,
             on_closed=self._handle_detached_closed,
-            on_position_changed=self.on_position_changed,  # same (transcript, index) shape — passed straight through
+            on_position_changed=self.on_position_changed,
         )
         self._show_detached_placeholder()
 

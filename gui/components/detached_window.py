@@ -3,6 +3,7 @@ import customtkinter as ctk
 from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
+from gui.components.canvas_toolbar import CanvasToolbar
 
 
 class DetachedTranscriptWindow(ctk.CTkToplevel):
@@ -19,6 +20,15 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.geometry("500x350")
         self.protocol("WM_DELETE_WINDOW", self.close)
 
+        # No maximize/detach here — neither makes sense from inside an already-detached window
+        self.toolbar = CanvasToolbar(
+            self,
+            on_pause_toggle=self._handle_pause_toggle,
+            on_restart=self._handle_restart,
+            show_maximize=False,
+            show_detach=False,
+        )
+
         self.input_view = TranscriptInput(
             self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text
         )
@@ -30,14 +40,18 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         return self.input_view.get_text()
 
     def _render_current_state(self) -> None:
+        self.toolbar.pack_forget()
+        self.input_view.pack_forget()
+        self.reader_display.pack_forget()
+
         if self.transcript.raw_text.strip():
-            self.input_view.pack_forget()
+            self.toolbar.pack(anchor="ne", padx=10, pady=10)
+            self.toolbar.set_paused(False)
             self.reader_display.pack(fill="both", expand=True)
             self.reader_display.load_session(
                 ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position)
             )
         else:
-            self.reader_display.pack_forget()
             self.input_view.pack(fill="both", expand=True)
 
     def _handle_text_submitted(self, raw_text: str) -> None:
@@ -48,7 +62,16 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self.on_position_changed:
             self.on_position_changed(self.transcript, index)
 
+    def _handle_pause_toggle(self) -> None:
+        is_paused = self.reader_display.toggle_pause()
+        self.toolbar.set_paused(is_paused)
+
+    def _handle_restart(self) -> None:
+        self.reader_display.restart()
+        self.toolbar.set_paused(False)
+
     def close(self) -> None:
+        self.reader_display.stop()  # cancel any pending timer before this window is destroyed
         draft_text = ""
         if not self.transcript.raw_text.strip():
             draft_text = self.get_draft_text().strip()
