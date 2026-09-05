@@ -18,6 +18,8 @@ class Canvas(ctk.CTkFrame):
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_window = None
+        self._input_currently_shown = False
+        self._drafts: dict[int, str] = {}  # unsubmitted paste-box text, keyed by transcript id
 
         self.toolbar = CanvasToolbar(
             self,
@@ -43,6 +45,7 @@ class Canvas(ctk.CTkFrame):
         self._show_empty()
 
     def load_transcript(self, transcript) -> None:
+        self._capture_current_draft()
         self.reader_display.stop()
         self.current_transcript = transcript
 
@@ -55,11 +58,17 @@ class Canvas(ctk.CTkFrame):
                 ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position)
             )
         else:
-            self.input_view.set_text("")
+            self.input_view.set_text(self._drafts.get(transcript.id, ""))
             self._show_input()
 
     def set_maximized(self, is_maximized: bool) -> None:
         self.toolbar.set_maximized(is_maximized)
+
+    def _capture_current_draft(self) -> None:
+        """Save whatever's currently typed against the transcript it actually
+        belongs to, before switching away reuses this same widget for another one."""
+        if self._input_currently_shown and self.current_transcript:
+            self._drafts[self.current_transcript.id] = self.input_view.get_text().strip()
 
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.on_text_submitted and self.current_transcript:
@@ -107,10 +116,10 @@ class Canvas(ctk.CTkFrame):
     def _handle_detached_closed(self, draft_text: str = "") -> None:
         self._detached_transcript_id = None
         self._detached_window = None
+        if self.current_transcript and not self.current_transcript.raw_text.strip():
+            self._drafts[self.current_transcript.id] = draft_text
         if self.current_transcript:
             self.load_transcript(self.current_transcript)
-            if not self.current_transcript.raw_text.strip():
-                self.input_view.set_text(draft_text)
 
     def _handle_reattach(self) -> None:
         if self._detached_window:
@@ -129,17 +138,21 @@ class Canvas(ctk.CTkFrame):
         widget.pack(fill="both", expand=True)
 
     def _show_empty(self) -> None:
+        self._input_currently_shown = False
         self._layout(show_toolbar=False)
         self._show_content(self.empty_label)
 
     def _show_input(self) -> None:
+        self._input_currently_shown = True
         self._layout(show_toolbar=True)
         self._show_content(self.input_view)
 
     def _show_reader(self) -> None:
+        self._input_currently_shown = False
         self._layout(show_toolbar=True)
         self._show_content(self.reader_display)
 
     def _show_detached_placeholder(self) -> None:
+        self._input_currently_shown = False
         self._layout(show_toolbar=False)
         self._show_content(self.detached_placeholder)
