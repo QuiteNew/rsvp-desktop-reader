@@ -20,7 +20,6 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.geometry("500x350")
         self.protocol("WM_DELETE_WINDOW", self.close)
 
-        # No maximize/detach here — neither makes sense from inside an already-detached window
         self.toolbar = CanvasToolbar(
             self,
             on_pause_toggle=self._handle_pause_toggle,
@@ -47,6 +46,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self.transcript.raw_text.strip():
             self.toolbar.pack(anchor="ne", padx=10, pady=10)
             self.toolbar.set_paused(False)
+            self.reader_display.set_colors(self.transcript.font_color, self.transcript.highlight_color, self.transcript.background_color)
             self.reader_display.pack(fill="both", expand=True)
             self.reader_display.load_session(
                 ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position)
@@ -71,7 +71,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.toolbar.set_paused(False)
 
     def close(self) -> None:
-        self.reader_display.stop()  # cancel any pending timer before this window is destroyed
+        self.reader_display.stop()
         draft_text = ""
         if not self.transcript.raw_text.strip():
             draft_text = self.get_draft_text().strip()

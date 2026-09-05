@@ -38,3 +38,9 @@ class ReadingPanel(ctk.CTkFrame):
             self.header.grid()
             self.grid_rowconfigure(0, minsize=self.HEADER_HEIGHT)
         self.canvas.set_maximized(is_focused)
+
+    def set_wpm(self, wpm: int) -> None:
+        self.canvas.set_wpm(wpm)
+
+    def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
+        self.canvas.set_colors(font_color, highlight_color, background_color)

@@ -19,7 +19,7 @@ class Canvas(ctk.CTkFrame):
         self._detached_transcript_id = None
         self._detached_window = None
         self._input_currently_shown = False
-        self._drafts: dict[int, str] = {}  # unsubmitted paste-box text, keyed by transcript id
+        self._drafts: dict[int, str] = {}
 
         self.toolbar = CanvasToolbar(
             self,
@@ -54,6 +54,7 @@ class Canvas(ctk.CTkFrame):
         elif transcript.raw_text.strip():
             self._show_reader()
             self.toolbar.set_paused(False)
+            self.reader_display.set_colors(transcript.font_color, transcript.highlight_color, transcript.background_color)
             self.reader_display.load_session(
                 ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position)
             )
@@ -64,9 +65,18 @@ class Canvas(ctk.CTkFrame):
     def set_maximized(self, is_maximized: bool) -> None:
         self.toolbar.set_maximized(is_maximized)
 
+    def set_wpm(self, wpm: int) -> None:
+        """Apply live to whichever view(s) are currently showing this transcript."""
+        self.reader_display.set_wpm(wpm)
+        if self._detached_window:
+            self._detached_window.reader_display.set_wpm(wpm)
+
+    def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
+        self.reader_display.set_colors(font_color, highlight_color, background_color)
+        if self._detached_window:
+            self._detached_window.reader_display.set_colors(font_color, highlight_color, background_color)
+
     def _capture_current_draft(self) -> None:
-        """Save whatever's currently typed against the transcript it actually
-        belongs to, before switching away reuses this same widget for another one."""
         if self._input_currently_shown and self.current_transcript:
             self._drafts[self.current_transcript.id] = self.input_view.get_text().strip()
 

@@ -50,15 +50,38 @@ class TranscriptStore:
         self._transcripts.append(transcript)
         return transcript
 
-    def set_transcript_text(self, transcript_id: int, raw_text: str) -> None:
+    def _find_transcript(self, transcript_id: int) -> Transcript | None:
         for t in self._transcripts:
             if t.id == transcript_id:
-                t.raw_text = raw_text
-                return
+                return t
+        return None
+
+    def set_transcript_text(self, transcript_id: int, raw_text: str) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.raw_text = raw_text
 
     def set_transcript_position(self, transcript_id: int, position: int) -> None:
-        """Save the current reading position onto an existing transcript, found by id."""
-        for t in self._transcripts:
-            if t.id == transcript_id:
-                t.position = position
-                return
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.position = position
+
+    def set_transcript_wpm(self, transcript_id: int, wpm: int) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.wpm = wpm
+
+    def set_transcript_font_color(self, transcript_id: int, color: str) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.font_color = color
+
+    def set_transcript_highlight_color(self, transcript_id: int, color: str) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.highlight_color = color
+
+    def set_transcript_background_color(self, transcript_id: int, color: str) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.background_color = color
