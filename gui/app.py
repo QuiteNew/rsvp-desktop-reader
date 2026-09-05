@@ -41,6 +41,7 @@ class RSVPApp(ctk.CTk):
             on_text_submitted=self._handle_text_submitted,
             on_maximize_toggle=self._toggle_focus_mode,
             on_position_changed=self._handle_position_changed,
+            on_pause_changed=self._handle_pause_changed,
         )
         self.reading_panel.grid(row=0, column=1, sticky="nsew")
 
@@ -99,6 +100,9 @@ class RSVPApp(ctk.CTk):
 
     def _handle_position_changed(self, transcript, index: int) -> None:
         self.store.set_transcript_position(transcript.id, index)
+
+    def _handle_pause_changed(self, transcript, is_paused: bool) -> None:
+        self.store.set_transcript_paused(transcript.id, is_paused)
 
     def _handle_wpm_changed(self, wpm: int) -> None:
         if not self._current_transcript:

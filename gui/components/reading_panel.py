@@ -9,7 +9,7 @@ class ReadingPanel(ctk.CTkFrame):
 
     HEADER_HEIGHT = 50
 
-    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None):
+    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None, on_pause_changed=None):
         super().__init__(master, corner_radius=0)
         self.grid_rowconfigure(0, weight=0, minsize=self.HEADER_HEIGHT)
         self.grid_rowconfigure(1, weight=1)
@@ -23,6 +23,7 @@ class ReadingPanel(ctk.CTkFrame):
             on_text_submitted=on_text_submitted,
             on_maximize_toggle=on_maximize_toggle,
             on_position_changed=on_position_changed,
+            on_pause_changed=on_pause_changed,
         )
         self.canvas.grid(row=1, column=0, sticky="nsew")
 

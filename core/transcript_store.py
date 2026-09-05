@@ -66,6 +66,11 @@ class TranscriptStore:
         if t:
             t.position = position
 
+    def set_transcript_paused(self, transcript_id: int, is_paused: bool) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.is_paused = is_paused
+
     def set_transcript_wpm(self, transcript_id: int, wpm: int) -> None:
         t = self._find_transcript(transcript_id)
         if t:

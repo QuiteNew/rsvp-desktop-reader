@@ -13,3 +13,4 @@ class Transcript:
     font_color: str = "#FFFFFF"
     highlight_color: str = "#E74C3C"
     background_color: str = "#1E1E1E"
+    is_paused: bool = False

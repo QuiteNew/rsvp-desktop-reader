@@ -9,12 +9,13 @@ from gui.components.canvas_toolbar import CanvasToolbar
 class DetachedTranscriptWindow(ctk.CTkToplevel):
     """A standalone window showing one transcript, separate from the main app window."""
 
-    def __init__(self, master, transcript, on_text_submitted, on_closed, on_position_changed=None, initial_draft_text=""):
+    def __init__(self, master, transcript, on_text_submitted, on_closed, on_position_changed=None, on_pause_changed=None, initial_draft_text=""):
         super().__init__(master)
         self.transcript = transcript
         self.on_text_submitted = on_text_submitted
         self.on_closed = on_closed
         self.on_position_changed = on_position_changed
+        self.on_pause_changed = on_pause_changed
 
         self.title(transcript.title)
         self.geometry("500x350")
@@ -45,11 +46,12 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
 
         if self.transcript.raw_text.strip():
             self.toolbar.pack(anchor="ne", padx=10, pady=10)
-            self.toolbar.set_paused(False)
+            self.toolbar.set_paused(self.transcript.is_paused)
             self.reader_display.set_colors(self.transcript.font_color, self.transcript.highlight_color, self.transcript.background_color)
             self.reader_display.pack(fill="both", expand=True)
             self.reader_display.load_session(
-                ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position)
+                ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position),
+                start_paused=self.transcript.is_paused,
             )
         else:
             self.input_view.pack(fill="both", expand=True)
@@ -62,13 +64,19 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self.on_position_changed:
             self.on_position_changed(self.transcript, index)
 
+    def _handle_pause_changed(self, is_paused: bool) -> None:
+        if self.on_pause_changed:
+            self.on_pause_changed(self.transcript, is_paused)
+
     def _handle_pause_toggle(self) -> None:
         is_paused = self.reader_display.toggle_pause()
         self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
 
     def _handle_restart(self) -> None:
         self.reader_display.restart()
         self.toolbar.set_paused(False)
+        self._handle_pause_changed(False)
 
     def close(self) -> None:
         self.reader_display.stop()

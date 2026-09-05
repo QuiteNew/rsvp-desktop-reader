@@ -10,11 +10,12 @@ from gui.components.detached_window import DetachedTranscriptWindow
 class Canvas(ctk.CTkFrame):
     """Main reading area: toolbar row (when relevant) above whichever content state applies."""
 
-    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None):
+    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None, on_pause_changed=None):
         super().__init__(master, fg_color="#2ECC71", corner_radius=0)
         self.on_text_submitted = on_text_submitted
         self.on_maximize_toggle = on_maximize_toggle
         self.on_position_changed = on_position_changed
+        self.on_pause_changed = on_pause_changed
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_window = None
@@ -53,10 +54,11 @@ class Canvas(ctk.CTkFrame):
             self._show_detached_placeholder()
         elif transcript.raw_text.strip():
             self._show_reader()
-            self.toolbar.set_paused(False)
+            self.toolbar.set_paused(transcript.is_paused)
             self.reader_display.set_colors(transcript.font_color, transcript.highlight_color, transcript.background_color)
             self.reader_display.load_session(
-                ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position)
+                ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position),
+                start_paused=transcript.is_paused,
             )
         else:
             self.input_view.set_text(self._drafts.get(transcript.id, ""))
@@ -66,7 +68,6 @@ class Canvas(ctk.CTkFrame):
         self.toolbar.set_maximized(is_maximized)
 
     def set_wpm(self, wpm: int) -> None:
-        """Apply live to whichever view(s) are currently showing this transcript."""
         self.reader_display.set_wpm(wpm)
         if self._detached_window:
             self._detached_window.reader_display.set_wpm(wpm)
@@ -88,13 +89,19 @@ class Canvas(ctk.CTkFrame):
         if self.on_position_changed and self.current_transcript:
             self.on_position_changed(self.current_transcript, index)
 
+    def _handle_pause_changed(self, is_paused: bool) -> None:
+        if self.on_pause_changed and self.current_transcript:
+            self.on_pause_changed(self.current_transcript, is_paused)
+
     def _handle_pause_toggle(self) -> None:
         is_paused = self.reader_display.toggle_pause()
         self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
 
     def _handle_restart(self) -> None:
         self.reader_display.restart()
         self.toolbar.set_paused(False)
+        self._handle_pause_changed(False)
 
     def _handle_maximize_toggle(self) -> None:
         if self.on_maximize_toggle:
@@ -116,6 +123,7 @@ class Canvas(ctk.CTkFrame):
             on_text_submitted=self._handle_detached_text_submitted,
             on_closed=self._handle_detached_closed,
             on_position_changed=self.on_position_changed,
+            on_pause_changed=self.on_pause_changed,
         )
         self._show_detached_placeholder()
 

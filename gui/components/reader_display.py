@@ -31,10 +31,10 @@ class ReaderDisplay(ctk.CTkFrame):
         self.after_label = ctk.CTkLabel(self.word_row, text="", font=plain_font, text_color=self.DEFAULT_FONT_COLOR)
         self.after_label.pack(side="left")
 
-    def load_session(self, session: ReaderSession) -> None:
+    def load_session(self, session: ReaderSession, start_paused: bool = False) -> None:
         self._cancel_pending()
         self.session = session
-        self._is_paused = False
+        self._is_paused = start_paused
         self._show_current_frame()
         self._schedule_next()
 
@@ -64,13 +64,10 @@ class ReaderDisplay(ctk.CTkFrame):
         self._schedule_next()
 
     def set_wpm(self, wpm: int) -> None:
-        """Apply a new speed live — takes effect on the next scheduled word,
-        since current_delay_ms() always reads the live wpm value fresh."""
         if self.session:
             self.session.set_wpm(wpm)
 
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
-        """Apply new colors live, regardless of whether a session is running."""
         self.configure(fg_color=background_color)
         self.word_row.configure(fg_color=background_color)
         self.before_label.configure(text_color=font_color)
