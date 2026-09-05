@@ -1,21 +1,15 @@
 import customtkinter as ctk
 
 
-class TranscriptList(ctk.CTkFrame):
-    """List of saved transcripts, with a '+' button to add a new one."""
+class TranscriptListBody(ctk.CTkFrame):
+    """Scrollable list of saved transcripts."""
 
-    def __init__(self, master, on_add=None, on_select=None):
+    def __init__(self, master, on_select=None):
         super().__init__(master, fg_color="#2C3E50", corner_radius=0)
-        self.on_add = on_add
         self.on_select = on_select
 
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=10, pady=10)
-        ctk.CTkLabel(header, text="List of Transcripts").pack(side="left")
-        ctk.CTkButton(header, text="+", width=28, command=self._handle_add).pack(side="right")
-
         self.entries_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.entries_frame.pack(fill="both", expand=True, padx=5, pady=(0, 5))
+        self.entries_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
     def add_entry(self, transcript) -> None:
         row = ctk.CTkLabel(
@@ -37,10 +31,6 @@ class TranscriptList(ctk.CTkFrame):
         self.clear()
         for t in transcripts:
             self.add_entry(t)
-
-    def _handle_add(self) -> None:
-        if self.on_add:
-            self.on_add()
 
     def _handle_select(self, transcript) -> None:
         if self.on_select:
