@@ -4,11 +4,13 @@ from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
+from gui.components.stop_button import StopButton
 from gui.components.detached_window import DetachedTranscriptWindow
 
 
 class Canvas(ctk.CTkFrame):
-    """Main reading area: toolbar row (when relevant) above whichever content state applies."""
+    """Main reading area: stop button (top-left) and toolbar (top-right)
+    above whichever content state applies."""
 
     def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None, on_pause_changed=None):
         super().__init__(master, fg_color="#2ECC71", corner_radius=0)
@@ -22,13 +24,22 @@ class Canvas(ctk.CTkFrame):
         self._input_currently_shown = False
         self._drafts: dict[int, str] = {}
 
+        self.button_row = ctk.CTkFrame(self, fg_color="transparent")
+        self.button_row.grid_columnconfigure(0, weight=1)  # left — stop
+        self.button_row.grid_columnconfigure(1, weight=0)  # right — toolbar
+
+        self.stop_button = StopButton(self.button_row, on_stop=self._handle_stop)
+        self.stop_button.grid(row=0, column=0, sticky="w")
+
         self.toolbar = CanvasToolbar(
-            self,
+            self.button_row,
             on_pause_toggle=self._handle_pause_toggle,
             on_restart=self._handle_restart,
             on_maximize_toggle=self._handle_maximize_toggle,
             on_detach=self._handle_detach,
         )
+        self.toolbar.grid(row=0, column=1, sticky="e")
+
         self.content_area = ctk.CTkFrame(self, fg_color="transparent")
 
         self.empty_label = ctk.CTkLabel(self.content_area, text="Select or create a transcript to begin")
@@ -103,6 +114,17 @@ class Canvas(ctk.CTkFrame):
         self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
 
+    def _handle_stop(self) -> None:
+        """End the session early and return to the paste-in box, pre-filled
+        with the existing text. Saved position/pause are left untouched —
+        resubmitting the same text resumes exactly where this left off."""
+        if not self.current_transcript:
+            return
+        self.reader_display.stop()
+        self.toolbar.set_paused(False)
+        self.input_view.set_text(self.current_transcript.raw_text)
+        self._show_input()
+
     def _handle_maximize_toggle(self) -> None:
         if self.on_maximize_toggle:
             self.on_maximize_toggle()
@@ -143,11 +165,11 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.close()
 
-    def _layout(self, show_toolbar: bool) -> None:
-        self.toolbar.pack_forget()
+    def _layout(self, show_buttons: bool) -> None:
+        self.button_row.pack_forget()
         self.content_area.pack_forget()
-        if show_toolbar:
-            self.toolbar.pack(anchor="ne", padx=10, pady=10)
+        if show_buttons:
+            self.button_row.pack(fill="x", padx=10, pady=10)
         self.content_area.pack(fill="both", expand=True)
 
     def _show_content(self, widget) -> None:
@@ -157,20 +179,20 @@ class Canvas(ctk.CTkFrame):
 
     def _show_empty(self) -> None:
         self._input_currently_shown = False
-        self._layout(show_toolbar=False)
+        self._layout(show_buttons=False)
         self._show_content(self.empty_label)
 
     def _show_input(self) -> None:
         self._input_currently_shown = True
-        self._layout(show_toolbar=True)
+        self._layout(show_buttons=True)
         self._show_content(self.input_view)
 
     def _show_reader(self) -> None:
         self._input_currently_shown = False
-        self._layout(show_toolbar=True)
+        self._layout(show_buttons=True)
         self._show_content(self.reader_display)
 
     def _show_detached_placeholder(self) -> None:
         self._input_currently_shown = False
-        self._layout(show_toolbar=False)
+        self._layout(show_buttons=False)
         self._show_content(self.detached_placeholder)
