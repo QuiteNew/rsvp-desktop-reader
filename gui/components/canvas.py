@@ -65,8 +65,6 @@ class Canvas(ctk.CTkFrame):
         if transcript.id == self._detached_transcript_id:
             self._show_detached_placeholder()
         elif transcript.id in self._stopped_transcript_ids:
-            # Deliberately stopped last time — stay on the paste box showing
-            # the real saved text, rather than re-evaluating "has text -> play"
             self.input_view.set_text(transcript.raw_text)
             self._show_input()
         elif transcript.raw_text.strip():
@@ -100,7 +98,6 @@ class Canvas(ctk.CTkFrame):
 
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.current_transcript:
-            # Resubmitting text is the one action that un-stops a stopped transcript
             self._stopped_transcript_ids.discard(self.current_transcript.id)
         if self.on_text_submitted and self.current_transcript:
             self.on_text_submitted(self.current_transcript, raw_text)
@@ -124,14 +121,17 @@ class Canvas(ctk.CTkFrame):
         self._handle_pause_changed(False)
 
     def _handle_stop(self) -> None:
-        """End the session early and return to the paste-in box, pre-filled
-        with the existing text. Saved position/pause are left untouched —
-        resubmitting the same text resumes exactly where this left off."""
+        """End the session, return to the paste-in box with the existing
+        text, and reset saved position/pause back to the start — so the
+        next time this transcript is played, it begins at word one again
+        rather than resuming from wherever it was stopped."""
         if not self.current_transcript:
             return
         self.reader_display.stop()
         self.toolbar.set_paused(False)
         self._stopped_transcript_ids.add(self.current_transcript.id)
+        self._handle_position_changed(0)
+        self._handle_pause_changed(False)
         self.input_view.set_text(self.current_transcript.raw_text)
         self._show_input()
 
