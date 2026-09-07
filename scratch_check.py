@@ -1,10 +1,9 @@
 from core.transcript_store import TranscriptStore
 
 store = TranscriptStore()
-print("Default space:", store.default_space)
+print("Loaded spaces:", store.spaces)
+print("Loaded transcripts:", [t.title for t in store.transcripts])
 
-store.add_transcript("Lecture 3 notes", store.default_space)
-store.add_transcript("Podcast transcript", store.default_space)
-
-for t in store.transcripts:
-    print(t)
+store.add_space("Testing")
+store.add_transcript("Persistence check", store.current_space)
+print("After adding — spaces:", store.spaces)

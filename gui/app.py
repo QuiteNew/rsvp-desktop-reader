@@ -37,18 +37,15 @@ class RSVPApp(ctk.CTk):
         self.grid_rowconfigure(3, weight=0, minsize=self.DIVIDER_HEIGHT)
         self.grid_rowconfigure(4, weight=0, minsize=self.BOTTOM_BAND_HEIGHT)
 
-        # Row 0 — headers, same row for both columns, so they share one exact height
         self.list_header = TranscriptListHeader(self, on_add=self._open_add_transcript_dialog)
         self.list_header.grid(row=0, column=0, sticky="nsew")
 
         self.header = Header(self)
         self.header.grid(row=0, column=1, sticky="nsew")
 
-        # Row 1 — one continuous line across the full window width
         self.top_divider = Divider(self)
         self.top_divider.grid(row=1, column=0, columnspan=2, sticky="nsew")
 
-        # Row 2 — main content
         self.list_body = TranscriptListBody(self, on_select=self._handle_open_transcript)
         self.list_body.grid(row=2, column=0, sticky="nsew")
 
@@ -61,11 +58,9 @@ class RSVPApp(ctk.CTk):
         )
         self.canvas.grid(row=2, column=1, sticky="nsew")
 
-        # Row 3 — the second continuous line, same technique
         self.bottom_divider = Divider(self)
         self.bottom_divider.grid(row=3, column=0, columnspan=2, sticky="nsew")
 
-        # Row 4 — bottom band
         self.spaces = Spaces(
             self,
             spaces=self.store.spaces,
@@ -83,6 +78,11 @@ class RSVPApp(ctk.CTk):
             on_background_color_changed=self._handle_background_color_changed,
         )
         self.footer.grid(row=4, column=1, sticky="nsew")
+
+        # Show whatever the store already loaded from disk — without this,
+        # the list stays visually empty until the next mutation happens to
+        # call _refresh_transcript_list() for an unrelated reason.
+        self._refresh_transcript_list()
 
     def _open_add_transcript_dialog(self) -> None:
         AddTranscriptDialog(
