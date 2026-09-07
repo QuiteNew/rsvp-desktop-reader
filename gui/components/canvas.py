@@ -23,10 +23,11 @@ class Canvas(ctk.CTkFrame):
         self._detached_window = None
         self._input_currently_shown = False
         self._drafts: dict[int, str] = {}
+        self._stopped_transcript_ids: set[int] = set()
 
         self.button_row = ctk.CTkFrame(self, fg_color="transparent")
-        self.button_row.grid_columnconfigure(0, weight=1)  # left — stop
-        self.button_row.grid_columnconfigure(1, weight=0)  # right — toolbar
+        self.button_row.grid_columnconfigure(0, weight=1)
+        self.button_row.grid_columnconfigure(1, weight=0)
 
         self.stop_button = StopButton(self.button_row, on_stop=self._handle_stop)
         self.stop_button.grid(row=0, column=0, sticky="w")
@@ -63,6 +64,11 @@ class Canvas(ctk.CTkFrame):
 
         if transcript.id == self._detached_transcript_id:
             self._show_detached_placeholder()
+        elif transcript.id in self._stopped_transcript_ids:
+            # Deliberately stopped last time — stay on the paste box showing
+            # the real saved text, rather than re-evaluating "has text -> play"
+            self.input_view.set_text(transcript.raw_text)
+            self._show_input()
         elif transcript.raw_text.strip():
             self._show_reader()
             self.toolbar.set_paused(transcript.is_paused)
@@ -93,6 +99,9 @@ class Canvas(ctk.CTkFrame):
             self._drafts[self.current_transcript.id] = self.input_view.get_text().strip()
 
     def _handle_text_submitted(self, raw_text: str) -> None:
+        if self.current_transcript:
+            # Resubmitting text is the one action that un-stops a stopped transcript
+            self._stopped_transcript_ids.discard(self.current_transcript.id)
         if self.on_text_submitted and self.current_transcript:
             self.on_text_submitted(self.current_transcript, raw_text)
 
@@ -122,6 +131,7 @@ class Canvas(ctk.CTkFrame):
             return
         self.reader_display.stop()
         self.toolbar.set_paused(False)
+        self._stopped_transcript_ids.add(self.current_transcript.id)
         self.input_view.set_text(self.current_transcript.raw_text)
         self._show_input()
 
@@ -150,6 +160,7 @@ class Canvas(ctk.CTkFrame):
         self._show_detached_placeholder()
 
     def _handle_detached_text_submitted(self, transcript, raw_text: str) -> None:
+        self._stopped_transcript_ids.discard(transcript.id)
         if self.on_text_submitted:
             self.on_text_submitted(transcript, raw_text)
 
