@@ -24,6 +24,7 @@ class RSVPApp(ctk.CTk):
         super().__init__()
         self.title("RSVP Reader")
         self.geometry("1000x650")
+        self.protocol("WM_DELETE_WINDOW", self._handle_close)
 
         self.store = TranscriptStore()
         self._focus_mode = False
@@ -55,6 +56,7 @@ class RSVPApp(ctk.CTk):
             on_maximize_toggle=self._toggle_focus_mode,
             on_position_changed=self._handle_position_changed,
             on_pause_changed=self._handle_pause_changed,
+            on_draft_changed=self._handle_draft_changed,
         )
         self.canvas.grid(row=2, column=1, sticky="nsew")
 
@@ -79,9 +81,6 @@ class RSVPApp(ctk.CTk):
         )
         self.footer.grid(row=4, column=1, sticky="nsew")
 
-        # Show whatever the store already loaded from disk — without this,
-        # the list stays visually empty until the next mutation happens to
-        # call _refresh_transcript_list() for an unrelated reason.
         self._refresh_transcript_list()
 
     def _open_add_transcript_dialog(self) -> None:
@@ -126,6 +125,9 @@ class RSVPApp(ctk.CTk):
     def _handle_pause_changed(self, transcript, is_paused: bool) -> None:
         self.store.set_transcript_paused(transcript.id, is_paused)
 
+    def _handle_draft_changed(self, transcript, text: str) -> None:
+        self.store.set_transcript_draft_text(transcript.id, text)
+
     def _handle_wpm_changed(self, wpm: int) -> None:
         if not self._current_transcript:
             return
@@ -156,6 +158,10 @@ class RSVPApp(ctk.CTk):
 
     def _refresh_transcript_list(self) -> None:
         self.list_body.render_transcripts(self.store.transcripts_in_current_space)
+
+    def _handle_close(self) -> None:
+        self.canvas.save_pending_draft()
+        self.destroy()
 
     def _toggle_focus_mode(self) -> None:
         self._focus_mode = not self._focus_mode

@@ -111,3 +111,9 @@ class TranscriptStore:
         if t:
             t.background_color = color
             self._save()
+
+    def set_transcript_draft_text(self, transcript_id: int, draft_text: str) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.draft_text = draft_text
+            self._save()
