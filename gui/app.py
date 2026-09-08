@@ -9,7 +9,9 @@ from gui.components.spaces import Spaces
 from gui.components.footer import Footer
 from gui.components.add_transcript_dialog import AddTranscriptDialog
 from gui.components.add_space_dialog import AddSpaceDialog
+from gui.components.settings_window import SettingsWindow
 from core.transcript_store import TranscriptStore
+from core.settings_store import SettingsStore
 
 
 class RSVPApp(ctk.CTk):
@@ -23,12 +25,14 @@ class RSVPApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("RSVP Reader")
-        self.geometry("1000x650")
-        self.protocol("WM_DELETE_WINDOW", self._handle_close)
 
         self.store = TranscriptStore()
+        self.settings_store = SettingsStore()
         self._focus_mode = False
         self._current_transcript = None
+
+        self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
+        self.protocol("WM_DELETE_WINDOW", self._handle_close)
 
         self.grid_columnconfigure(0, weight=0, minsize=self.SIDEBAR_WIDTH)
         self.grid_columnconfigure(1, weight=1)
@@ -41,7 +45,7 @@ class RSVPApp(ctk.CTk):
         self.list_header = TranscriptListHeader(self, on_add=self._open_add_transcript_dialog)
         self.list_header.grid(row=0, column=0, sticky="nsew")
 
-        self.header = Header(self)
+        self.header = Header(self, on_settings=self._open_settings_window)
         self.header.grid(row=0, column=1, sticky="nsew")
 
         self.top_divider = Divider(self)
@@ -158,6 +162,18 @@ class RSVPApp(ctk.CTk):
 
     def _refresh_transcript_list(self) -> None:
         self.list_body.render_transcripts(self.store.transcripts_in_current_space)
+
+    def _open_settings_window(self) -> None:
+        SettingsWindow(
+            self,
+            current_width=self.settings_store.window_width,
+            current_height=self.settings_store.window_height,
+            on_apply=self._handle_window_size_applied,
+        )
+
+    def _handle_window_size_applied(self, width: int, height: int) -> None:
+        self.settings_store.set_window_size(width, height)
+        self.geometry(f"{width}x{height}")
 
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()
