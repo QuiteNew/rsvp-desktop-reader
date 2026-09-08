@@ -17,30 +17,25 @@ from core.settings_store import SettingsStore
 class RSVPApp(ctk.CTk):
     """Main application window, laid out as a single 2-column, 5-row grid."""
 
-    SIDEBAR_WIDTH = 220
-    HEADER_HEIGHT = 50
-    DIVIDER_HEIGHT = 2
-    BOTTOM_BAND_HEIGHT = 150
+    DIVIDER_HEIGHT = 2  # fixed — not user-adjustable, unlike the other regions
 
     def __init__(self):
         super().__init__()
         self.title("RSVP Reader")
 
-        self.store = TranscriptStore()
         self.settings_store = SettingsStore()
+        self.store = TranscriptStore(data_directory=self.settings_store.data_directory)
         self._focus_mode = False
         self._current_transcript = None
 
         self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
 
-        self.grid_columnconfigure(0, weight=0, minsize=self.SIDEBAR_WIDTH)
         self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=0, minsize=self.HEADER_HEIGHT)
         self.grid_rowconfigure(1, weight=0, minsize=self.DIVIDER_HEIGHT)
         self.grid_rowconfigure(2, weight=1)
         self.grid_rowconfigure(3, weight=0, minsize=self.DIVIDER_HEIGHT)
-        self.grid_rowconfigure(4, weight=0, minsize=self.BOTTOM_BAND_HEIGHT)
+        self._apply_layout_sizes()
 
         self.list_header = TranscriptListHeader(self, on_add=self._open_add_transcript_dialog)
         self.list_header.grid(row=0, column=0, sticky="nsew")
@@ -87,6 +82,15 @@ class RSVPApp(ctk.CTk):
 
         self._refresh_transcript_list()
 
+    def _apply_layout_sizes(self) -> None:
+        """Apply the sidebar/header/bottom-band sizes currently held in
+        settings. Reused for initial setup, after a Settings Apply, and
+        when restoring from focus mode — one source of truth for these
+        three region sizes."""
+        self.grid_columnconfigure(0, weight=0, minsize=self.settings_store.sidebar_width)
+        self.grid_rowconfigure(0, weight=0, minsize=self.settings_store.header_height)
+        self.grid_rowconfigure(4, weight=0, minsize=self.settings_store.bottom_band_height)
+
     def _open_add_transcript_dialog(self) -> None:
         AddTranscriptDialog(
             self,
@@ -96,7 +100,13 @@ class RSVPApp(ctk.CTk):
         )
 
     def _handle_new_transcript(self, title: str, space: str) -> None:
-        self.store.add_transcript(title, space)
+        self.store.add_transcript(
+            title, space,
+            wpm=self.settings_store.default_wpm,
+            font_color=self.settings_store.default_font_color,
+            highlight_color=self.settings_store.default_highlight_color,
+            background_color=self.settings_store.default_background_color,
+        )
         self._refresh_transcript_list()
 
     def _open_add_space_dialog(self) -> None:
@@ -166,14 +176,36 @@ class RSVPApp(ctk.CTk):
     def _open_settings_window(self) -> None:
         SettingsWindow(
             self,
-            current_width=self.settings_store.window_width,
-            current_height=self.settings_store.window_height,
-            on_apply=self._handle_window_size_applied,
+            window_width=self.settings_store.window_width,
+            window_height=self.settings_store.window_height,
+            sidebar_width=self.settings_store.sidebar_width,
+            header_height=self.settings_store.header_height,
+            bottom_band_height=self.settings_store.bottom_band_height,
+            default_wpm=self.settings_store.default_wpm,
+            default_font_color=self.settings_store.default_font_color,
+            default_highlight_color=self.settings_store.default_highlight_color,
+            default_background_color=self.settings_store.default_background_color,
+            data_directory=self.settings_store.data_directory,
+            on_apply=self._handle_settings_applied,
         )
 
-    def _handle_window_size_applied(self, width: int, height: int) -> None:
-        self.settings_store.set_window_size(width, height)
-        self.geometry(f"{width}x{height}")
+    def _handle_settings_applied(self, values: dict) -> None:
+        self.settings_store.set_window_size(values["window_width"], values["window_height"])
+        self.geometry(f"{values['window_width']}x{values['window_height']}")
+
+        self.settings_store.set_layout_sizes(
+            values["sidebar_width"], values["header_height"], values["bottom_band_height"]
+        )
+        if not self._focus_mode:
+            self._apply_layout_sizes()
+
+        self.settings_store.set_defaults(
+            values["default_wpm"], values["default_font_color"],
+            values["default_highlight_color"], values["default_background_color"],
+        )
+
+        self.settings_store.set_data_directory(values["data_directory"])
+        self.store.set_data_directory(values["data_directory"])
 
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()
@@ -203,10 +235,8 @@ class RSVPApp(ctk.CTk):
             self.bottom_divider.grid()
             self.spaces.grid()
             self.footer.grid()
-            self.grid_columnconfigure(0, minsize=self.SIDEBAR_WIDTH)
-            self.grid_rowconfigure(0, minsize=self.HEADER_HEIGHT)
+            self._apply_layout_sizes()
             self.grid_rowconfigure(1, minsize=self.DIVIDER_HEIGHT)
             self.grid_rowconfigure(3, minsize=self.DIVIDER_HEIGHT)
-            self.grid_rowconfigure(4, minsize=self.BOTTOM_BAND_HEIGHT)
 
         self.canvas.set_maximized(self._focus_mode)

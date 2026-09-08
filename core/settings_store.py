@@ -1,24 +1,33 @@
 import json
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
-SETTINGS_DIR = Path.home() / ".rsvp_reader"
+from core.storage import DEFAULT_DATA_DIR
+
+# settings.json itself always lives here, fixed — it's what tells the app
+# where everything else (including relocatable transcript data) lives.
+SETTINGS_DIR = DEFAULT_DATA_DIR
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
-
-DEFAULT_WIDTH = 1000
-DEFAULT_HEIGHT = 650
 
 
 @dataclass
 class AppSettings:
-    window_width: int = DEFAULT_WIDTH
-    window_height: int = DEFAULT_HEIGHT
+    window_width: int = 1000
+    window_height: int = 650
+    sidebar_width: int = 220
+    header_height: int = 50
+    bottom_band_height: int = 150
+    default_wpm: int = 300
+    default_font_color: str = "#FFFFFF"
+    default_highlight_color: str = "#E74C3C"
+    default_background_color: str = "#1E1E1E"
+    data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
 
 
 class SettingsStore:
-    """Persists app-level settings (currently just window size) to their
-    own file — a different concern from transcript/space data, so it gets
-    its own small store rather than being folded into TranscriptStore."""
+    """Persists app-level settings — window/layout sizes, new-transcript
+    defaults, and the transcript data folder — to their own file, separate
+    from transcript/space data itself."""
 
     def __init__(self):
         self._settings = self._load()
@@ -28,7 +37,7 @@ class SettingsStore:
             return AppSettings()
         try:
             data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-            return AppSettings(**data)
+            return AppSettings(**data)  # missing keys fall back to defaults automatically
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
 
@@ -44,7 +53,56 @@ class SettingsStore:
     def window_height(self) -> int:
         return self._settings.window_height
 
+    @property
+    def sidebar_width(self) -> int:
+        return self._settings.sidebar_width
+
+    @property
+    def header_height(self) -> int:
+        return self._settings.header_height
+
+    @property
+    def bottom_band_height(self) -> int:
+        return self._settings.bottom_band_height
+
+    @property
+    def default_wpm(self) -> int:
+        return self._settings.default_wpm
+
+    @property
+    def default_font_color(self) -> str:
+        return self._settings.default_font_color
+
+    @property
+    def default_highlight_color(self) -> str:
+        return self._settings.default_highlight_color
+
+    @property
+    def default_background_color(self) -> str:
+        return self._settings.default_background_color
+
+    @property
+    def data_directory(self) -> str:
+        return self._settings.data_directory
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
+        self._save()
+
+    def set_layout_sizes(self, sidebar_width: int, header_height: int, bottom_band_height: int) -> None:
+        self._settings.sidebar_width = sidebar_width
+        self._settings.header_height = header_height
+        self._settings.bottom_band_height = bottom_band_height
+        self._save()
+
+    def set_defaults(self, wpm: int, font_color: str, highlight_color: str, background_color: str) -> None:
+        self._settings.default_wpm = wpm
+        self._settings.default_font_color = font_color
+        self._settings.default_highlight_color = highlight_color
+        self._settings.default_background_color = background_color
+        self._save()
+
+    def set_data_directory(self, directory: str) -> None:
+        self._settings.data_directory = directory
         self._save()

@@ -4,29 +4,31 @@ from dataclasses import asdict
 
 from core.models import Transcript
 
-DATA_DIR = Path.home() / ".rsvp_reader"
-DATA_FILE = DATA_DIR / "data.json"
+DEFAULT_DATA_DIR = Path.home() / ".rsvp_reader"
 
 
-def save_state(spaces: list[str], current_space_index: int, transcripts: list[Transcript], next_id: int) -> None:
-    """Write the store's full state to disk as JSON."""
-    DATA_DIR.mkdir(exist_ok=True)
+def save_state(directory: str, spaces: list[str], current_space_index: int, transcripts: list[Transcript], next_id: int) -> None:
+    """Write the store's full state to disk as JSON, inside the given directory."""
+    dir_path = Path(directory)
+    dir_path.mkdir(parents=True, exist_ok=True)
+    data_file = dir_path / "data.json"
     data = {
         "next_id": next_id,
         "current_space_index": current_space_index,
         "spaces": spaces,
         "transcripts": [asdict(t) for t in transcripts],
     }
-    DATA_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    data_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def load_state():
-    """Read saved state from disk. Returns None if no valid save exists yet,
-    so the caller can fall back to sensible defaults."""
-    if not DATA_FILE.exists():
+def load_state(directory: str):
+    """Read saved state from the given directory. Returns None if no valid
+    save exists there yet, so the caller can fall back to sensible defaults."""
+    data_file = Path(directory) / "data.json"
+    if not data_file.exists():
         return None
     try:
-        data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+        data = json.loads(data_file.read_text(encoding="utf-8"))
         transcripts = [Transcript(**t) for t in data["transcripts"]]
         return {
             "next_id": data["next_id"],
@@ -35,6 +37,4 @@ def load_state():
             "transcripts": transcripts,
         }
     except (json.JSONDecodeError, KeyError, TypeError):
-        # Corrupted, or saved by an older version with different Transcript
-        # fields — safer to start fresh than crash on launch
         return None
