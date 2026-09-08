@@ -54,6 +54,19 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkButton(button_row, text="Close", command=self.destroy).pack(side="left")
         ctk.CTkButton(button_row, text="Apply", command=self._handle_apply).pack(side="right")
 
+    def _open_native_dialog(self, dialog_fn, **kwargs):
+        """Run any native OS dialog (color picker, folder browser, etc.)
+        safely from inside this modally-grabbed window. Native dialogs
+        live outside Tk's own window management — if this window's
+        grab_set() is still active when the OS dialog closes, Windows can
+        lose track of which window should regain focus, freezing the
+        entire app. Releasing the grab first, and re-establishing it
+        immediately after, avoids that regardless of the outcome."""
+        self.grab_release()
+        result = dialog_fn(parent=self, **kwargs)
+        self.grab_set()
+        return result
+
     # ---- Defaults tab ----
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color) -> None:
@@ -89,19 +102,19 @@ class SettingsWindow(ctk.CTkToplevel):
         return swatch
 
     def _pick_default_font_color(self) -> None:
-        color = colorchooser.askcolor(color=self.default_font_color)[1]
+        color = self._open_native_dialog(colorchooser.askcolor, color=self.default_font_color)[1]
         if color:
             self.default_font_color = color
             self.default_font_swatch.configure(fg_color=color)
 
     def _pick_default_highlight_color(self) -> None:
-        color = colorchooser.askcolor(color=self.default_highlight_color)[1]
+        color = self._open_native_dialog(colorchooser.askcolor, color=self.default_highlight_color)[1]
         if color:
             self.default_highlight_color = color
             self.default_highlight_swatch.configure(fg_color=color)
 
     def _pick_default_background_color(self) -> None:
-        color = colorchooser.askcolor(color=self.default_background_color)[1]
+        color = self._open_native_dialog(colorchooser.askcolor, color=self.default_background_color)[1]
         if color:
             self.default_background_color = color
             self.default_background_swatch.configure(fg_color=color)
@@ -133,7 +146,7 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkButton(tab, text="Choose folder…", command=self._pick_data_directory).pack(anchor="w")
 
     def _pick_data_directory(self) -> None:
-        chosen = filedialog.askdirectory(initialdir=self._data_directory)
+        chosen = self._open_native_dialog(filedialog.askdirectory, initialdir=self._data_directory)
         if chosen:
             self._data_directory = chosen
             self.data_directory_label.configure(text=chosen)
