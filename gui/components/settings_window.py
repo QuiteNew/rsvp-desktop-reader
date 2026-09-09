@@ -1,30 +1,31 @@
 import customtkinter as ctk
 from tkinter import colorchooser, filedialog
 
+from core.settings_store import (
+    AppSettings,
+    WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
+    SIDEBAR_WIDTH_RANGE, HEADER_HEIGHT_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
+    WPM_RANGE,
+)
+
 
 class SettingsWindow(ctk.CTkToplevel):
-    """App-wide settings: new-transcript defaults, layout sizing, and
-    where transcript data is stored. Appearance (day/night mode) is a
-    placeholder tab, deliberately deferred to a later session."""
-
-    MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH = 500, 2000
-    MIN_WINDOW_HEIGHT, MAX_WINDOW_HEIGHT = 400, 1400
-    MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH = 120, 500
-    MIN_HEADER_HEIGHT, MAX_HEADER_HEIGHT = 30, 120
-    MIN_BOTTOM_BAND_HEIGHT, MAX_BOTTOM_BAND_HEIGHT = 80, 400
-    MIN_WPM, MAX_WPM = 100, 1000
+    """App-wide settings: new-transcript defaults, layout sizing (including
+    free-form drag-resize), and where transcript data is stored. Appearance
+    (day/night mode) is a placeholder tab, deliberately deferred."""
 
     def __init__(
         self, master,
         window_width, window_height,
         sidebar_width, header_height, bottom_band_height,
+        freeform_resize_enabled,
         default_wpm, default_font_color, default_highlight_color, default_background_color,
         data_directory,
         on_apply,
     ):
         super().__init__(master)
         self.title("Settings")
-        self.geometry("480x430")
+        self.geometry("480x480")
         self.on_apply = on_apply
         self._data_directory = data_directory
 
@@ -42,7 +43,7 @@ class SettingsWindow(ctk.CTkToplevel):
         appearance_tab = self.tabview.add("Appearance")
 
         self._build_defaults_tab(defaults_tab, default_wpm, default_font_color, default_highlight_color, default_background_color)
-        self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, header_height, bottom_band_height)
+        self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, header_height, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
         self._build_appearance_tab(appearance_tab)
 
@@ -55,13 +56,8 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkButton(button_row, text="Apply", command=self._handle_apply).pack(side="right")
 
     def _open_native_dialog(self, dialog_fn, **kwargs):
-        """Run any native OS dialog (color picker, folder browser, etc.)
-        safely from inside this modally-grabbed window. Native dialogs
-        live outside Tk's own window management — if this window's
-        grab_set() is still active when the OS dialog closes, Windows can
-        lose track of which window should regain focus, freezing the
-        entire app. Releasing the grab first, and re-establishing it
-        immediately after, avoids that regardless of the outcome."""
+        """Run any native OS dialog safely from inside this modally-grabbed
+        window — release/re-grab avoids the earlier Windows freeze bug."""
         self.grab_release()
         result = dialog_fn(parent=self, **kwargs)
         self.grab_set()
@@ -78,7 +74,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_wpm_label = ctk.CTkLabel(wpm_row, text=f"{wpm} WPM", width=70)
         self.default_wpm_label.pack(side="right")
         self.default_wpm_slider = ctk.CTkSlider(
-            tab, from_=self.MIN_WPM, to=self.MAX_WPM, number_of_steps=90,
+            tab, from_=WPM_RANGE[0], to=WPM_RANGE[1], number_of_steps=90,
             command=lambda v: self.default_wpm_label.configure(text=f"{int(v)} WPM"),
         )
         self.default_wpm_slider.set(wpm)
@@ -92,6 +88,10 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.default_background_color = background_color
         self.default_background_swatch = self._color_row(tab, "Background colour", background_color, self._pick_default_background_color)
+
+        reset_row = ctk.CTkFrame(tab, fg_color="transparent")
+        reset_row.pack(fill="x", pady=(20, 0))
+        ctk.CTkButton(reset_row, text="Reset to Original Defaults", command=self._handle_reset_defaults).pack(anchor="w")
 
     def _color_row(self, tab, label, color, command) -> ctk.CTkButton:
         row = ctk.CTkFrame(tab, fg_color="transparent")
@@ -119,9 +119,37 @@ class SettingsWindow(ctk.CTkToplevel):
             self.default_background_color = color
             self.default_background_swatch.configure(fg_color=color)
 
+    def _handle_reset_defaults(self) -> None:
+        """Reset just this dialog's fields back to the app's original,
+        hand-picked defaults — a fresh AppSettings() instance already
+        carries those exact values, so nothing is duplicated as separate
+        literals. Apply is still required afterward to actually save
+        and propagate the reset, same as any other change here."""
+        original = AppSettings()
+
+        self.default_wpm_slider.set(original.default_wpm)
+        self.default_wpm_label.configure(text=f"{original.default_wpm} WPM")
+
+        self.default_font_color = original.default_font_color
+        self.default_font_swatch.configure(fg_color=original.default_font_color)
+
+        self.default_highlight_color = original.default_highlight_color
+        self.default_highlight_swatch.configure(fg_color=original.default_highlight_color)
+
+        self.default_background_color = original.default_background_color
+        self.default_background_swatch.configure(fg_color=original.default_background_color)
+
     # ---- Layout tab ----
 
-    def _build_layout_tab(self, tab, window_width, window_height, sidebar_width, header_height, bottom_band_height) -> None:
+    def _build_layout_tab(self, tab, window_width, window_height, sidebar_width, header_height, bottom_band_height, freeform_resize_enabled) -> None:
+        self.freeform_switch = ctk.CTkSwitch(tab, text="Free-form resize (drag borders in the main window)")
+        (self.freeform_switch.select() if freeform_resize_enabled else self.freeform_switch.deselect())
+        self.freeform_switch.pack(anchor="w", pady=(5, 5))
+        ctk.CTkLabel(
+            tab, text="When on, hover over any border in the main window and drag it directly.",
+            text_color="gray60", wraplength=400, justify="left",
+        ).pack(anchor="w", pady=(0, 15))
+
         self.window_width_entry = self._number_row(tab, "Window width", window_width)
         self.window_height_entry = self._number_row(tab, "Window height", window_height)
         self.sidebar_width_entry = self._number_row(tab, "Sidebar width", sidebar_width)
@@ -160,11 +188,11 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _handle_apply(self) -> None:
         entries = {
-            "window_width": (self.window_width_entry, self.MIN_WINDOW_WIDTH, self.MAX_WINDOW_WIDTH),
-            "window_height": (self.window_height_entry, self.MIN_WINDOW_HEIGHT, self.MAX_WINDOW_HEIGHT),
-            "sidebar_width": (self.sidebar_width_entry, self.MIN_SIDEBAR_WIDTH, self.MAX_SIDEBAR_WIDTH),
-            "header_height": (self.header_height_entry, self.MIN_HEADER_HEIGHT, self.MAX_HEADER_HEIGHT),
-            "bottom_band_height": (self.bottom_band_height_entry, self.MIN_BOTTOM_BAND_HEIGHT, self.MAX_BOTTOM_BAND_HEIGHT),
+            "window_width": (self.window_width_entry, *WINDOW_WIDTH_RANGE),
+            "window_height": (self.window_height_entry, *WINDOW_HEIGHT_RANGE),
+            "sidebar_width": (self.sidebar_width_entry, *SIDEBAR_WIDTH_RANGE),
+            "header_height": (self.header_height_entry, *HEADER_HEIGHT_RANGE),
+            "bottom_band_height": (self.bottom_band_height_entry, *BOTTOM_BAND_HEIGHT_RANGE),
         }
 
         values = {}
@@ -180,6 +208,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 return
             values[key] = number
 
+        values["freeform_resize_enabled"] = bool(self.freeform_switch.get())
         values["default_wpm"] = int(self.default_wpm_slider.get())
         values["default_font_color"] = self.default_font_color
         values["default_highlight_color"] = self.default_highlight_color

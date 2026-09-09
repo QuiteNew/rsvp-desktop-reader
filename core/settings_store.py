@@ -4,10 +4,19 @@ from dataclasses import dataclass, asdict, field
 
 from core.storage import DEFAULT_DATA_DIR
 
-# settings.json itself always lives here, fixed — it's what tells the app
-# where everything else (including relocatable transcript data) lives.
 SETTINGS_DIR = DEFAULT_DATA_DIR
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+
+# Shared validation/slider ranges — imported by both SettingsWindow (typed
+# field validation, slider bounds) and the main app window (clamping live
+# free-form drag resizing), so both enforcement points can never drift
+# out of sync with each other.
+WINDOW_WIDTH_RANGE = (500, 2000)
+WINDOW_HEIGHT_RANGE = (400, 1400)
+SIDEBAR_WIDTH_RANGE = (120, 500)
+HEADER_HEIGHT_RANGE = (30, 120)
+BOTTOM_BAND_HEIGHT_RANGE = (80, 400)
+WPM_RANGE = (100, 1000)
 
 
 @dataclass
@@ -22,12 +31,13 @@ class AppSettings:
     default_highlight_color: str = "#E74C3C"
     default_background_color: str = "#1E1E1E"
     data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
+    freeform_resize_enabled: bool = False
 
 
 class SettingsStore:
     """Persists app-level settings — window/layout sizes, new-transcript
-    defaults, and the transcript data folder — to their own file, separate
-    from transcript/space data itself."""
+    defaults, the transcript data folder, and the free-form resize
+    preference — to their own file, separate from transcript/space data."""
 
     def __init__(self):
         self._settings = self._load()
@@ -37,7 +47,7 @@ class SettingsStore:
             return AppSettings()
         try:
             data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-            return AppSettings(**data)  # missing keys fall back to defaults automatically
+            return AppSettings(**data)
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
 
@@ -85,6 +95,10 @@ class SettingsStore:
     def data_directory(self) -> str:
         return self._settings.data_directory
 
+    @property
+    def freeform_resize_enabled(self) -> bool:
+        return self._settings.freeform_resize_enabled
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -105,4 +119,8 @@ class SettingsStore:
 
     def set_data_directory(self, directory: str) -> None:
         self._settings.data_directory = directory
+        self._save()
+
+    def set_freeform_resize_enabled(self, enabled: bool) -> None:
+        self._settings.freeform_resize_enabled = enabled
         self._save()
