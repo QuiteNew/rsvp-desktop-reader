@@ -63,6 +63,12 @@ class SettingsWindow(ctk.CTkToplevel):
         self.grab_set()
         return result
 
+    def _set_entry_value(self, entry: ctk.CTkEntry, value) -> None:
+        """CTkEntry has no direct .set() the way a slider does — resetting
+        its displayed text means clearing it and reinserting explicitly."""
+        entry.delete(0, "end")
+        entry.insert(0, str(value))
+
     # ---- Defaults tab ----
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color) -> None:
@@ -89,9 +95,14 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_background_color = background_color
         self.default_background_swatch = self._color_row(tab, "Background colour", background_color, self._pick_default_background_color)
 
-        reset_row = ctk.CTkFrame(tab, fg_color="transparent")
-        reset_row.pack(fill="x", pady=(20, 0))
-        ctk.CTkButton(reset_row, text="Reset to Original Defaults", command=self._handle_reset_defaults).pack(anchor="w")
+        self._reset_row(tab, self._handle_reset_defaults)
+
+    def _reset_row(self, tab, command) -> None:
+        """Shared 'Reset to Original Defaults' button — same label,
+        placement, and style across every tab that has one."""
+        row = ctk.CTkFrame(tab, fg_color="transparent")
+        row.pack(fill="x", pady=(20, 0))
+        ctk.CTkButton(row, text="Reset to Original Defaults", command=command).pack(anchor="w")
 
     def _color_row(self, tab, label, color, command) -> ctk.CTkButton:
         row = ctk.CTkFrame(tab, fg_color="transparent")
@@ -120,11 +131,6 @@ class SettingsWindow(ctk.CTkToplevel):
             self.default_background_swatch.configure(fg_color=color)
 
     def _handle_reset_defaults(self) -> None:
-        """Reset just this dialog's fields back to the app's original,
-        hand-picked defaults — a fresh AppSettings() instance already
-        carries those exact values, so nothing is duplicated as separate
-        literals. Apply is still required afterward to actually save
-        and propagate the reset, same as any other change here."""
         original = AppSettings()
 
         self.default_wpm_slider.set(original.default_wpm)
@@ -156,6 +162,8 @@ class SettingsWindow(ctk.CTkToplevel):
         self.header_height_entry = self._number_row(tab, "Header height", header_height)
         self.bottom_band_height_entry = self._number_row(tab, "Bottom band height", bottom_band_height)
 
+        self._reset_row(tab, self._handle_reset_layout)
+
     def _number_row(self, tab, label, value) -> ctk.CTkEntry:
         row = ctk.CTkFrame(tab, fg_color="transparent")
         row.pack(fill="x", pady=4)
@@ -165,6 +173,16 @@ class SettingsWindow(ctk.CTkToplevel):
         entry.pack(side="left", fill="x", expand=True)
         return entry
 
+    def _handle_reset_layout(self) -> None:
+        original = AppSettings()
+
+        (self.freeform_switch.select() if original.freeform_resize_enabled else self.freeform_switch.deselect())
+        self._set_entry_value(self.window_width_entry, original.window_width)
+        self._set_entry_value(self.window_height_entry, original.window_height)
+        self._set_entry_value(self.sidebar_width_entry, original.sidebar_width)
+        self._set_entry_value(self.header_height_entry, original.header_height)
+        self._set_entry_value(self.bottom_band_height_entry, original.bottom_band_height)
+
     # ---- Storage tab ----
 
     def _build_storage_tab(self, tab, data_directory) -> None:
@@ -173,11 +191,18 @@ class SettingsWindow(ctk.CTkToplevel):
         self.data_directory_label.pack(anchor="w", pady=(0, 10))
         ctk.CTkButton(tab, text="Choose folder…", command=self._pick_data_directory).pack(anchor="w")
 
+        self._reset_row(tab, self._handle_reset_storage)
+
     def _pick_data_directory(self) -> None:
         chosen = self._open_native_dialog(filedialog.askdirectory, initialdir=self._data_directory)
         if chosen:
             self._data_directory = chosen
             self.data_directory_label.configure(text=chosen)
+
+    def _handle_reset_storage(self) -> None:
+        original = AppSettings()
+        self._data_directory = original.data_directory
+        self.data_directory_label.configure(text=original.data_directory)
 
     # ---- Appearance tab ----
 
