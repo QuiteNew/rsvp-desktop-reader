@@ -57,15 +57,23 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _open_native_dialog(self, dialog_fn, **kwargs):
         """Run any native OS dialog safely from inside this modally-grabbed
-        window — release/re-grab avoids the earlier Windows freeze bug."""
+        window. Releasing the grab before opening avoids the original
+        Windows freeze bug. Re-acquiring it is deliberately deferred via
+        after() rather than done immediately — some native dialogs (e.g.
+        creating a new folder inside the folder browser) do extra OS-level
+        window churn on close, and re-grabbing before Windows has fully
+        settled that churn can reproduce the same freeze. Same reasoning
+        as why this window's very first grab_set(), above, is deferred."""
         self.grab_release()
         result = dialog_fn(parent=self, **kwargs)
-        self.grab_set()
+        self.after(50, self._regrab_if_still_open)
         return result
 
+    def _regrab_if_still_open(self) -> None:
+        if self.winfo_exists():
+            self.grab_set()
+
     def _set_entry_value(self, entry: ctk.CTkEntry, value) -> None:
-        """CTkEntry has no direct .set() the way a slider does — resetting
-        its displayed text means clearing it and reinserting explicitly."""
         entry.delete(0, "end")
         entry.insert(0, str(value))
 
@@ -98,8 +106,6 @@ class SettingsWindow(ctk.CTkToplevel):
         self._reset_row(tab, self._handle_reset_defaults)
 
     def _reset_row(self, tab, command) -> None:
-        """Shared 'Reset to Original Defaults' button — same label,
-        placement, and style across every tab that has one."""
         row = ctk.CTkFrame(tab, fg_color="transparent")
         row.pack(fill="x", pady=(20, 0))
         ctk.CTkButton(row, text="Reset to Original Defaults", command=command).pack(anchor="w")
