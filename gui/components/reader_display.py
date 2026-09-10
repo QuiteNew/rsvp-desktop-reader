@@ -1,13 +1,14 @@
 import customtkinter as ctk
 from core.reader import ReaderSession
+from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW
 
 
 class ReaderDisplay(ctk.CTkFrame):
-    """Displays the flashing word, with the ORP letter rendered in a distinct
-    color and weight from the rest of the word."""
+    """Displays the flashing word, with the ORP letter rendered in a
+    distinct color from the rest of the word."""
 
-    DEFAULT_FONT_COLOR = "#FFFFFF"
-    DEFAULT_HIGHLIGHT_COLOR = "#E74C3C"
+    DEFAULT_FONT_COLOR = COCOA_INK
+    DEFAULT_HIGHLIGHT_COLOR = EMBER_GLOW
 
     def __init__(self, master, on_position_changed=None):
         super().__init__(master, fg_color="transparent")
@@ -19,16 +20,15 @@ class ReaderDisplay(ctk.CTkFrame):
         self.word_row = ctk.CTkFrame(self, fg_color="transparent")
         self.word_row.pack(expand=True)
 
-        plain_font = ctk.CTkFont(family="Arial", size=32)
-        focus_font = ctk.CTkFont(family="Arial", size=32, weight="bold")
+        word_font = ctk.CTkFont(family=FONT_HEADING, size=32)
 
-        self.before_label = ctk.CTkLabel(self.word_row, text="", font=plain_font, text_color=self.DEFAULT_FONT_COLOR)
+        self.before_label = ctk.CTkLabel(self.word_row, text="", font=word_font, text_color=self.DEFAULT_FONT_COLOR)
         self.before_label.pack(side="left")
 
-        self.focus_label = ctk.CTkLabel(self.word_row, text="", font=focus_font, text_color=self.DEFAULT_HIGHLIGHT_COLOR)
+        self.focus_label = ctk.CTkLabel(self.word_row, text="", font=word_font, text_color=self.DEFAULT_HIGHLIGHT_COLOR)
         self.focus_label.pack(side="left")
 
-        self.after_label = ctk.CTkLabel(self.word_row, text="", font=plain_font, text_color=self.DEFAULT_FONT_COLOR)
+        self.after_label = ctk.CTkLabel(self.word_row, text="", font=word_font, text_color=self.DEFAULT_FONT_COLOR)
         self.after_label.pack(side="left")
 
     def load_session(self, session: ReaderSession, start_paused: bool = False) -> None:

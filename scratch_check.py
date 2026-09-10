@@ -1,9 +1,9 @@
-from core.transcript_store import TranscriptStore
+import tkinter as tk
+import tkinter.font as tkfont
+from gui.theme import register_fonts
 
-store = TranscriptStore()
-print("Loaded spaces:", store.spaces)
-print("Loaded transcripts:", [t.title for t in store.transcripts])
-
-store.add_space("Testing")
-store.add_transcript("Persistence check", store.current_space)
-print("After adding — spaces:", store.spaces)
+register_fonts()
+root = tk.Tk()
+matches = [f for f in tkfont.families() if "fredoka" in f.lower() or "quicksand" in f.lower()]
+print("Matching font families found:", matches)
+root.destroy()

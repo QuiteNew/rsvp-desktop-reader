@@ -12,6 +12,8 @@ from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
 from core.transcript_store import TranscriptStore
 from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, HEADER_HEIGHT_RANGE, BOTTOM_BAND_HEIGHT_RANGE
+from gui.theme import HEARTH_PAPER
+from gui.theme import unregister_fonts
 
 
 class RSVPApp(ctk.CTk):
@@ -23,6 +25,8 @@ class RSVPApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("RSVP Reader")
+
+        self.configure(fg_color=HEARTH_PAPER)
 
         self.settings_store = SettingsStore()
         self.store = TranscriptStore(data_directory=self.settings_store.data_directory)
@@ -307,6 +311,7 @@ class RSVPApp(ctk.CTk):
 
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()
+        unregister_fonts()
         self.destroy()
 
     def _toggle_focus_mode(self) -> None:

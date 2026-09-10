@@ -27,9 +27,9 @@ class AppSettings:
     header_height: int = 50
     bottom_band_height: int = 150
     default_wpm: int = 300
-    default_font_color: str = "#FFFFFF"
-    default_highlight_color: str = "#E74C3C"
-    default_background_color: str = "#1E1E1E"
+    default_font_color: str = "#3B2E27"        # Cocoa Ink
+    default_highlight_color: str = "#D98A3D"   # Ember Glow
+    default_background_color: str = "#F6EFE3"  # Hearth Paper
     data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
     freeform_resize_enabled: bool = False
 

@@ -6,6 +6,7 @@ from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
 from gui.components.stop_button import StopButton
 from gui.components.detached_window import DetachedTranscriptWindow
+from gui.theme import HEARTH_PAPER
 
 
 class Canvas(ctk.CTkFrame):
@@ -13,7 +14,7 @@ class Canvas(ctk.CTkFrame):
     above whichever content state applies."""
 
     def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None, on_pause_changed=None, on_draft_changed=None):
-        super().__init__(master, fg_color="#2ECC71", corner_radius=0)
+        super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
         self.on_maximize_toggle = on_maximize_toggle
         self.on_position_changed = on_position_changed
