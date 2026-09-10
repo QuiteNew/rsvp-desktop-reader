@@ -13,6 +13,8 @@ class Canvas(ctk.CTkFrame):
     """Main reading area: stop button (top-left) and toolbar (top-right)
     above whichever content state applies."""
 
+    SKIP_WORD_COUNT = 10
+
     def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None, on_pause_changed=None, on_draft_changed=None):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -115,6 +117,18 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_wpm(wpm)
         if self._detached_window:
             self._detached_window.reader_display.set_wpm(wpm)
+
+    def skip_backward(self) -> None:
+        self._skip(-self.SKIP_WORD_COUNT)
+
+    def skip_forward(self) -> None:
+        self._skip(self.SKIP_WORD_COUNT)
+
+    def _skip(self, delta: int) -> None:
+        self.reader_display.skip(delta)
+        if self._detached_window:
+            self._detached_window.reader_display.skip(delta)
+
 
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self.reader_display.set_colors(font_color, highlight_color, background_color)

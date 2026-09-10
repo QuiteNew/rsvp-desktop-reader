@@ -119,7 +119,10 @@ class RSVPApp(ctk.CTk):
             on_font_color_changed=self._handle_font_color_changed,
             on_highlight_color_changed=self._handle_highlight_color_changed,
             on_background_color_changed=self._handle_background_color_changed,
+            on_skip_back=self.canvas.skip_backward,
+            on_skip_forward=self.canvas.skip_forward,
         )
+
         self.footer.grid(row=4, column=2, sticky="nsew")
 
         self._apply_freeform_resize_state()

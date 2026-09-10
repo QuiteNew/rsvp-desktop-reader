@@ -12,8 +12,6 @@ class ReaderSession:
         words = tokenize(clean)
         self.frames: list[ORPWord] = [split_at_orp(w) for w in words]
         self.wpm = wpm
-        # Clamped defensively — guards against a stale saved position ever
-        # exceeding the word count (not currently reachable, but cheap to guard)
         self.index = min(start_index, len(self.frames))
 
     @property
@@ -35,6 +33,12 @@ class ReaderSession:
     def advance(self) -> None:
         if not self.is_finished:
             self.index += 1
+
+    def seek(self, delta: int) -> None:
+        """Jump the current position by delta words — negative moves
+        backward, positive moves forward — clamped so it can never land
+        before the first word or past the last."""
+        self.index = max(0, min(self.total_words, self.index + delta))
 
     def reset(self) -> None:
         self.index = 0
