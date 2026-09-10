@@ -3,6 +3,7 @@ from core.tokenizer import tokenize
 from core.orp import split_at_orp, ORPWord
 from core.timing import wpm_to_delay_ms
 
+DEFAULT_SKIP_WORDS = 10
 
 class ReaderSession:
     """Holds a tokenized, ORP-split transcript and tracks playback position."""

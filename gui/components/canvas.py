@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from core.reader import ReaderSession
+from core.reader import ReaderSession, DEFAULT_SKIP_WORDS
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
@@ -12,8 +12,6 @@ from gui.theme import HEARTH_PAPER
 class Canvas(ctk.CTkFrame):
     """Main reading area: stop button (top-left) and toolbar (top-right)
     above whichever content state applies."""
-
-    SKIP_WORD_COUNT = 10
 
     def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None, on_pause_changed=None, on_draft_changed=None):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
@@ -84,12 +82,6 @@ class Canvas(ctk.CTkFrame):
             self._show_input()
 
     def handle_transcript_deleted(self, transcript_id: int) -> None:
-        """Clean up if the transcript being deleted is open anywhere in
-        this canvas — as the current view, detached in its own window, or
-        just marked stopped. current_transcript is cleared FIRST, before
-        closing any detached window — the detached-close flow normally
-        reloads whatever current_transcript still points to, which would
-        otherwise briefly resurrect the just-deleted transcript's content."""
         was_current = self.current_transcript is not None and self.current_transcript.id == transcript_id
         was_detached = self._detached_transcript_id == transcript_id
 
@@ -118,22 +110,21 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.reader_display.set_wpm(wpm)
 
+    def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
+        self.reader_display.set_colors(font_color, highlight_color, background_color)
+        if self._detached_window:
+            self._detached_window.reader_display.set_colors(font_color, highlight_color, background_color)
+
     def skip_backward(self) -> None:
-        self._skip(-self.SKIP_WORD_COUNT)
+        self._skip(-DEFAULT_SKIP_WORDS)
 
     def skip_forward(self) -> None:
-        self._skip(self.SKIP_WORD_COUNT)
+        self._skip(DEFAULT_SKIP_WORDS)
 
     def _skip(self, delta: int) -> None:
         self.reader_display.skip(delta)
         if self._detached_window:
             self._detached_window.reader_display.skip(delta)
-
-
-    def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
-        self.reader_display.set_colors(font_color, highlight_color, background_color)
-        if self._detached_window:
-            self._detached_window.reader_display.set_colors(font_color, highlight_color, background_color)
 
     def save_pending_draft(self) -> None:
         self._capture_current_draft()

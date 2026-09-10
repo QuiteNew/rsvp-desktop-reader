@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from core.reader import ReaderSession
+from core.reader import ReaderSession, DEFAULT_SKIP_WORDS
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
@@ -23,8 +23,11 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
 
         self.toolbar = CanvasToolbar(
             self,
+            on_skip_back=self._handle_skip_back,
+            on_skip_forward=self._handle_skip_forward,
             on_pause_toggle=self._handle_pause_toggle,
             on_restart=self._handle_restart,
+            show_skip=True,
             show_maximize=False,
             show_detach=False,
         )
@@ -63,6 +66,12 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _handle_position_changed(self, index: int) -> None:
         if self.on_position_changed:
             self.on_position_changed(self.transcript, index)
+
+    def _handle_skip_back(self) -> None:
+        self.reader_display.skip(-DEFAULT_SKIP_WORDS)
+
+    def _handle_skip_forward(self) -> None:
+        self.reader_display.skip(DEFAULT_SKIP_WORDS)
 
     def _handle_pause_changed(self, is_paused: bool) -> None:
         if self.on_pause_changed:

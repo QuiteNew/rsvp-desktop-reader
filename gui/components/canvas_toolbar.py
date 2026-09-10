@@ -2,7 +2,8 @@ import customtkinter as ctk
 
 
 class CanvasToolbar(ctk.CTkFrame):
-    """Floating-style control row: pause/play, restart, and optionally detach + maximize.
+    """Floating-style control row: optionally skip back/forward, then
+    pause/play, restart, and optionally detach + maximize.
 
     True translucency isn't possible in Tkinter — this approximates a
     'glass' look with a light, low-contrast fill and soft rounded corners.
@@ -14,20 +15,32 @@ class CanvasToolbar(ctk.CTkFrame):
     def __init__(
         self,
         master,
+        on_skip_back=None,
+        on_skip_forward=None,
         on_pause_toggle=None,
         on_restart=None,
         on_maximize_toggle=None,
         on_detach=None,
+        show_skip: bool = False,
         show_maximize: bool = True,
         show_detach: bool = True,
     ):
         super().__init__(master, fg_color="transparent")
+        self.on_skip_back = on_skip_back
+        self.on_skip_forward = on_skip_forward
         self.on_pause_toggle = on_pause_toggle
         self.on_restart = on_restart
         self.on_maximize_toggle = on_maximize_toggle
         self.on_detach = on_detach
 
-        # Order: Pause, Restart, Detach, Maximize — left to right
+        # Order: [Rewind, Forward,] Pause, Restart, [Detach,] [Maximize] — left to right
+        if show_skip:
+            self.skip_back_button = self._make_button("<<", self._handle_skip_back)
+            self.skip_back_button.pack(side="left", padx=(0, 6))
+
+            self.skip_forward_button = self._make_button(">>", self._handle_skip_forward)
+            self.skip_forward_button.pack(side="left", padx=(0, 6))
+
         self.pause_button = self._make_button("⏸", self._handle_pause_toggle)
         self.pause_button.pack(side="left", padx=(0, 6))
 
@@ -56,6 +69,14 @@ class CanvasToolbar(ctk.CTkFrame):
 
     def set_paused(self, is_paused: bool) -> None:
         self.pause_button.configure(text="▶" if is_paused else "⏸")
+
+    def _handle_skip_back(self) -> None:
+        if self.on_skip_back:
+            self.on_skip_back()
+
+    def _handle_skip_forward(self) -> None:
+        if self.on_skip_forward:
+            self.on_skip_forward()
 
     def _handle_pause_toggle(self) -> None:
         if self.on_pause_toggle:
