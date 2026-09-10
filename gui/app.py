@@ -10,29 +10,28 @@ from gui.components.footer import Footer
 from gui.components.add_transcript_dialog import AddTranscriptDialog
 from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
+from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
+from gui.theme import HEARTH_PAPER, unregister_fonts
 from core.transcript_store import TranscriptStore
 from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, HEADER_HEIGHT_RANGE, BOTTOM_BAND_HEIGHT_RANGE
-from gui.theme import HEARTH_PAPER
-from gui.theme import unregister_fonts
 
 
 class RSVPApp(ctk.CTk):
     """Main application window: sidebar | vertical divider | main content,
     across 5 rows (headers / divider / content / divider / bottom band)."""
 
-    DIVIDER_THICKNESS = 2  # fixed line weight — not itself user-adjustable
+    DIVIDER_THICKNESS = 2
 
     def __init__(self):
         super().__init__()
         self.title("RSVP Reader")
-
         self.configure(fg_color=HEARTH_PAPER)
 
         self.settings_store = SettingsStore()
         self.store = TranscriptStore(data_directory=self.settings_store.data_directory)
         self._focus_mode = False
         self._current_transcript = None
-        self._drag_start_value = None  # shared across all 3 drag handlers — only one can be active at a time
+        self._drag_start_value = None
         self._pending_value = None
 
         self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
@@ -72,7 +71,11 @@ class RSVPApp(ctk.CTk):
         )
         self.top_divider_right.grid(row=1, column=2, sticky="nsew")
 
-        self.list_body = TranscriptListBody(self, on_select=self._handle_open_transcript)
+        self.list_body = TranscriptListBody(
+            self,
+            on_select=self._handle_open_transcript,
+            on_delete_requested=self._handle_delete_requested,
+        )
         self.list_body.grid(row=2, column=0, sticky="nsew")
 
         self.canvas = Canvas(
@@ -123,9 +126,6 @@ class RSVPApp(ctk.CTk):
         self._refresh_transcript_list()
 
     def _apply_layout_sizes(self) -> None:
-        """The single source of truth for every adjustable + fixed grid
-        dimension. Reused at startup, after Settings Apply, and when
-        restoring from focus mode."""
         self.grid_columnconfigure(0, weight=0, minsize=self.settings_store.sidebar_width)
         self.grid_columnconfigure(1, weight=0, minsize=self.DIVIDER_THICKNESS)
         self.grid_rowconfigure(0, weight=0, minsize=self.settings_store.header_height)
@@ -141,8 +141,6 @@ class RSVPApp(ctk.CTk):
         self.bottom_divider_left.set_resizable(enabled)
         self.bottom_divider_right.set_resizable(enabled)
 
-    # ---- Sidebar width drag (direct: dragging right makes it wider) ----
-
     def _handle_sidebar_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.sidebar_width
 
@@ -157,8 +155,6 @@ class RSVPApp(ctk.CTk):
             self._pending_value, self.settings_store.header_height, self.settings_store.bottom_band_height
         )
 
-    # ---- Header height drag (direct: dragging down makes it taller) ----
-
     def _handle_header_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.header_height
 
@@ -172,8 +168,6 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_layout_sizes(
             self.settings_store.sidebar_width, self._pending_value, self.settings_store.bottom_band_height
         )
-
-    # ---- Bottom band height drag (inverse: dragging its TOP edge down shrinks it) ----
 
     def _handle_bottom_band_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.bottom_band_height
@@ -308,6 +302,21 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])
+
+    def _handle_delete_requested(self, transcript) -> None:
+        DeleteTranscriptDialog(self, on_confirm=lambda: self._handle_delete_confirmed(transcript))
+
+    def _handle_delete_confirmed(self, transcript) -> None:
+        was_current = self._current_transcript is not None and self._current_transcript.id == transcript.id
+
+        self.canvas.handle_transcript_deleted(transcript.id)
+        self.store.delete_transcript(transcript.id)
+        self._refresh_transcript_list()
+
+        if was_current:
+            self._current_transcript = None
+            self.header.set_title("No transcript selected")
+            self.footer.set_enabled(False)
 
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()

@@ -81,6 +81,33 @@ class Canvas(ctk.CTkFrame):
             self.input_view.set_text(transcript.draft_text)
             self._show_input()
 
+    def handle_transcript_deleted(self, transcript_id: int) -> None:
+        """Clean up if the transcript being deleted is open anywhere in
+        this canvas — as the current view, detached in its own window, or
+        just marked stopped. current_transcript is cleared FIRST, before
+        closing any detached window — the detached-close flow normally
+        reloads whatever current_transcript still points to, which would
+        otherwise briefly resurrect the just-deleted transcript's content."""
+        was_current = self.current_transcript is not None and self.current_transcript.id == transcript_id
+        was_detached = self._detached_transcript_id == transcript_id
+
+        if was_current:
+            self.current_transcript = None
+            self.reader_display.stop()
+
+        self._stopped_transcript_ids.discard(transcript_id)
+
+        if was_detached:
+            detached_window = self._detached_window
+            self._detached_transcript_id = None
+            self._detached_transcript = None
+            self._detached_window = None
+            if detached_window:
+                detached_window.destroy()
+
+        if was_current:
+            self._show_empty()
+
     def set_maximized(self, is_maximized: bool) -> None:
         self.toolbar.set_maximized(is_maximized)
 
@@ -95,10 +122,6 @@ class Canvas(ctk.CTkFrame):
             self._detached_window.reader_display.set_colors(font_color, highlight_color, background_color)
 
     def save_pending_draft(self) -> None:
-        """Persist whatever's currently typed in the paste box, if it's showing.
-        Draft-saving normally happens only when navigating away from a
-        transcript via load_transcript() — call this explicitly before the
-        app closes, since closing isn't itself a navigation event."""
         self._capture_current_draft()
 
     def _capture_current_draft(self) -> None:
@@ -113,8 +136,6 @@ class Canvas(ctk.CTkFrame):
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.current_transcript:
             self._stopped_transcript_ids.discard(self.current_transcript.id)
-            # The draft is now real, saved text — clear it so stale draft
-            # data doesn't linger in storage once it's no longer needed
             self._report_draft_changed(self.current_transcript, "")
         if self.on_text_submitted and self.current_transcript:
             self.on_text_submitted(self.current_transcript, raw_text)
@@ -156,9 +177,7 @@ class Canvas(ctk.CTkFrame):
         if not self.current_transcript:
             return
         self._detached_transcript_id = self.current_transcript.id
-        self._detached_transcript = self.current_transcript  # remembered explicitly —
-        # current_transcript can change if a different transcript gets opened
-        # in the main canvas while this one is still detached
+        self._detached_transcript = self.current_transcript
 
         draft_text = ""
         if not self.current_transcript.raw_text.strip():
@@ -186,6 +205,7 @@ class Canvas(ctk.CTkFrame):
         detached_transcript = self._detached_transcript
         self._detached_transcript_id = None
         self._detached_transcript = None
+        self._detached_window = None
         if detached_transcript and not detached_transcript.raw_text.strip():
             self._report_draft_changed(detached_transcript, draft_text)
         if self.current_transcript:

@@ -9,8 +9,6 @@ class TranscriptStore:
     in a configurable directory."""
 
     def __init__(self, data_directory: str | None = None):
-        # Optional with a sensible fallback — anything creating TranscriptStore()
-        # with no arguments (e.g. scratch_check.py) keeps working unchanged.
         self._data_directory = data_directory or str(DEFAULT_DATA_DIR)
 
         loaded = load_state(self._data_directory)
@@ -29,10 +27,6 @@ class TranscriptStore:
         save_state(self._data_directory, self._spaces, self._current_space_index, self._transcripts, self._next_id)
 
     def set_data_directory(self, directory: str) -> None:
-        """Relocate where this store saves — writes the current in-memory
-        state to the new directory immediately, so nothing is lost. The old
-        file, if any, is left in place untouched rather than deleted, to
-        avoid any risk of destroying data through a relocation bug."""
         self._data_directory = directory
         self._save()
 
@@ -142,3 +136,8 @@ class TranscriptStore:
         if t:
             t.draft_text = draft_text
             self._save()
+
+    def delete_transcript(self, transcript_id: int) -> None:
+        """Permanently remove a transcript and persist the change immediately."""
+        self._transcripts = [t for t in self._transcripts if t.id != transcript_id]
+        self._save()
