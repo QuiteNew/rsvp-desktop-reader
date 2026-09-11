@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from core.reader import ReaderSession, DEFAULT_SKIP_WORDS
+from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
@@ -9,13 +9,19 @@ from gui.components.canvas_toolbar import CanvasToolbar
 class DetachedTranscriptWindow(ctk.CTkToplevel):
     """A standalone window showing one transcript, separate from the main app window."""
 
-    def __init__(self, master, transcript, on_text_submitted, on_closed, on_position_changed=None, on_pause_changed=None, initial_draft_text=""):
+    def __init__(
+        self, master, transcript, on_text_submitted, on_closed,
+        on_position_changed=None, on_pause_changed=None, initial_draft_text="",
+        skip_word_count: int = 10, pause_on_skip: bool = False,
+    ):
         super().__init__(master)
         self.transcript = transcript
         self.on_text_submitted = on_text_submitted
         self.on_closed = on_closed
         self.on_position_changed = on_position_changed
         self.on_pause_changed = on_pause_changed
+        self.skip_word_count = skip_word_count
+        self.pause_on_skip = pause_on_skip
 
         self.title(transcript.title)
         self.geometry("500x350")
@@ -42,6 +48,12 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def get_draft_text(self) -> str:
         return self.input_view.get_text()
 
+    def set_skip_word_count(self, count: int) -> None:
+        self.skip_word_count = count
+
+    def set_pause_on_skip(self, enabled: bool) -> None:
+        self.pause_on_skip = enabled
+
     def _render_current_state(self) -> None:
         self.toolbar.pack_forget()
         self.input_view.pack_forget()
@@ -67,15 +79,20 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self.on_position_changed:
             self.on_position_changed(self.transcript, index)
 
-    def _handle_skip_back(self) -> None:
-        self.reader_display.skip(-DEFAULT_SKIP_WORDS)
-
-    def _handle_skip_forward(self) -> None:
-        self.reader_display.skip(DEFAULT_SKIP_WORDS)
-
     def _handle_pause_changed(self, is_paused: bool) -> None:
         if self.on_pause_changed:
             self.on_pause_changed(self.transcript, is_paused)
+
+    def _handle_skip_back(self) -> None:
+        self._handle_skip(-self.skip_word_count)
+
+    def _handle_skip_forward(self) -> None:
+        self._handle_skip(self.skip_word_count)
+
+    def _handle_skip(self, delta: int) -> None:
+        is_paused = self.reader_display.skip(delta, force_pause=self.pause_on_skip)
+        self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
 
     def _handle_pause_toggle(self) -> None:
         is_paused = self.reader_display.toggle_pause()

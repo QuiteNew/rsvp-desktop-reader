@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from core.reader import ReaderSession, DEFAULT_SKIP_WORDS
+from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
@@ -13,13 +13,20 @@ class Canvas(ctk.CTkFrame):
     """Main reading area: stop button (top-left) and toolbar (top-right)
     above whichever content state applies."""
 
-    def __init__(self, master, on_text_submitted=None, on_maximize_toggle=None, on_position_changed=None, on_pause_changed=None, on_draft_changed=None):
+    def __init__(
+        self, master,
+        on_text_submitted=None, on_maximize_toggle=None,
+        on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
+        skip_word_count: int = 10, pause_on_skip: bool = False,
+    ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
         self.on_maximize_toggle = on_maximize_toggle
         self.on_position_changed = on_position_changed
         self.on_pause_changed = on_pause_changed
         self.on_draft_changed = on_draft_changed
+        self._skip_word_count = skip_word_count
+        self._pause_on_skip = pause_on_skip
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -116,15 +123,35 @@ class Canvas(ctk.CTkFrame):
             self._detached_window.reader_display.set_colors(font_color, highlight_color, background_color)
 
     def skip_backward(self) -> None:
-        self._skip(-DEFAULT_SKIP_WORDS)
+        self._skip(-self._skip_word_count)
 
     def skip_forward(self) -> None:
-        self._skip(DEFAULT_SKIP_WORDS)
+        self._skip(self._skip_word_count)
 
     def _skip(self, delta: int) -> None:
-        self.reader_display.skip(delta)
+        """Skip whichever reader display is actually active — the
+        detached popup's if this transcript is currently detached,
+        otherwise the main canvas's own. Only that one result gets
+        persisted: the main display sits inactive while detached, and
+        using its (stale, always-unpaused) result instead would silently
+        overwrite the real one from the detached side."""
         if self._detached_window:
-            self._detached_window.reader_display.skip(delta)
+            is_paused = self._detached_window.reader_display.skip(delta, force_pause=self._pause_on_skip)
+            self._detached_window.toolbar.set_paused(is_paused)
+        else:
+            is_paused = self.reader_display.skip(delta, force_pause=self._pause_on_skip)
+            self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
+
+    def set_skip_word_count(self, count: int) -> None:
+        self._skip_word_count = count
+        if self._detached_window:
+            self._detached_window.set_skip_word_count(count)
+
+    def set_pause_on_skip(self, enabled: bool) -> None:
+        self._pause_on_skip = enabled
+        if self._detached_window:
+            self._detached_window.set_pause_on_skip(enabled)
 
     def save_pending_draft(self) -> None:
         self._capture_current_draft()
@@ -181,6 +208,7 @@ class Canvas(ctk.CTkFrame):
     def _handle_detach(self) -> None:
         if not self.current_transcript:
             return
+        self.reader_display.stop()  # the main display becomes inactive the moment this transcript detaches
         self._detached_transcript_id = self.current_transcript.id
         self._detached_transcript = self.current_transcript
 
@@ -197,6 +225,8 @@ class Canvas(ctk.CTkFrame):
             on_closed=self._handle_detached_closed,
             on_position_changed=self.on_position_changed,
             on_pause_changed=self.on_pause_changed,
+            skip_word_count=self._skip_word_count,
+            pause_on_skip=self._pause_on_skip,
         )
         self._show_detached_placeholder()
 

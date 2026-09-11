@@ -63,20 +63,23 @@ class ReaderDisplay(ctk.CTkFrame):
         self._report_position()
         self._schedule_next()
 
-    def skip(self, delta: int) -> None:
-        """Jump forward or backward by delta words, redraw immediately,
-        and resume the timer only if not currently paused — preserves
-        whatever play/pause state was already active. Unlike restart(),
-        which always resumes playing, skip() respects a pause: skipping
-        while paused just moves the frozen word, it doesn't un-pause."""
+    def skip(self, delta: int, force_pause: bool = False) -> bool:
+        """Jump by delta words and redraw immediately. If force_pause is
+        True, always land paused regardless of prior state; otherwise
+        preserve whatever play/pause state was already active. Returns
+        the resulting paused state, mirroring toggle_pause()'s pattern,
+        so the caller can sync a toolbar icon and persist it."""
         if self.session is None:
-            return
+            return self._is_paused
         self._cancel_pending()
         self.session.seek(delta)
         self._show_current_frame()
         self._report_position()
+        if force_pause:
+            self._is_paused = True
         if not self._is_paused:
             self._schedule_next()
+        return self._is_paused
 
     def set_wpm(self, wpm: int) -> None:
         if self.session:

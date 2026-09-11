@@ -5,7 +5,7 @@ from core.settings_store import (
     AppSettings,
     WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
     SIDEBAR_WIDTH_RANGE, HEADER_HEIGHT_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
-    WPM_RANGE,
+    WPM_RANGE, SKIP_WORD_COUNT_RANGE,
 )
 
 
@@ -20,12 +20,13 @@ class SettingsWindow(ctk.CTkToplevel):
         sidebar_width, header_height, bottom_band_height,
         freeform_resize_enabled,
         default_wpm, default_font_color, default_highlight_color, default_background_color,
+        skip_word_count, pause_on_skip,
         data_directory,
         on_apply,
     ):
         super().__init__(master)
         self.title("Settings")
-        self.geometry("480x480")
+        self.geometry("480x520")
         self.on_apply = on_apply
         self._data_directory = data_directory
 
@@ -42,7 +43,10 @@ class SettingsWindow(ctk.CTkToplevel):
         storage_tab = self.tabview.add("Storage")
         appearance_tab = self.tabview.add("Appearance")
 
-        self._build_defaults_tab(defaults_tab, default_wpm, default_font_color, default_highlight_color, default_background_color)
+        self._build_defaults_tab(
+            defaults_tab, default_wpm, default_font_color, default_highlight_color,
+            default_background_color, skip_word_count, pause_on_skip,
+        )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, header_height, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
         self._build_appearance_tab(appearance_tab)
@@ -57,13 +61,9 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _open_native_dialog(self, dialog_fn, **kwargs):
         """Run any native OS dialog safely from inside this modally-grabbed
-        window. Releasing the grab before opening avoids the original
-        Windows freeze bug. Re-acquiring it is deliberately deferred via
-        after() rather than done immediately — some native dialogs (e.g.
-        creating a new folder inside the folder browser) do extra OS-level
-        window churn on close, and re-grabbing before Windows has fully
-        settled that churn can reproduce the same freeze. Same reasoning
-        as why this window's very first grab_set(), above, is deferred."""
+        window. Release before opening avoids the earlier Windows freeze
+        bug; re-acquiring is deliberately deferred via after() since some
+        native dialogs do extra OS-level window churn on close."""
         self.grab_release()
         result = dialog_fn(parent=self, **kwargs)
         self.after(50, self._regrab_if_still_open)
@@ -79,7 +79,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, skip_word_count, pause_on_skip) -> None:
         ctk.CTkLabel(tab, text="Applied to newly created transcripts only", text_color="gray60").pack(anchor="w", pady=(5, 15))
 
         wpm_row = ctk.CTkFrame(tab, fg_color="transparent")
@@ -102,6 +102,23 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.default_background_color = background_color
         self.default_background_swatch = self._color_row(tab, "Background colour", background_color, self._pick_default_background_color)
+
+        skip_row = ctk.CTkFrame(tab, fg_color="transparent")
+        skip_row.pack(fill="x", pady=6)
+        ctk.CTkLabel(skip_row, text="Skip amount", width=90, anchor="w").pack(side="left")
+        self.skip_word_count_label = ctk.CTkLabel(skip_row, text=f"{skip_word_count} words", width=70)
+        self.skip_word_count_label.pack(side="right")
+        self.skip_word_count_slider = ctk.CTkSlider(
+            tab, from_=SKIP_WORD_COUNT_RANGE[0], to=SKIP_WORD_COUNT_RANGE[1],
+            number_of_steps=SKIP_WORD_COUNT_RANGE[1] - SKIP_WORD_COUNT_RANGE[0],
+            command=lambda v: self.skip_word_count_label.configure(text=f"{int(v)} words"),
+        )
+        self.skip_word_count_slider.set(skip_word_count)
+        self.skip_word_count_slider.pack(fill="x", pady=(0, 10))
+
+        self.pause_on_skip_switch = ctk.CTkSwitch(tab, text="Pause playback when skipping")
+        (self.pause_on_skip_switch.select() if pause_on_skip else self.pause_on_skip_switch.deselect())
+        self.pause_on_skip_switch.pack(anchor="w", pady=(5, 15))
 
         self._reset_row(tab, self._handle_reset_defaults)
 
@@ -150,6 +167,11 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.default_background_color = original.default_background_color
         self.default_background_swatch.configure(fg_color=original.default_background_color)
+
+        self.skip_word_count_slider.set(original.skip_word_count)
+        self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
+
+        (self.pause_on_skip_switch.select() if original.pause_on_skip else self.pause_on_skip_switch.deselect())
 
     # ---- Layout tab ----
 
@@ -244,6 +266,8 @@ class SettingsWindow(ctk.CTkToplevel):
         values["default_font_color"] = self.default_font_color
         values["default_highlight_color"] = self.default_highlight_color
         values["default_background_color"] = self.default_background_color
+        values["skip_word_count"] = int(self.skip_word_count_slider.get())
+        values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["data_directory"] = self._data_directory
 
         self.error_label.configure(text="")

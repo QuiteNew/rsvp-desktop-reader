@@ -85,6 +85,8 @@ class RSVPApp(ctk.CTk):
             on_position_changed=self._handle_position_changed,
             on_pause_changed=self._handle_pause_changed,
             on_draft_changed=self._handle_draft_changed,
+            skip_word_count=self.settings_store.skip_word_count,
+            pause_on_skip=self.settings_store.pause_on_skip,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -283,6 +285,8 @@ class RSVPApp(ctk.CTk):
             default_background_color=self.settings_store.default_background_color,
             data_directory=self.settings_store.data_directory,
             on_apply=self._handle_settings_applied,
+            skip_word_count=self.settings_store.skip_word_count,
+            pause_on_skip=self.settings_store.pause_on_skip,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
@@ -305,6 +309,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])
+        self.settings_store.set_skip_behavior(values["skip_word_count"], values["pause_on_skip"])
+        self.canvas.set_skip_word_count(values["skip_word_count"])
+        self.canvas.set_pause_on_skip(values["pause_on_skip"])
 
     def _handle_delete_requested(self, transcript) -> None:
         DeleteTranscriptDialog(self, on_confirm=lambda: self._handle_delete_confirmed(transcript))
