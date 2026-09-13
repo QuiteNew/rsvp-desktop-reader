@@ -11,7 +11,8 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
 
     def __init__(
         self, master, transcript, on_text_submitted, on_closed,
-        on_position_changed=None, on_pause_changed=None, initial_draft_text="",
+        on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
+        initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
     ):
         super().__init__(master)
@@ -20,6 +21,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.on_closed = on_closed
         self.on_position_changed = on_position_changed
         self.on_pause_changed = on_pause_changed
+        self.on_stopped_changed = on_stopped_changed
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
 
@@ -59,7 +61,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.input_view.pack_forget()
         self.reader_display.pack_forget()
 
-        if self.transcript.raw_text.strip():
+        if self.transcript.is_stopped:
+            self.input_view.set_text(self.transcript.raw_text)
+            self.input_view.pack(fill="both", expand=True)
+        elif self.transcript.raw_text.strip():
             self.toolbar.pack(anchor="ne", padx=10, pady=10)
             self.toolbar.set_paused(self.transcript.is_paused)
             self.reader_display.set_colors(self.transcript.font_color, self.transcript.highlight_color, self.transcript.background_color)
@@ -72,6 +77,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self.input_view.pack(fill="both", expand=True)
 
     def _handle_text_submitted(self, raw_text: str) -> None:
+        self._handle_stopped_changed(False)
         self.on_text_submitted(self.transcript, raw_text)
         self._render_current_state()
 
@@ -79,9 +85,9 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self.on_position_changed:
             self.on_position_changed(self.transcript, index)
 
-    def _handle_pause_changed(self, is_paused: bool) -> None:
-        if self.on_pause_changed:
-            self.on_pause_changed(self.transcript, is_paused)
+    def _handle_stopped_changed(self, is_stopped: bool) -> None:
+        if self.on_stopped_changed:
+            self.on_stopped_changed(self.transcript, is_stopped)
 
     def _handle_skip_back(self) -> None:
         self._handle_skip(-self.skip_word_count)
@@ -93,6 +99,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         is_paused = self.reader_display.skip(delta, force_pause=self.pause_on_skip)
         self.toolbar.set_paused(is_paused)
         self._handle_pause_changed(is_paused)
+
+    def _handle_pause_changed(self, is_paused: bool) -> None:
+        if self.on_pause_changed:
+            self.on_pause_changed(self.transcript, is_paused)
 
     def _handle_pause_toggle(self) -> None:
         is_paused = self.reader_display.toggle_pause()

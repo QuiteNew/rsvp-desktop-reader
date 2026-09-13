@@ -17,6 +17,7 @@ class Canvas(ctk.CTkFrame):
         self, master,
         on_text_submitted=None, on_maximize_toggle=None,
         on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
+        on_stopped_changed=None,
         skip_word_count: int = 10, pause_on_skip: bool = False,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
@@ -25,6 +26,7 @@ class Canvas(ctk.CTkFrame):
         self.on_position_changed = on_position_changed
         self.on_pause_changed = on_pause_changed
         self.on_draft_changed = on_draft_changed
+        self.on_stopped_changed = on_stopped_changed
         self._skip_word_count = skip_word_count
         self._pause_on_skip = pause_on_skip
         self.current_transcript = None
@@ -32,7 +34,6 @@ class Canvas(ctk.CTkFrame):
         self._detached_transcript = None
         self._detached_window = None
         self._input_currently_shown = False
-        self._stopped_transcript_ids: set[int] = set()
 
         self.button_row = ctk.CTkFrame(self, fg_color="transparent")
         self.button_row.grid_columnconfigure(0, weight=1)
@@ -73,7 +74,7 @@ class Canvas(ctk.CTkFrame):
 
         if transcript.id == self._detached_transcript_id:
             self._show_detached_placeholder()
-        elif transcript.id in self._stopped_transcript_ids:
+        elif transcript.is_stopped:
             self.input_view.set_text(transcript.raw_text)
             self._show_input()
         elif transcript.raw_text.strip():
@@ -95,8 +96,6 @@ class Canvas(ctk.CTkFrame):
         if was_current:
             self.current_transcript = None
             self.reader_display.stop()
-
-        self._stopped_transcript_ids.discard(transcript_id)
 
         if was_detached:
             detached_window = self._detached_window
@@ -129,12 +128,6 @@ class Canvas(ctk.CTkFrame):
         self._skip(self._skip_word_count)
 
     def _skip(self, delta: int) -> None:
-        """Skip whichever reader display is actually active — the
-        detached popup's if this transcript is currently detached,
-        otherwise the main canvas's own. Only that one result gets
-        persisted: the main display sits inactive while detached, and
-        using its (stale, always-unpaused) result instead would silently
-        overwrite the real one from the detached side."""
         if self._detached_window:
             is_paused = self._detached_window.reader_display.skip(delta, force_pause=self._pause_on_skip)
             self._detached_window.toolbar.set_paused(is_paused)
@@ -157,7 +150,7 @@ class Canvas(ctk.CTkFrame):
         self._capture_current_draft()
 
     def _capture_current_draft(self) -> None:
-        if self._input_currently_shown and self.current_transcript:
+        if self._input_currently_shown and self.current_transcript and not self.current_transcript.is_stopped:
             text = self.input_view.get_text().strip()
             self._report_draft_changed(self.current_transcript, text)
 
@@ -165,9 +158,13 @@ class Canvas(ctk.CTkFrame):
         if self.on_draft_changed:
             self.on_draft_changed(transcript, text)
 
+    def _handle_stopped_changed(self, is_stopped: bool) -> None:
+        if self.on_stopped_changed and self.current_transcript:
+            self.on_stopped_changed(self.current_transcript, is_stopped)
+
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.current_transcript:
-            self._stopped_transcript_ids.discard(self.current_transcript.id)
+            self._handle_stopped_changed(False)
             self._report_draft_changed(self.current_transcript, "")
         if self.on_text_submitted and self.current_transcript:
             self.on_text_submitted(self.current_transcript, raw_text)
@@ -195,9 +192,9 @@ class Canvas(ctk.CTkFrame):
             return
         self.reader_display.stop()
         self.toolbar.set_paused(False)
-        self._stopped_transcript_ids.add(self.current_transcript.id)
         self._handle_position_changed(0)
         self._handle_pause_changed(False)
+        self._handle_stopped_changed(True)
         self.input_view.set_text(self.current_transcript.raw_text)
         self._show_input()
 
@@ -208,12 +205,17 @@ class Canvas(ctk.CTkFrame):
     def _handle_detach(self) -> None:
         if not self.current_transcript:
             return
-        self.reader_display.stop()  # the main display becomes inactive the moment this transcript detaches
+        self.reader_display.stop()
         self._detached_transcript_id = self.current_transcript.id
         self._detached_transcript = self.current_transcript
 
+        # A stopped transcript needs its real saved text handed to the
+        # popup as an editable draft — otherwise the popup has no way to
+        # know it shouldn't just start flashing the text it still has.
         draft_text = ""
-        if not self.current_transcript.raw_text.strip():
+        if self.current_transcript.is_stopped:
+            draft_text = self.current_transcript.raw_text
+        elif not self.current_transcript.raw_text.strip():
             draft_text = self.input_view.get_text().strip()
             self._report_draft_changed(self.current_transcript, draft_text)
 
@@ -225,13 +227,13 @@ class Canvas(ctk.CTkFrame):
             on_closed=self._handle_detached_closed,
             on_position_changed=self.on_position_changed,
             on_pause_changed=self.on_pause_changed,
+            on_stopped_changed=self.on_stopped_changed,
             skip_word_count=self._skip_word_count,
             pause_on_skip=self._pause_on_skip,
         )
         self._show_detached_placeholder()
 
     def _handle_detached_text_submitted(self, transcript, raw_text: str) -> None:
-        self._stopped_transcript_ids.discard(transcript.id)
         self._report_draft_changed(transcript, "")
         if self.on_text_submitted:
             self.on_text_submitted(transcript, raw_text)

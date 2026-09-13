@@ -107,6 +107,12 @@ class TranscriptStore:
             t.is_paused = is_paused
             self._save()
 
+    def set_transcript_stopped(self, transcript_id: int, is_stopped: bool) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.is_stopped = is_stopped
+            self._save()
+
     def set_transcript_wpm(self, transcript_id: int, wpm: int) -> None:
         t = self._find_transcript(transcript_id)
         if t:

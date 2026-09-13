@@ -87,6 +87,7 @@ class RSVPApp(ctk.CTk):
             on_draft_changed=self._handle_draft_changed,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
+            on_stopped_changed=self._handle_stopped_changed,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -235,6 +236,9 @@ class RSVPApp(ctk.CTk):
 
     def _handle_pause_changed(self, transcript, is_paused: bool) -> None:
         self.store.set_transcript_paused(transcript.id, is_paused)
+
+    def _handle_stopped_changed(self, transcript, is_stopped: bool) -> None:
+        self.store.set_transcript_stopped(transcript.id, is_stopped)
 
     def _handle_draft_changed(self, transcript, text: str) -> None:
         self.store.set_transcript_draft_text(transcript.id, text)

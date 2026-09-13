@@ -15,3 +15,4 @@ class Transcript:
     background_color: str = "#1E1E1E"
     is_paused: bool = False
     draft_text: str = ""
+    is_stopped: bool = False
