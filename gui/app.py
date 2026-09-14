@@ -294,6 +294,8 @@ class RSVPApp(ctk.CTk):
             on_apply=self._handle_settings_applied,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
+            on_skip_word_count_changed=self._handle_skip_word_count_live,
+            on_pause_on_skip_changed=self._handle_pause_on_skip_live,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
@@ -323,6 +325,7 @@ class RSVPApp(ctk.CTk):
     def _handle_delete_requested(self, transcript) -> None:
         DeleteTranscriptDialog(self, on_confirm=lambda: self._handle_delete_confirmed(transcript))
 
+
     def _handle_delete_confirmed(self, transcript) -> None:
         was_current = self._current_transcript is not None and self._current_transcript.id == transcript.id
 
@@ -334,6 +337,14 @@ class RSVPApp(ctk.CTk):
             self._current_transcript = None
             self.header.set_title("No transcript selected")
             self.footer.set_enabled(False)
+
+    def _handle_skip_word_count_live(self, count: int) -> None:
+        self.settings_store.set_skip_behavior(count, self.settings_store.pause_on_skip)
+        self.canvas.set_skip_word_count(count)
+
+    def _handle_pause_on_skip_live(self, enabled: bool) -> None:
+        self.settings_store.set_skip_behavior(self.settings_store.skip_word_count, enabled)
+        self.canvas.set_pause_on_skip(enabled)
 
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()

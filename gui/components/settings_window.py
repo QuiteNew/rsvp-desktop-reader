@@ -23,11 +23,17 @@ class SettingsWindow(ctk.CTkToplevel):
         skip_word_count, pause_on_skip,
         data_directory,
         on_apply,
+        on_skip_word_count_changed=None,
+        on_pause_on_skip_changed=None,
     ):
         super().__init__(master)
         self.title("Settings")
-        self.geometry("480x520")
+        self.geometry("500x600")
+        self.minsize(420, 420)
+        self.resizable(True, True)
         self.on_apply = on_apply
+        self.on_skip_word_count_changed = on_skip_word_count_changed
+        self.on_pause_on_skip_changed = on_pause_on_skip_changed
         self._data_directory = data_directory
 
         self.lift()
@@ -60,10 +66,6 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkButton(button_row, text="Apply", command=self._handle_apply).pack(side="right")
 
     def _open_native_dialog(self, dialog_fn, **kwargs):
-        """Run any native OS dialog safely from inside this modally-grabbed
-        window. Release before opening avoids the earlier Windows freeze
-        bug; re-acquiring is deliberately deferred via after() since some
-        native dialogs do extra OS-level window churn on close."""
         self.grab_release()
         result = dialog_fn(parent=self, **kwargs)
         self.after(50, self._regrab_if_still_open)
@@ -80,47 +82,59 @@ class SettingsWindow(ctk.CTkToplevel):
     # ---- Defaults tab ----
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, skip_word_count, pause_on_skip) -> None:
-        ctk.CTkLabel(tab, text="Applied to newly created transcripts only", text_color="gray60").pack(anchor="w", pady=(5, 15))
+        # Scrollable so this tab's content can keep growing without ever
+        # pushing the shared Apply/Close row below the visible window.
+        scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
 
-        wpm_row = ctk.CTkFrame(tab, fg_color="transparent")
+        ctk.CTkLabel(scroll, text="Applied to newly created transcripts only", text_color="gray60").pack(anchor="w", pady=(5, 15))
+
+        wpm_row = ctk.CTkFrame(scroll, fg_color="transparent")
         wpm_row.pack(fill="x", pady=6)
         ctk.CTkLabel(wpm_row, text="Speed", width=90, anchor="w").pack(side="left")
         self.default_wpm_label = ctk.CTkLabel(wpm_row, text=f"{wpm} WPM", width=70)
         self.default_wpm_label.pack(side="right")
         self.default_wpm_slider = ctk.CTkSlider(
-            tab, from_=WPM_RANGE[0], to=WPM_RANGE[1], number_of_steps=90,
+            scroll, from_=WPM_RANGE[0], to=WPM_RANGE[1], number_of_steps=90,
             command=lambda v: self.default_wpm_label.configure(text=f"{int(v)} WPM"),
         )
         self.default_wpm_slider.set(wpm)
         self.default_wpm_slider.pack(fill="x", pady=(0, 10))
 
         self.default_font_color = font_color
-        self.default_font_swatch = self._color_row(tab, "Font colour", font_color, self._pick_default_font_color)
+        self.default_font_swatch = self._color_row(scroll, "Font colour", font_color, self._pick_default_font_color)
 
         self.default_highlight_color = highlight_color
-        self.default_highlight_swatch = self._color_row(tab, "Highlight colour", highlight_color, self._pick_default_highlight_color)
+        self.default_highlight_swatch = self._color_row(scroll, "Highlight colour", highlight_color, self._pick_default_highlight_color)
 
         self.default_background_color = background_color
-        self.default_background_swatch = self._color_row(tab, "Background colour", background_color, self._pick_default_background_color)
+        self.default_background_swatch = self._color_row(scroll, "Background colour", background_color, self._pick_default_background_color)
 
-        skip_row = ctk.CTkFrame(tab, fg_color="transparent")
+        ctk.CTkLabel(
+            scroll, text="Skip controls below apply immediately, to the current transcript too — not just future ones",
+            text_color="gray60", wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(10, 10))
+
+        skip_row = ctk.CTkFrame(scroll, fg_color="transparent")
         skip_row.pack(fill="x", pady=6)
         ctk.CTkLabel(skip_row, text="Skip amount", width=90, anchor="w").pack(side="left")
         self.skip_word_count_label = ctk.CTkLabel(skip_row, text=f"{skip_word_count} words", width=70)
         self.skip_word_count_label.pack(side="right")
         self.skip_word_count_slider = ctk.CTkSlider(
-            tab, from_=SKIP_WORD_COUNT_RANGE[0], to=SKIP_WORD_COUNT_RANGE[1],
+            scroll, from_=SKIP_WORD_COUNT_RANGE[0], to=SKIP_WORD_COUNT_RANGE[1],
             number_of_steps=SKIP_WORD_COUNT_RANGE[1] - SKIP_WORD_COUNT_RANGE[0],
-            command=lambda v: self.skip_word_count_label.configure(text=f"{int(v)} words"),
+            command=self._handle_skip_word_count_slide,
         )
         self.skip_word_count_slider.set(skip_word_count)
         self.skip_word_count_slider.pack(fill="x", pady=(0, 10))
 
-        self.pause_on_skip_switch = ctk.CTkSwitch(tab, text="Pause playback when skipping")
+        self.pause_on_skip_switch = ctk.CTkSwitch(
+            scroll, text="Pause playback when skipping", command=self._handle_pause_on_skip_toggle
+        )
         (self.pause_on_skip_switch.select() if pause_on_skip else self.pause_on_skip_switch.deselect())
         self.pause_on_skip_switch.pack(anchor="w", pady=(5, 15))
 
-        self._reset_row(tab, self._handle_reset_defaults)
+        self._reset_row(scroll, self._handle_reset_defaults)
 
     def _reset_row(self, tab, command) -> None:
         row = ctk.CTkFrame(tab, fg_color="transparent")
@@ -153,6 +167,17 @@ class SettingsWindow(ctk.CTkToplevel):
             self.default_background_color = color
             self.default_background_swatch.configure(fg_color=color)
 
+    def _handle_skip_word_count_slide(self, value) -> None:
+        count = int(value)
+        self.skip_word_count_label.configure(text=f"{count} words")
+        if self.on_skip_word_count_changed:
+            self.on_skip_word_count_changed(count)
+
+    def _handle_pause_on_skip_toggle(self) -> None:
+        enabled = bool(self.pause_on_skip_switch.get())
+        if self.on_pause_on_skip_changed:
+            self.on_pause_on_skip_changed(enabled)
+
     def _handle_reset_defaults(self) -> None:
         original = AppSettings()
 
@@ -170,8 +195,12 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
+        if self.on_skip_word_count_changed:
+            self.on_skip_word_count_changed(original.skip_word_count)
 
         (self.pause_on_skip_switch.select() if original.pause_on_skip else self.pause_on_skip_switch.deselect())
+        if self.on_pause_on_skip_changed:
+            self.on_pause_on_skip_changed(original.pause_on_skip)
 
     # ---- Layout tab ----
 
