@@ -150,7 +150,12 @@ class Canvas(ctk.CTkFrame):
         self._capture_current_draft()
 
     def _capture_current_draft(self) -> None:
-        if self._input_currently_shown and self.current_transcript and not self.current_transcript.is_stopped:
+        """Capture whatever's currently in the paste box whenever it's
+        showing — regardless of whether this transcript is stopped or
+        genuinely fresh. Which underlying field it lands in is decided
+        downstream, in app.py's _handle_draft_changed, based on
+        transcript.is_stopped."""
+        if self._input_currently_shown and self.current_transcript:
             text = self.input_view.get_text().strip()
             self._report_draft_changed(self.current_transcript, text)
 
@@ -209,13 +214,11 @@ class Canvas(ctk.CTkFrame):
         self._detached_transcript_id = self.current_transcript.id
         self._detached_transcript = self.current_transcript
 
-        # A stopped transcript needs its real saved text handed to the
-        # popup as an editable draft — otherwise the popup has no way to
-        # know it shouldn't just start flashing the text it still has.
         draft_text = ""
-        if self.current_transcript.is_stopped:
-            draft_text = self.current_transcript.raw_text
-        elif not self.current_transcript.raw_text.strip():
+        if self.current_transcript.is_stopped or not self.current_transcript.raw_text.strip():
+            # Both cases mean the paste box is what's currently showing —
+            # capture whatever's actually typed right now (including
+            # unsaved edits), not a possibly-stale saved value.
             draft_text = self.input_view.get_text().strip()
             self._report_draft_changed(self.current_transcript, draft_text)
 
@@ -243,8 +246,10 @@ class Canvas(ctk.CTkFrame):
         self._detached_transcript_id = None
         self._detached_transcript = None
         self._detached_window = None
-        if detached_transcript and not detached_transcript.raw_text.strip():
+
+        if detached_transcript and (detached_transcript.is_stopped or not detached_transcript.raw_text.strip()):
             self._report_draft_changed(detached_transcript, draft_text)
+
         if self.current_transcript:
             self.load_transcript(self.current_transcript)
 

@@ -117,7 +117,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def close(self) -> None:
         self.reader_display.stop()
         draft_text = ""
-        if not self.transcript.raw_text.strip():
+        if self.transcript.is_stopped or not self.transcript.raw_text.strip():
             draft_text = self.get_draft_text().strip()
         self.on_closed(draft_text)
         self.destroy()

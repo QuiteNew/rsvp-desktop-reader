@@ -241,7 +241,10 @@ class RSVPApp(ctk.CTk):
         self.store.set_transcript_stopped(transcript.id, is_stopped)
 
     def _handle_draft_changed(self, transcript, text: str) -> None:
-        self.store.set_transcript_draft_text(transcript.id, text)
+        if transcript.is_stopped:
+            self.store.set_transcript_text(transcript.id, text)
+        else:
+            self.store.set_transcript_draft_text(transcript.id, text)
 
     def _handle_wpm_changed(self, wpm: int) -> None:
         if not self._current_transcript:
