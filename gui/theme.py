@@ -7,16 +7,18 @@ import ctypes
 
 # ---- Colors ----
 
-HEARTH_PAPER = "#F6EFE3"     # base background — light surfaces
-COCOA_INK = "#3B2E27"        # dark chrome — sidebar, dark surfaces
-COCOA_INK_LIGHT = "#4A3C33"  # one step lighter than Cocoa Ink — rows/cards on dark surfaces
-WARM_TAUPE = "#ECE0CF"       # card/panel surfaces on the light side
-DUSK_BLUE = "#6E8496"        # muted accent — used sparingly, never a dominant color
-EMBER_GLOW = "#D98A3D"       # warm accent — "+" buttons, highlights, active states
-WARM_LINE = "#D6C4AC"        # borders and hairline dividers
+HEARTH_PAPER = "#F6EFE3"      # base background — light surfaces
+COCOA_INK = "#3B2E27"         # dark chrome — sidebar, dark surfaces
+COCOA_INK_LIGHT = "#4A3C33"   # one step lighter than Cocoa Ink — rows/cards on dark surfaces
+WARM_TAUPE = "#ECE0CF"        # card/panel surfaces on the light side
+DUSK_BLUE = "#6E8496"         # muted accent — used sparingly, never a dominant color
+DUSK_BLUE_HOVER = "#5C7284"   # a touch darker, for hover states on Dusk Blue elements
+EMBER_GLOW = "#D98A3D"        # warm accent — "+" buttons, highlights, active states
+EMBER_GLOW_HOVER = "#C17A2F"  # a touch darker, for hover states on Ember Glow elements
+WARM_LINE = "#D6C4AC"         # borders, hairline dividers, and revealed-state grays
 
-TEXT_ON_LIGHT = COCOA_INK    # body text sitting on Hearth Paper / Warm Taupe
-TEXT_ON_DARK = HEARTH_PAPER  # body text sitting on Cocoa Ink
+TEXT_ON_LIGHT = COCOA_INK     # body text sitting on Hearth Paper / Warm Taupe
+TEXT_ON_DARK = HEARTH_PAPER   # body text sitting on Cocoa Ink
 
 # ---- Fonts ----
 # These are the family names Windows should report after registering

@@ -1,35 +1,40 @@
 import customtkinter as ctk
+from gui.theme import COCOA_INK, COCOA_INK_LIGHT, HEARTH_PAPER, WARM_LINE, FONT_BODY
 
 
 class TranscriptListBody(ctk.CTkFrame):
     """Scrollable list of saved transcripts. Each row has a delete
     button that only becomes clearly visible when hovering that row."""
 
-    DELETE_MUTED = "#47566B"     # close to the row's own background — present but subtle at rest
-    DELETE_REVEALED = "#AEB6BF"  # a plain, clearly visible gray on hover — never blue
+    DELETE_MUTED = "#6E5D4F"     # a warm brown-gray, close to the row's own background at rest
+    DELETE_REVEALED = WARM_LINE  # a plain, clearly visible warm gray on hover — never blue
 
     def __init__(self, master, on_select=None, on_delete_requested=None):
-        super().__init__(master, fg_color="#2C3E50", corner_radius=0)
+        super().__init__(master, fg_color=COCOA_INK, corner_radius=0)
         self.on_select = on_select
         self.on_delete_requested = on_delete_requested
 
         self.entries_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.entries_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.entries_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
     def add_entry(self, transcript) -> None:
-        row = ctk.CTkFrame(self.entries_frame, fg_color="#34495E", corner_radius=4)
-        row.pack(fill="x", pady=2, padx=2)
+        row = ctk.CTkFrame(self.entries_frame, fg_color=COCOA_INK_LIGHT, corner_radius=10)
+        row.pack(fill="x", pady=3, padx=2)
 
-        title_label = ctk.CTkLabel(row, text=transcript.title, anchor="w", cursor="hand2")
-        title_label.pack(side="left", fill="x", expand=True, padx=(10, 4), pady=6)
+        title_font = ctk.CTkFont(family=FONT_BODY, size=13)
+        title_label = ctk.CTkLabel(
+            row, text=transcript.title, anchor="w",
+            text_color=HEARTH_PAPER, font=title_font, cursor="hand2",
+        )
+        title_label.pack(side="left", fill="x", expand=True, padx=(12, 4), pady=8)
 
         delete_button = ctk.CTkButton(
-            row, text="X", width=20, height=20, corner_radius=6,
-            fg_color="transparent", hover_color="#34495E",
+            row, text="X", width=20, height=20, corner_radius=8,
+            fg_color="transparent", hover_color=COCOA_INK_LIGHT,
             text_color=self.DELETE_MUTED, cursor="hand2",
             command=lambda t=transcript: self._handle_delete_requested(t),
         )
-        delete_button.pack(side="right", padx=(0, 8))
+        delete_button.pack(side="right", padx=(0, 10))
 
         def reveal(event=None):
             delete_button.configure(text_color=self.DELETE_REVEALED)

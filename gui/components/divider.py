@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.theme import WARM_LINE
 
 
 class Divider(ctk.CTkFrame):
@@ -13,7 +14,7 @@ class Divider(ctk.CTkFrame):
     rather than saving on every pixel of movement).
     """
 
-    COLOR = "#000000"
+    COLOR = WARM_LINE
     THICKNESS = 2
 
     def __init__(self, master, orientation: str = "horizontal", on_drag_start=None, on_drag=None, on_drag_end=None):
@@ -24,7 +25,7 @@ class Divider(ctk.CTkFrame):
         self.on_drag = on_drag
         self.on_drag_end = on_drag_end
         self._enabled = False
-        self._drag_origin = None  # (root_x, root_y) captured at press time
+        self._drag_origin = None
 
         self.bind("<Enter>", self._handle_enter)
         self.bind("<Leave>", self._handle_leave)
@@ -33,7 +34,6 @@ class Divider(ctk.CTkFrame):
         self.bind("<ButtonRelease-1>", self._handle_release)
 
     def set_resizable(self, enabled: bool) -> None:
-        """Turn free-form dragging on or off for this divider."""
         self._enabled = enabled
         if not enabled:
             self.configure(cursor="")
