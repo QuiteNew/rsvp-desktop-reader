@@ -21,7 +21,7 @@ class AppSettings:
     window_width: int = 1000
     window_height: int = 650
     sidebar_width: int = 220
-    header_height: int = 50
+    header_height: int = 80
     bottom_band_height: int = 150
     default_wpm: int = 300
     default_font_color: str = "#3B2E27"
@@ -31,7 +31,7 @@ class AppSettings:
     freeform_resize_enabled: bool = False
     skip_word_count: int = 10
     pause_on_skip: bool = False
-
+    pause_on_skip: bool = False
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from

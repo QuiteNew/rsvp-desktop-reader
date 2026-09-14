@@ -11,7 +11,7 @@ class Header(ctk.CTkFrame):
 
         title_font = ctk.CTkFont(family=FONT_HEADING, size=16)
         self.title_label = ctk.CTkLabel(self, text="No transcript selected", text_color=COCOA_INK, font=title_font)
-        self.title_label.pack(side="left", padx=15)
+        self.title_label.pack(side="left", padx=15, pady=18)
 
         button_font = ctk.CTkFont(family=FONT_BODY, size=12)
         ctk.CTkButton(
@@ -19,7 +19,7 @@ class Header(ctk.CTkFrame):
             fg_color="transparent", border_width=1, border_color=WARM_LINE,
             text_color=COCOA_INK, hover_color=WARM_LINE, font=button_font,
             command=self._handle_settings,
-        ).pack(side="right", padx=15)
+        ).pack(side="right", padx=15, pady=18)
 
     def set_title(self, title: str) -> None:
         self.title_label.configure(text=title)

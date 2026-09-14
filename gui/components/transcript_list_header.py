@@ -1,16 +1,16 @@
 import customtkinter as ctk
-from gui.theme import COCOA_INK, HEARTH_PAPER, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING
+from gui.theme import WARM_TAUPE, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING
 
 
 class TranscriptListHeader(ctk.CTkFrame):
     """Top of the sidebar: 'List of Transcripts' title and a '+' button."""
 
     def __init__(self, master, on_add=None):
-        super().__init__(master, fg_color=COCOA_INK, corner_radius=0)
+        super().__init__(master, fg_color=WARM_TAUPE, corner_radius=0)
         self.on_add = on_add
 
         title_font = ctk.CTkFont(family=FONT_HEADING, size=15)
-        ctk.CTkLabel(self, text="List of Transcripts", text_color=HEARTH_PAPER, font=title_font).pack(side="left", padx=12)
+        ctk.CTkLabel(self, text="List of Transcripts", text_color=COCOA_INK, font=title_font).pack(side="left", padx=12)
 
         ctk.CTkButton(
             self, text="+", width=28, height=28, corner_radius=10,
