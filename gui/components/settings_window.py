@@ -7,6 +7,7 @@ from core.settings_store import (
     SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
     WPM_RANGE, SKIP_WORD_COUNT_RANGE,
 )
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
 
 
 class SettingsWindow(ctk.CTkToplevel):
@@ -32,6 +33,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.geometry("500x600")
         self.minsize(420, 420)
         self.resizable(True, True)
+        self.configure(fg_color=HEARTH_PAPER)
         self.on_apply = on_apply
         self.on_skip_word_count_changed = on_skip_word_count_changed
         self.on_pause_on_skip_changed = on_pause_on_skip_changed
@@ -42,7 +44,20 @@ class SettingsWindow(ctk.CTkToplevel):
         self.after(10, self.grab_set)
         self.focus_force()
 
-        self.tabview = ctk.CTkTabview(self)
+        self.label_font = ctk.CTkFont(family=FONT_BODY, size=13)
+        self.small_font = ctk.CTkFont(family=FONT_BODY, size=11)
+        self.button_font = ctk.CTkFont(family=FONT_BODY, size=13)
+
+        self.tabview = ctk.CTkTabview(
+            self,
+            fg_color=HEARTH_PAPER,
+            segmented_button_fg_color=WARM_TAUPE,
+            segmented_button_selected_color=EMBER_GLOW,
+            segmented_button_selected_hover_color=EMBER_GLOW_HOVER,
+            segmented_button_unselected_color=WARM_TAUPE,
+            segmented_button_unselected_hover_color=WARM_LINE,
+            text_color=COCOA_INK,
+        )
         self.tabview.pack(fill="both", expand=True, padx=15, pady=(15, 5))
 
         defaults_tab = self.tabview.add("Defaults")
@@ -58,13 +73,21 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_storage_tab(storage_tab, data_directory)
         self._build_appearance_tab(appearance_tab)
 
-        self.error_label = ctk.CTkLabel(self, text="", text_color="#E74C3C")
+        self.error_label = ctk.CTkLabel(self, text="", text_color="#E74C3C", font=self.small_font)
         self.error_label.pack(padx=15, pady=(0, 5), anchor="w")
 
         button_row = ctk.CTkFrame(self, fg_color="transparent")
         button_row.pack(fill="x", padx=15, pady=(0, 15))
-        ctk.CTkButton(button_row, text="Close", command=self.destroy).pack(side="left")
-        ctk.CTkButton(button_row, text="Apply", command=self._handle_apply).pack(side="right")
+        ctk.CTkButton(
+            button_row, text="Close", width=90, corner_radius=10,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            font=self.button_font, command=self.destroy,
+        ).pack(side="left")
+        ctk.CTkButton(
+            button_row, text="Apply", width=90, corner_radius=10,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            font=self.button_font, command=self._handle_apply,
+        ).pack(side="right")
 
     def _open_native_dialog(self, dialog_fn, **kwargs):
         self.grab_release()
@@ -80,22 +103,49 @@ class SettingsWindow(ctk.CTkToplevel):
         entry.delete(0, "end")
         entry.insert(0, str(value))
 
+    def _styled_entry(self, master) -> ctk.CTkEntry:
+        return ctk.CTkEntry(
+            master, fg_color=WARM_TAUPE, border_color=WARM_LINE, border_width=1,
+            text_color=COCOA_INK, font=self.label_font,
+        )
+
+    def _styled_slider(self, master, from_, to, steps, command) -> ctk.CTkSlider:
+        return ctk.CTkSlider(
+            master, from_=from_, to=to, number_of_steps=steps,
+            progress_color=EMBER_GLOW, button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
+            fg_color=WARM_LINE, command=command,
+        )
+
+    def _styled_switch(self, master, text, command=None) -> ctk.CTkSwitch:
+        return ctk.CTkSwitch(
+            master, text=text, font=self.label_font, text_color=COCOA_INK,
+            progress_color=EMBER_GLOW, fg_color=WARM_LINE, button_color=HEARTH_PAPER,
+            command=command,
+        )
+
+    def _styled_button(self, master, text, command, width=140) -> ctk.CTkButton:
+        return ctk.CTkButton(
+            master, text=text, width=width, corner_radius=10,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            font=self.button_font, command=command,
+        )
+
     # ---- Defaults tab ----
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, skip_word_count, pause_on_skip) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(scroll, text="Applied to newly created transcripts only", text_color="gray60").pack(anchor="w", pady=(5, 15))
+        ctk.CTkLabel(scroll, text="Applied to newly created transcripts only", text_color=COCOA_INK, font=self.small_font).pack(anchor="w", pady=(5, 15))
 
         wpm_row = ctk.CTkFrame(scroll, fg_color="transparent")
         wpm_row.pack(fill="x", pady=6)
-        ctk.CTkLabel(wpm_row, text="Speed", width=90, anchor="w").pack(side="left")
-        self.default_wpm_label = ctk.CTkLabel(wpm_row, text=f"{wpm} WPM", width=70)
+        ctk.CTkLabel(wpm_row, text="Speed", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
+        self.default_wpm_label = ctk.CTkLabel(wpm_row, text=f"{wpm} WPM", width=70, text_color=COCOA_INK, font=self.label_font)
         self.default_wpm_label.pack(side="right")
-        self.default_wpm_slider = ctk.CTkSlider(
-            scroll, from_=WPM_RANGE[0], to=WPM_RANGE[1], number_of_steps=90,
-            command=lambda v: self.default_wpm_label.configure(text=f"{int(v)} WPM"),
+        self.default_wpm_slider = self._styled_slider(
+            scroll, WPM_RANGE[0], WPM_RANGE[1], 90,
+            lambda v: self.default_wpm_label.configure(text=f"{int(v)} WPM"),
         )
         self.default_wpm_slider.set(wpm)
         self.default_wpm_slider.pack(fill="x", pady=(0, 10))
@@ -111,25 +161,22 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript too — not just future ones",
-            text_color="gray60", wraplength=420, justify="left",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(10, 10))
 
         skip_row = ctk.CTkFrame(scroll, fg_color="transparent")
         skip_row.pack(fill="x", pady=6)
-        ctk.CTkLabel(skip_row, text="Skip amount", width=90, anchor="w").pack(side="left")
-        self.skip_word_count_label = ctk.CTkLabel(skip_row, text=f"{skip_word_count} words", width=70)
+        ctk.CTkLabel(skip_row, text="Skip amount", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
+        self.skip_word_count_label = ctk.CTkLabel(skip_row, text=f"{skip_word_count} words", width=70, text_color=COCOA_INK, font=self.label_font)
         self.skip_word_count_label.pack(side="right")
-        self.skip_word_count_slider = ctk.CTkSlider(
-            scroll, from_=SKIP_WORD_COUNT_RANGE[0], to=SKIP_WORD_COUNT_RANGE[1],
-            number_of_steps=SKIP_WORD_COUNT_RANGE[1] - SKIP_WORD_COUNT_RANGE[0],
-            command=self._handle_skip_word_count_slide,
+        self.skip_word_count_slider = self._styled_slider(
+            scroll, SKIP_WORD_COUNT_RANGE[0], SKIP_WORD_COUNT_RANGE[1], SKIP_WORD_COUNT_RANGE[1] - SKIP_WORD_COUNT_RANGE[0],
+            self._handle_skip_word_count_slide,
         )
         self.skip_word_count_slider.set(skip_word_count)
         self.skip_word_count_slider.pack(fill="x", pady=(0, 10))
 
-        self.pause_on_skip_switch = ctk.CTkSwitch(
-            scroll, text="Pause playback when skipping", command=self._handle_pause_on_skip_toggle
-        )
+        self.pause_on_skip_switch = self._styled_switch(scroll, "Pause playback when skipping", self._handle_pause_on_skip_toggle)
         (self.pause_on_skip_switch.select() if pause_on_skip else self.pause_on_skip_switch.deselect())
         self.pause_on_skip_switch.pack(anchor="w", pady=(5, 15))
 
@@ -138,13 +185,18 @@ class SettingsWindow(ctk.CTkToplevel):
     def _reset_row(self, tab, command) -> None:
         row = ctk.CTkFrame(tab, fg_color="transparent")
         row.pack(fill="x", pady=(20, 0))
-        ctk.CTkButton(row, text="Reset to Original Defaults", command=command).pack(anchor="w")
+        self._styled_button(row, "Reset to Original Defaults", command, width=200).pack(anchor="w")
 
     def _color_row(self, tab, label, color, command) -> ctk.CTkButton:
         row = ctk.CTkFrame(tab, fg_color="transparent")
         row.pack(fill="x", pady=6)
-        ctk.CTkLabel(row, text=label, width=90, anchor="w").pack(side="left")
-        swatch = ctk.CTkButton(row, text="", width=28, height=28, corner_radius=6, fg_color=color, command=command)
+        ctk.CTkLabel(row, text=label, width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
+        # Deliberately NOT the accent orange — this button's whole job is
+        # to show the actual selected color, same principle as the Footer swatches.
+        swatch = ctk.CTkButton(
+            row, text="", width=28, height=28, corner_radius=8,
+            border_width=2, border_color=WARM_LINE, fg_color=color, command=command,
+        )
         swatch.pack(side="left")
         return swatch
 
@@ -204,12 +256,12 @@ class SettingsWindow(ctk.CTkToplevel):
     # ---- Layout tab ----
 
     def _build_layout_tab(self, tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled) -> None:
-        self.freeform_switch = ctk.CTkSwitch(tab, text="Free-form resize (drag borders in the main window)")
+        self.freeform_switch = self._styled_switch(tab, "Free-form resize (drag borders in the main window)")
         (self.freeform_switch.select() if freeform_resize_enabled else self.freeform_switch.deselect())
         self.freeform_switch.pack(anchor="w", pady=(5, 5))
         ctk.CTkLabel(
             tab, text="When on, hover over the sidebar or bottom-band border in the main window and drag it directly.",
-            text_color="gray60", wraplength=400, justify="left",
+            text_color=COCOA_INK, font=self.small_font, wraplength=400, justify="left",
         ).pack(anchor="w", pady=(0, 15))
 
         self.window_width_entry = self._number_row(tab, "Window width", window_width)
@@ -222,8 +274,8 @@ class SettingsWindow(ctk.CTkToplevel):
     def _number_row(self, tab, label, value) -> ctk.CTkEntry:
         row = ctk.CTkFrame(tab, fg_color="transparent")
         row.pack(fill="x", pady=4)
-        ctk.CTkLabel(row, text=label, width=140, anchor="w").pack(side="left")
-        entry = ctk.CTkEntry(row)
+        ctk.CTkLabel(row, text=label, width=140, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
+        entry = self._styled_entry(row)
         entry.insert(0, str(value))
         entry.pack(side="left", fill="x", expand=True)
         return entry
@@ -240,10 +292,16 @@ class SettingsWindow(ctk.CTkToplevel):
     # ---- Storage tab ----
 
     def _build_storage_tab(self, tab, data_directory) -> None:
-        ctk.CTkLabel(tab, text="Transcripts are saved as a JSON file in this folder:", text_color="gray60").pack(anchor="w", pady=(5, 10))
-        self.data_directory_label = ctk.CTkLabel(tab, text=data_directory, wraplength=380, justify="left")
+        ctk.CTkLabel(
+            tab, text="Transcripts are saved as a JSON file in this folder:",
+            text_color=COCOA_INK, font=self.small_font,
+        ).pack(anchor="w", pady=(5, 10))
+        self.data_directory_label = ctk.CTkLabel(
+            tab, text=data_directory, text_color=COCOA_INK, font=self.small_font,
+            wraplength=380, justify="left",
+        )
         self.data_directory_label.pack(anchor="w", pady=(0, 10))
-        ctk.CTkButton(tab, text="Choose folder…", command=self._pick_data_directory).pack(anchor="w")
+        self._styled_button(tab, "Choose folder…", self._pick_data_directory, width=140).pack(anchor="w")
 
         self._reset_row(tab, self._handle_reset_storage)
 
@@ -261,7 +319,10 @@ class SettingsWindow(ctk.CTkToplevel):
     # ---- Appearance tab ----
 
     def _build_appearance_tab(self, tab) -> None:
-        ctk.CTkLabel(tab, text="Day / night mode is coming in a later session.", text_color="gray60").pack(pady=20)
+        ctk.CTkLabel(
+            tab, text="Day / night mode is coming in a later session.",
+            text_color=COCOA_INK, font=self.small_font,
+        ).pack(pady=20)
 
     # ---- Apply ----
 
