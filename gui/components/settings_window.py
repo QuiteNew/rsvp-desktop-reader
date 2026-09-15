@@ -117,9 +117,13 @@ class SettingsWindow(ctk.CTkToplevel):
         )
 
     def _styled_switch(self, master, text, command=None) -> ctk.CTkSwitch:
+        # button_color is the knob itself — fixed to COCOA_INK so it stays
+        # clearly visible in both states, rather than the previous
+        # HEARTH_PAPER, which nearly vanished against the off-state track.
         return ctk.CTkSwitch(
             master, text=text, font=self.label_font, text_color=COCOA_INK,
-            progress_color=EMBER_GLOW, fg_color=WARM_LINE, button_color=HEARTH_PAPER,
+            progress_color=EMBER_GLOW, fg_color=WARM_LINE,
+            button_color=COCOA_INK, button_hover_color=COCOA_INK,
             command=command,
         )
 
@@ -191,13 +195,11 @@ class SettingsWindow(ctk.CTkToplevel):
         row = ctk.CTkFrame(tab, fg_color="transparent")
         row.pack(fill="x", pady=6)
         ctk.CTkLabel(row, text=label, width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
-        # Deliberately NOT the accent orange — this button's whole job is
-        # to show the actual selected color, same principle as the Footer swatches.
         swatch = ctk.CTkButton(
             row, text="", width=28, height=28, corner_radius=8,
             border_width=2, border_color=WARM_LINE, fg_color=color, command=command,
         )
-        swatch.pack(side="left")
+        swatch.pack(side="left", padx=(12, 0))
         return swatch
 
     def _pick_default_font_color(self) -> None:
