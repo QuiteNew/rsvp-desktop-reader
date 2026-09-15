@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from tkinter import colorchooser
+from gui.theme import WARM_MOCHA, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, WARM_LINE, FONT_BODY
 
 
 class Footer(ctk.CTkFrame):
@@ -15,13 +16,15 @@ class Footer(ctk.CTkFrame):
         on_skip_back=None,
         on_skip_forward=None,
     ):
-        super().__init__(master, fg_color="#E67E22", corner_radius=0)
+        super().__init__(master, fg_color=WARM_MOCHA, corner_radius=0)
         self.on_wpm_changed = on_wpm_changed
         self.on_font_color_changed = on_font_color_changed
         self.on_highlight_color_changed = on_highlight_color_changed
         self.on_background_color_changed = on_background_color_changed
         self.on_skip_back = on_skip_back
         self.on_skip_forward = on_skip_forward
+
+        label_font = ctk.CTkFont(family=FONT_BODY, size=12)
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -33,41 +36,52 @@ class Footer(ctk.CTkFrame):
 
         font_row = ctk.CTkFrame(left, fg_color="transparent")
         font_row.pack(pady=6)
-        ctk.CTkLabel(font_row, text="Font").pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(font_row, text="Font", text_color=COCOA_INK, font=label_font).pack(side="left", padx=(0, 8))
         self.font_swatch = ctk.CTkButton(
-            font_row, text="", width=28, height=28, corner_radius=6, command=self._pick_font_color
+            font_row, text="", width=28, height=28, corner_radius=8,
+            border_width=2, border_color=WARM_LINE,
+            command=self._pick_font_color,
         )
         self.font_swatch.pack(side="left")
 
         bg_row = ctk.CTkFrame(left, fg_color="transparent")
         bg_row.pack(pady=6)
-        ctk.CTkLabel(bg_row, text="Background").pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(bg_row, text="Background", text_color=COCOA_INK, font=label_font).pack(side="left", padx=(0, 8))
         self.background_swatch = ctk.CTkButton(
-            bg_row, text="", width=28, height=28, corner_radius=6, command=self._pick_background_color
+            bg_row, text="", width=28, height=28, corner_radius=8,
+            border_width=2, border_color=WARM_LINE,
+            command=self._pick_background_color,
         )
         self.background_swatch.pack(side="left")
 
         middle = ctk.CTkFrame(self, fg_color="transparent")
         middle.grid(row=0, column=1, sticky="nsew")
-        self.wpm_label = ctk.CTkLabel(middle, text="300 WPM")
+        self.wpm_label = ctk.CTkLabel(middle, text="300 WPM", text_color=COCOA_INK, font=label_font)
         self.wpm_label.pack(pady=(10, 0))
 
         slider_row = ctk.CTkFrame(middle, fg_color="transparent")
         slider_row.pack(padx=15, pady=(4, 0), fill="x")
 
         self.skip_back_button = ctk.CTkButton(
-            slider_row, text="<<", width=36, command=self._handle_skip_back
+            slider_row, text="<<", width=36, corner_radius=10,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            command=self._handle_skip_back,
         )
         self.skip_back_button.pack(side="left", padx=(0, 8))
 
         self.wpm_slider = ctk.CTkSlider(
-            slider_row, from_=100, to=1000, number_of_steps=90, command=self._handle_wpm_slide
+            slider_row, from_=100, to=1000, number_of_steps=90,
+            progress_color=EMBER_GLOW, button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
+            fg_color=WARM_LINE,
+            command=self._handle_wpm_slide,
         )
         self.wpm_slider.set(300)
         self.wpm_slider.pack(side="left", fill="x", expand=True)
 
         self.skip_forward_button = ctk.CTkButton(
-            slider_row, text=">>", width=36, command=self._handle_skip_forward
+            slider_row, text=">>", width=36, corner_radius=10,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            command=self._handle_skip_forward,
         )
         self.skip_forward_button.pack(side="left", padx=(8, 0))
 
@@ -75,9 +89,11 @@ class Footer(ctk.CTkFrame):
         right.grid(row=0, column=2, sticky="nsew")
         highlight_row = ctk.CTkFrame(right, fg_color="transparent")
         highlight_row.pack(expand=True)
-        ctk.CTkLabel(highlight_row, text="Highlight").pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(highlight_row, text="Highlight", text_color=COCOA_INK, font=label_font).pack(side="left", padx=(0, 8))
         self.highlight_swatch = ctk.CTkButton(
-            highlight_row, text="", width=28, height=28, corner_radius=6, command=self._pick_highlight_color
+            highlight_row, text="", width=28, height=28, corner_radius=8,
+            border_width=2, border_color=WARM_LINE,
+            command=self._pick_highlight_color,
         )
         self.highlight_swatch.pack(side="left")
 

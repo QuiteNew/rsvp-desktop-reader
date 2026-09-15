@@ -20,6 +20,7 @@ WARM_LINE = "#D6C4AC"         # borders, hairline dividers, and revealed-state g
 TEXT_ON_LIGHT = COCOA_INK     # body text sitting on Hearth Paper / Warm Taupe
 TEXT_ON_DARK = HEARTH_PAPER   # body text sitting on Cocoa Ink
 
+WARM_MOCHA = "#ddc6a6"    # mid-tone for Spaces/Footer — lighter than before, still a clear step below the light surfaces
 # ---- Fonts ----
 # These are the family names Windows should report after registering
 # the bundled .ttf files below. Google Fonts exports are usually named

@@ -13,14 +13,14 @@ from gui.components.settings_window import SettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
 from gui.theme import HEARTH_PAPER, unregister_fonts
 from core.transcript_store import TranscriptStore
-from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, HEADER_HEIGHT_RANGE, BOTTOM_BAND_HEIGHT_RANGE
+from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE
 
 
 class RSVPApp(ctk.CTk):
     """Main application window: sidebar | vertical divider | main content,
     across 5 rows (headers / divider / content / divider / bottom band)."""
 
-    DIVIDER_THICKNESS = 2
+    HEADER_HEIGHT = 80  # fixed — not user-configurable
 
     def __init__(self):
         super().__init__()
@@ -39,6 +39,9 @@ class RSVPApp(ctk.CTk):
 
         self.grid_columnconfigure(2, weight=1)
         self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(0, weight=0, minsize=self.HEADER_HEIGHT)
+        self.grid_rowconfigure(1, weight=0, minsize=Divider.HIT_THICKNESS)
+        self.grid_rowconfigure(3, weight=0, minsize=Divider.HIT_THICKNESS)
         self._apply_layout_sizes()
 
         self.list_header = TranscriptListHeader(self, on_add=self._open_add_transcript_dialog)
@@ -55,20 +58,10 @@ class RSVPApp(ctk.CTk):
         )
         self.vertical_divider.grid(row=0, column=1, rowspan=5, sticky="nsew")
 
-        self.top_divider_left = Divider(
-            self, orientation="horizontal",
-            on_drag_start=self._handle_header_drag_start,
-            on_drag=self._handle_header_drag,
-            on_drag_end=self._handle_header_drag_end,
-        )
+        self.top_divider_left = Divider(self, orientation="horizontal")
         self.top_divider_left.grid(row=1, column=0, sticky="nsew")
 
-        self.top_divider_right = Divider(
-            self, orientation="horizontal",
-            on_drag_start=self._handle_header_drag_start,
-            on_drag=self._handle_header_drag,
-            on_drag_end=self._handle_header_drag_end,
-        )
+        self.top_divider_right = Divider(self, orientation="horizontal")
         self.top_divider_right.grid(row=1, column=2, sticky="nsew")
 
         self.list_body = TranscriptListBody(
@@ -85,9 +78,9 @@ class RSVPApp(ctk.CTk):
             on_position_changed=self._handle_position_changed,
             on_pause_changed=self._handle_pause_changed,
             on_draft_changed=self._handle_draft_changed,
+            on_stopped_changed=self._handle_stopped_changed,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
-            on_stopped_changed=self._handle_stopped_changed,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -125,7 +118,6 @@ class RSVPApp(ctk.CTk):
             on_skip_back=self.canvas.skip_backward,
             on_skip_forward=self.canvas.skip_forward,
         )
-
         self.footer.grid(row=4, column=2, sticky="nsew")
 
         self._apply_freeform_resize_state()
@@ -133,17 +125,12 @@ class RSVPApp(ctk.CTk):
 
     def _apply_layout_sizes(self) -> None:
         self.grid_columnconfigure(0, weight=0, minsize=self.settings_store.sidebar_width)
-        self.grid_columnconfigure(1, weight=0, minsize=self.DIVIDER_THICKNESS)
-        self.grid_rowconfigure(0, weight=0, minsize=self.settings_store.header_height)
-        self.grid_rowconfigure(1, weight=0, minsize=self.DIVIDER_THICKNESS)
-        self.grid_rowconfigure(3, weight=0, minsize=self.DIVIDER_THICKNESS)
+        self.grid_columnconfigure(1, weight=0, minsize=Divider.HIT_THICKNESS)
         self.grid_rowconfigure(4, weight=0, minsize=self.settings_store.bottom_band_height)
 
     def _apply_freeform_resize_state(self) -> None:
         enabled = self.settings_store.freeform_resize_enabled
         self.vertical_divider.set_resizable(enabled)
-        self.top_divider_left.set_resizable(enabled)
-        self.top_divider_right.set_resizable(enabled)
         self.bottom_divider_left.set_resizable(enabled)
         self.bottom_divider_right.set_resizable(enabled)
 
@@ -157,23 +144,7 @@ class RSVPApp(ctk.CTk):
         self._pending_value = new_width
 
     def _handle_sidebar_drag_end(self) -> None:
-        self.settings_store.set_layout_sizes(
-            self._pending_value, self.settings_store.header_height, self.settings_store.bottom_band_height
-        )
-
-    def _handle_header_drag_start(self) -> None:
-        self._drag_start_value = self.settings_store.header_height
-
-    def _handle_header_drag(self, delta: int) -> None:
-        low, high = HEADER_HEIGHT_RANGE
-        new_height = max(low, min(high, self._drag_start_value + delta))
-        self.grid_rowconfigure(0, minsize=new_height)
-        self._pending_value = new_height
-
-    def _handle_header_drag_end(self) -> None:
-        self.settings_store.set_layout_sizes(
-            self.settings_store.sidebar_width, self._pending_value, self.settings_store.bottom_band_height
-        )
+        self.settings_store.set_layout_sizes(self._pending_value, self.settings_store.bottom_band_height)
 
     def _handle_bottom_band_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.bottom_band_height
@@ -185,9 +156,7 @@ class RSVPApp(ctk.CTk):
         self._pending_value = new_height
 
     def _handle_bottom_band_drag_end(self) -> None:
-        self.settings_store.set_layout_sizes(
-            self.settings_store.sidebar_width, self.settings_store.header_height, self._pending_value
-        )
+        self.settings_store.set_layout_sizes(self.settings_store.sidebar_width, self._pending_value)
 
     def _open_add_transcript_dialog(self) -> None:
         AddTranscriptDialog(
@@ -283,17 +252,16 @@ class RSVPApp(ctk.CTk):
             window_width=self.settings_store.window_width,
             window_height=self.settings_store.window_height,
             sidebar_width=self.settings_store.sidebar_width,
-            header_height=self.settings_store.header_height,
             bottom_band_height=self.settings_store.bottom_band_height,
             freeform_resize_enabled=self.settings_store.freeform_resize_enabled,
             default_wpm=self.settings_store.default_wpm,
             default_font_color=self.settings_store.default_font_color,
             default_highlight_color=self.settings_store.default_highlight_color,
             default_background_color=self.settings_store.default_background_color,
-            data_directory=self.settings_store.data_directory,
-            on_apply=self._handle_settings_applied,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
+            data_directory=self.settings_store.data_directory,
+            on_apply=self._handle_settings_applied,
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
         )
@@ -302,9 +270,7 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_window_size(values["window_width"], values["window_height"])
         self.geometry(f"{values['window_width']}x{values['window_height']}")
 
-        self.settings_store.set_layout_sizes(
-            values["sidebar_width"], values["header_height"], values["bottom_band_height"]
-        )
+        self.settings_store.set_layout_sizes(values["sidebar_width"], values["bottom_band_height"])
         if not self._focus_mode:
             self._apply_layout_sizes()
 
@@ -324,7 +290,6 @@ class RSVPApp(ctk.CTk):
 
     def _handle_delete_requested(self, transcript) -> None:
         DeleteTranscriptDialog(self, on_confirm=lambda: self._handle_delete_confirmed(transcript))
-
 
     def _handle_delete_confirmed(self, transcript) -> None:
         was_current = self._current_transcript is not None and self._current_transcript.id == transcript.id
@@ -382,6 +347,9 @@ class RSVPApp(ctk.CTk):
             self.bottom_divider_right.grid()
             self.spaces.grid()
             self.footer.grid()
+            self.grid_rowconfigure(0, minsize=self.HEADER_HEIGHT)
+            self.grid_rowconfigure(1, minsize=Divider.HIT_THICKNESS)
+            self.grid_rowconfigure(3, minsize=Divider.HIT_THICKNESS)
             self._apply_layout_sizes()
 
         self.canvas.set_maximized(self._focus_mode)

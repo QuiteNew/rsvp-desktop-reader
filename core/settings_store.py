@@ -10,7 +10,6 @@ SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 WINDOW_WIDTH_RANGE = (500, 2000)
 WINDOW_HEIGHT_RANGE = (400, 1400)
 SIDEBAR_WIDTH_RANGE = (120, 500)
-HEADER_HEIGHT_RANGE = (30, 120)
 BOTTOM_BAND_HEIGHT_RANGE = (80, 400)
 WPM_RANGE = (100, 1000)
 SKIP_WORD_COUNT_RANGE = (1, 50)
@@ -21,8 +20,7 @@ class AppSettings:
     window_width: int = 1000
     window_height: int = 650
     sidebar_width: int = 220
-    header_height: int = 80
-    bottom_band_height: int = 150
+    bottom_band_height: int = 100
     default_wpm: int = 300
     default_font_color: str = "#3B2E27"
     default_highlight_color: str = "#D98A3D"
@@ -31,7 +29,7 @@ class AppSettings:
     freeform_resize_enabled: bool = False
     skip_word_count: int = 10
     pause_on_skip: bool = False
-    pause_on_skip: bool = False
+
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -45,6 +43,7 @@ class SettingsStore:
             return AppSettings()
         try:
             data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            data.pop("header_height", None)  # gone from AppSettings — drop it if an old file still has it
             return AppSettings(**data)
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
@@ -64,10 +63,6 @@ class SettingsStore:
     @property
     def sidebar_width(self) -> int:
         return self._settings.sidebar_width
-
-    @property
-    def header_height(self) -> int:
-        return self._settings.header_height
 
     @property
     def bottom_band_height(self) -> int:
@@ -110,9 +105,8 @@ class SettingsStore:
         self._settings.window_height = height
         self._save()
 
-    def set_layout_sizes(self, sidebar_width: int, header_height: int, bottom_band_height: int) -> None:
+    def set_layout_sizes(self, sidebar_width: int, bottom_band_height: int) -> None:
         self._settings.sidebar_width = sidebar_width
-        self._settings.header_height = header_height
         self._settings.bottom_band_height = bottom_band_height
         self._save()
 

@@ -4,7 +4,7 @@ from tkinter import colorchooser, filedialog
 from core.settings_store import (
     AppSettings,
     WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
-    SIDEBAR_WIDTH_RANGE, HEADER_HEIGHT_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
+    SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
     WPM_RANGE, SKIP_WORD_COUNT_RANGE,
 )
 
@@ -12,12 +12,13 @@ from core.settings_store import (
 class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
     free-form drag-resize), and where transcript data is stored. Appearance
-    (day/night mode) is a placeholder tab, deliberately deferred."""
+    (day/night mode) is a placeholder tab, deliberately deferred. Header
+    height is a fixed constant, not user-configurable — see gui/app.py."""
 
     def __init__(
         self, master,
         window_width, window_height,
-        sidebar_width, header_height, bottom_band_height,
+        sidebar_width, bottom_band_height,
         freeform_resize_enabled,
         default_wpm, default_font_color, default_highlight_color, default_background_color,
         skip_word_count, pause_on_skip,
@@ -53,7 +54,7 @@ class SettingsWindow(ctk.CTkToplevel):
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, skip_word_count, pause_on_skip,
         )
-        self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, header_height, bottom_band_height, freeform_resize_enabled)
+        self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
         self._build_appearance_tab(appearance_tab)
 
@@ -82,8 +83,6 @@ class SettingsWindow(ctk.CTkToplevel):
     # ---- Defaults tab ----
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, skip_word_count, pause_on_skip) -> None:
-        # Scrollable so this tab's content can keep growing without ever
-        # pushing the shared Apply/Close row below the visible window.
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True)
 
@@ -204,19 +203,18 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Layout tab ----
 
-    def _build_layout_tab(self, tab, window_width, window_height, sidebar_width, header_height, bottom_band_height, freeform_resize_enabled) -> None:
+    def _build_layout_tab(self, tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled) -> None:
         self.freeform_switch = ctk.CTkSwitch(tab, text="Free-form resize (drag borders in the main window)")
         (self.freeform_switch.select() if freeform_resize_enabled else self.freeform_switch.deselect())
         self.freeform_switch.pack(anchor="w", pady=(5, 5))
         ctk.CTkLabel(
-            tab, text="When on, hover over any border in the main window and drag it directly.",
+            tab, text="When on, hover over the sidebar or bottom-band border in the main window and drag it directly.",
             text_color="gray60", wraplength=400, justify="left",
         ).pack(anchor="w", pady=(0, 15))
 
         self.window_width_entry = self._number_row(tab, "Window width", window_width)
         self.window_height_entry = self._number_row(tab, "Window height", window_height)
         self.sidebar_width_entry = self._number_row(tab, "Sidebar width", sidebar_width)
-        self.header_height_entry = self._number_row(tab, "Header height", header_height)
         self.bottom_band_height_entry = self._number_row(tab, "Bottom band height", bottom_band_height)
 
         self._reset_row(tab, self._handle_reset_layout)
@@ -237,7 +235,6 @@ class SettingsWindow(ctk.CTkToplevel):
         self._set_entry_value(self.window_width_entry, original.window_width)
         self._set_entry_value(self.window_height_entry, original.window_height)
         self._set_entry_value(self.sidebar_width_entry, original.sidebar_width)
-        self._set_entry_value(self.header_height_entry, original.header_height)
         self._set_entry_value(self.bottom_band_height_entry, original.bottom_band_height)
 
     # ---- Storage tab ----
@@ -273,7 +270,6 @@ class SettingsWindow(ctk.CTkToplevel):
             "window_width": (self.window_width_entry, *WINDOW_WIDTH_RANGE),
             "window_height": (self.window_height_entry, *WINDOW_HEIGHT_RANGE),
             "sidebar_width": (self.sidebar_width_entry, *SIDEBAR_WIDTH_RANGE),
-            "header_height": (self.header_height_entry, *HEADER_HEIGHT_RANGE),
             "bottom_band_height": (self.bottom_band_height_entry, *BOTTOM_BAND_HEIGHT_RANGE),
         }
 

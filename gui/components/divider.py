@@ -3,23 +3,26 @@ from gui.theme import WARM_LINE
 
 
 class Divider(ctk.CTkFrame):
-    """A thin line separating two sections. Can double as a draggable
-    resize handle: when enabled, hovering shows a resize cursor, and
-    dragging reports the cumulative pixel offset from where the drag
+    """A resize handle: a thin visible line sitting inside a much larger
+    invisible band that actually receives hover/click/drag events. A
+    purely 2px-thick clickable target proved unreliable to grab in
+    practice — this keeps the same thin visual line but gives the mouse
+    a genuinely generous area to land on, the pattern most real desktop
+    apps use for thin draggable dividers.
+
+    When enabled, hovering anywhere in the band shows a resize cursor,
+    and dragging reports the cumulative pixel offset from where the drag
     began via on_drag — measured from the original press point every
     time, not incrementally, so the caller can always compute a fresh
     target size as (size_at_drag_start + delta) without drift building up.
-    on_drag_start fires once when a drag begins (record the current size);
-    on_drag_end fires once when it finishes (persist the final size,
-    rather than saving on every pixel of movement).
     """
 
-    COLOR = WARM_LINE
-    THICKNESS = 2
+    LINE_THICKNESS = 2
+    HIT_THICKNESS = 10  # the real clickable size — much larger than the visible line
 
     def __init__(self, master, orientation: str = "horizontal", on_drag_start=None, on_drag=None, on_drag_end=None):
-        size_kwargs = {"height": self.THICKNESS} if orientation == "horizontal" else {"width": self.THICKNESS}
-        super().__init__(master, fg_color=self.COLOR, corner_radius=0, **size_kwargs)
+        size_kwargs = {"height": self.HIT_THICKNESS} if orientation == "horizontal" else {"width": self.HIT_THICKNESS}
+        super().__init__(master, fg_color="transparent", corner_radius=0, **size_kwargs)
         self.orientation = orientation
         self.on_drag_start = on_drag_start
         self.on_drag = on_drag
@@ -27,6 +30,15 @@ class Divider(ctk.CTkFrame):
         self._enabled = False
         self._drag_origin = None
 
+        if orientation == "horizontal":
+            self.line = ctk.CTkFrame(self, fg_color=WARM_LINE, corner_radius=0, height=self.LINE_THICKNESS)
+            self.line.place(relx=0, rely=0.5, relwidth=1.0, anchor="w")
+        else:
+            self.line = ctk.CTkFrame(self, fg_color=WARM_LINE, corner_radius=0, width=self.LINE_THICKNESS)
+            self.line.place(relx=0.5, rely=0, relheight=1.0, anchor="n")
+
+        # Bound to self — the full, larger band — not the thin line itself,
+        # so the whole band is clickable/hoverable, not just its center.
         self.bind("<Enter>", self._handle_enter)
         self.bind("<Leave>", self._handle_leave)
         self.bind("<ButtonPress-1>", self._handle_press)

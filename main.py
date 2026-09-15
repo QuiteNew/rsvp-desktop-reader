@@ -1,4 +1,5 @@
 import customtkinter as ctk
+
 from gui.app import RSVPApp
 from gui.theme import register_fonts
 
