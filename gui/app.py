@@ -1,5 +1,6 @@
 import customtkinter as ctk
 
+
 from gui.components.transcript_list_header import TranscriptListHeader
 from gui.components.transcript_list_body import TranscriptListBody
 from gui.components.header import Header
@@ -264,6 +265,7 @@ class RSVPApp(ctk.CTk):
             on_apply=self._handle_settings_applied,
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
+            appearance_mode=self.settings_store.appearance_mode,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
@@ -287,6 +289,8 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_skip_behavior(values["skip_word_count"], values["pause_on_skip"])
         self.canvas.set_skip_word_count(values["skip_word_count"])
         self.canvas.set_pause_on_skip(values["pause_on_skip"])
+
+        self.settings_store.set_appearance_mode(values["appearance_mode"])
 
     def _handle_delete_requested(self, transcript) -> None:
         DeleteTranscriptDialog(self, on_confirm=lambda: self._handle_delete_confirmed(transcript))

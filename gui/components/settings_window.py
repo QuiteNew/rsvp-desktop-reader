@@ -12,9 +12,11 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW
 
 class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
-    free-form drag-resize), and where transcript data is stored. Appearance
-    (day/night mode) is a placeholder tab, deliberately deferred. Header
-    height is a fixed constant, not user-configurable — see gui/app.py."""
+    free-form drag-resize), where transcript data is stored, and colour
+    theme. Header height is a fixed constant, not user-configurable —
+    see gui/app.py. Theme changes take effect on next launch, not live —
+    every widget's color is set explicitly at creation, so a live switch
+    would mean reconfiguring the entire widget tree at once."""
 
     def __init__(
         self, master,
@@ -24,6 +26,7 @@ class SettingsWindow(ctk.CTkToplevel):
         default_wpm, default_font_color, default_highlight_color, default_background_color,
         skip_word_count, pause_on_skip,
         data_directory,
+        appearance_mode,
         on_apply,
         on_skip_word_count_changed=None,
         on_pause_on_skip_changed=None,
@@ -71,7 +74,7 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
-        self._build_appearance_tab(appearance_tab)
+        self._build_appearance_tab(appearance_tab, appearance_mode)
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#E74C3C", font=self.small_font)
         self.error_label.pack(padx=15, pady=(0, 5), anchor="w")
@@ -117,9 +120,6 @@ class SettingsWindow(ctk.CTkToplevel):
         )
 
     def _styled_switch(self, master, text, command=None) -> ctk.CTkSwitch:
-        # button_color is the knob itself — fixed to COCOA_INK so it stays
-        # clearly visible in both states, rather than the previous
-        # HEARTH_PAPER, which nearly vanished against the off-state track.
         return ctk.CTkSwitch(
             master, text=text, font=self.label_font, text_color=COCOA_INK,
             progress_color=EMBER_GLOW, fg_color=WARM_LINE,
@@ -320,11 +320,29 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Appearance tab ----
 
-    def _build_appearance_tab(self, tab) -> None:
+    def _build_appearance_tab(self, tab, appearance_mode: str) -> None:
         ctk.CTkLabel(
-            tab, text="Day / night mode is coming in a later session.",
-            text_color=COCOA_INK, font=self.small_font,
-        ).pack(pady=20)
+            tab, text="Colour theme", text_color=COCOA_INK, font=self.label_font,
+        ).pack(anchor="w", pady=(10, 8))
+
+        self.appearance_mode_selector = ctk.CTkSegmentedButton(
+            tab, values=["Light", "Dark", "System"],
+            fg_color=WARM_TAUPE, selected_color=EMBER_GLOW, selected_hover_color=EMBER_GLOW_HOVER,
+            unselected_color=WARM_TAUPE, unselected_hover_color=WARM_LINE,
+            text_color=COCOA_INK, font=self.label_font,
+        )
+        self.appearance_mode_selector.set(appearance_mode.capitalize())
+        self.appearance_mode_selector.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(
+            tab,
+            text=(
+                "Takes effect the next time you launch the app. Dark colours "
+                "are being designed in an upcoming session — for now, Dark "
+                "looks identical to Light."
+            ),
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 10))
 
     # ---- Apply ----
 
@@ -357,6 +375,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["skip_word_count"] = int(self.skip_word_count_slider.get())
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["data_directory"] = self._data_directory
+        values["appearance_mode"] = self.appearance_mode_selector.get().lower()
 
         self.error_label.configure(text="")
         self.on_apply(values)

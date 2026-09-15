@@ -29,6 +29,7 @@ class AppSettings:
     freeform_resize_enabled: bool = False
     skip_word_count: int = 10
     pause_on_skip: bool = False
+    appearance_mode: str = "light"  # "light", "dark", or "system"
 
 
 class SettingsStore:
@@ -99,6 +100,14 @@ class SettingsStore:
     @property
     def pause_on_skip(self) -> bool:
         return self._settings.pause_on_skip
+
+    @property
+    def appearance_mode(self) -> str:
+        return self._settings.appearance_mode
+
+    def set_appearance_mode(self, mode: str) -> None:
+        self._settings.appearance_mode = mode
+        self._save()
 
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width

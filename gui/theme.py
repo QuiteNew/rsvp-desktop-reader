@@ -1,35 +1,95 @@
 """Central design tokens for the RSVP reader's "cozy fireside" theme.
 Every styled component reads its colors and fonts from here, so a
-future palette or font change happens in exactly one place."""
+future palette or font change happens in exactly one place.
+
+Theme switching (Light/Dark/System) is resolved ONCE, here, at import
+time — before any other module that reads these constants gets loaded.
+That's what lets every component file keep importing plain names like
+HEARTH_PAPER unchanged; this file alone decides what they equal."""
 
 import os
 import ctypes
 
+# ---- Palettes ----
+# DARK_PALETTE currently mirrors LIGHT_PALETTE exactly — a deliberate
+# placeholder. Selecting "Dark" is fully functional end to end (it's a
+# real, separate palette dict, correctly resolved and applied), it just
+# doesn't look different yet. Designing real dark colors is a distinct,
+# deliberate next step — not something to rush inside this change.
+
+LIGHT_PALETTE = {
+    "hearth_paper": "#F6EFE3",
+    "cocoa_ink": "#3B2E27",
+    "cocoa_ink_light": "#4A3C33",
+    "warm_taupe": "#ECE0CF",
+    "warm_mocha": "#B7A38A",
+    "dusk_blue": "#6E8496",
+    "dusk_blue_hover": "#5C7284",
+    "ember_glow": "#D98A3D",
+    "ember_glow_hover": "#C17A2F",
+    "warm_line": "#D6C4AC",
+    "text_on_light": "#3B2E27",
+    "text_on_dark": "#F6EFE3",
+}
+
+DARK_PALETTE = dict(LIGHT_PALETTE)  # placeholder — real dark colors: next session
+
+
+def _detect_system_prefers_dark() -> bool:
+    """Best-effort read of the OS's own light/dark preference, used only
+    when the appearance mode is set to 'system'."""
+    try:
+        import darkdetect
+        return darkdetect.isDark() is True
+    except Exception:
+        return False
+
+
+def _resolve_active_palette():
+    """Decide once which palette and CTk appearance-mode string to use,
+    based on the saved setting. Falls back to Light on any error (e.g.
+    a fresh install with no settings file yet), so a theming problem can
+    never prevent the app from launching."""
+    mode = "light"
+    try:
+        from core.settings_store import SettingsStore
+        mode = SettingsStore().appearance_mode
+    except Exception:
+        pass
+
+    if mode == "dark":
+        is_dark = True
+    elif mode == "system":
+        is_dark = _detect_system_prefers_dark()
+    else:
+        is_dark = False
+
+    palette = DARK_PALETTE if is_dark else LIGHT_PALETTE
+    ctk_mode = "Dark" if is_dark else "Light"
+    return palette, ctk_mode
+
+
+_active, CTK_APPEARANCE_MODE = _resolve_active_palette()
+
 # ---- Colors ----
 
-HEARTH_PAPER = "#F6EFE3"      # base background — light surfaces
-COCOA_INK = "#3B2E27"         # dark chrome — sidebar, dark surfaces
-COCOA_INK_LIGHT = "#4A3C33"   # one step lighter than Cocoa Ink — rows/cards on dark surfaces
-WARM_TAUPE = "#ECE0CF"        # card/panel surfaces on the light side
-DUSK_BLUE = "#6E8496"         # muted accent — used sparingly, never a dominant color
-DUSK_BLUE_HOVER = "#5C7284"   # a touch darker, for hover states on Dusk Blue elements
-EMBER_GLOW = "#D98A3D"        # warm accent — "+" buttons, highlights, active states
-EMBER_GLOW_HOVER = "#C17A2F"  # a touch darker, for hover states on Ember Glow elements
-WARM_LINE = "#D6C4AC"         # borders, hairline dividers, and revealed-state grays
+HEARTH_PAPER = _active["hearth_paper"]
+COCOA_INK = _active["cocoa_ink"]
+COCOA_INK_LIGHT = _active["cocoa_ink_light"]
+WARM_TAUPE = _active["warm_taupe"]
+WARM_MOCHA = _active["warm_mocha"]
+DUSK_BLUE = _active["dusk_blue"]
+DUSK_BLUE_HOVER = _active["dusk_blue_hover"]
+EMBER_GLOW = _active["ember_glow"]
+EMBER_GLOW_HOVER = _active["ember_glow_hover"]
+WARM_LINE = _active["warm_line"]
+TEXT_ON_LIGHT = _active["text_on_light"]
+TEXT_ON_DARK = _active["text_on_dark"]
 
-TEXT_ON_LIGHT = COCOA_INK     # body text sitting on Hearth Paper / Warm Taupe
-TEXT_ON_DARK = HEARTH_PAPER   # body text sitting on Cocoa Ink
-
-WARM_MOCHA = "#ddc6a6"    # mid-tone for Spaces/Footer — lighter than before, still a clear step below the light surfaces
 # ---- Fonts ----
-# These are the family names Windows should report after registering
-# the bundled .ttf files below. Google Fonts exports are usually named
-# exactly this way, but it can vary — the verification step in chat
-# confirms this, and these two constants are the only place to correct
-# it if it doesn't match.
 
-FONT_HEADING = "Fredoka SemiBold"  # the flashing word display, section headings
-FONT_BODY = "Quicksand Medium"     # everyday UI chrome — labels, buttons, lists
+FONT_HEADING = "Fredoka SemiBold"
+FONT_BODY = "Quicksand Medium"
 
 _FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
 _FONT_FILES = ["Fredoka-SemiBold.ttf", "Quicksand-Medium.ttf"]
@@ -38,11 +98,6 @@ _FR_PRIVATE = 0x10
 
 
 def register_fonts() -> None:
-    """Load the bundled font files for this process only — no system-wide
-    install, no admin rights needed, nothing left behind for other
-    applications on this machine. Windows-only, since AddFontResourceExW
-    is a Windows GDI call; silently does nothing on other platforms, or
-    for a file that isn't there yet, rather than crashing the app."""
     if os.name != "nt":
         return
     for filename in _FONT_FILES:
@@ -52,9 +107,6 @@ def register_fonts() -> None:
 
 
 def unregister_fonts() -> None:
-    """Mirror of register_fonts(), called on app close. Not strictly
-    required — private fonts release automatically when the process
-    exits — but tidy to do explicitly rather than rely on that."""
     if os.name != "nt":
         return
     for filename in _FONT_FILES:
