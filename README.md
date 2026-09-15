@@ -1,4 +1,4 @@
-# RSVP Desktop Reader
+# Rapid Serial Visualization Presentation Desktop Reader
 
 A lightweight, fully offline speed-reading app that flashes transcript text
 one word at a time - eliminating eye movement so you can read faster without
@@ -27,7 +27,7 @@ real architecture underneath it: a clean split between the pure reading
 logic in `core/` and everything GUI-related in `gui/`, so the two never
 depend on each other.
 
-### Contents
+## Contents
 
 - [Features](#features)
 - [The RSVP Technique](#the-rsvp-technique)
@@ -120,28 +120,29 @@ python main.py
 
 ## Project Structure
 
+````
 rsvp-desktop-reader/
 ├── assets/
-│ └── fonts/ # Bundled Fredoka & Quicksand font files
-├── core/ # Pure reading engine - no GUI dependencies
-│ ├── models.py # The Transcript data model
-│ ├── parser.py # Strips timestamps from raw transcript text
-│ ├── tokenizer.py # Splits cleaned text into words
-│ ├── orp.py # Calculates each word's Optimal Recognition Point
-│ ├── timing.py # Converts WPM into a per-word delay
-│ ├── reader.py # ReaderSession - ties the above together
-│ ├── transcript_store.py # In-memory store + persistence for transcripts/spaces
-│ ├── settings_store.py # In-memory store + persistence for app settings
-│ └── storage.py # Low-level JSON read/write
+│   └── fonts/              # Bundled Fredoka & Quicksand font files
+├── core/                   # Pure reading engine — no GUI dependencies
+│   ├── models.py           # The Transcript data model
+│   ├── parser.py           # Strips timestamps from raw transcript text
+│   ├── tokenizer.py        # Splits cleaned text into words
+│   ├── orp.py               # Calculates each word's Optimal Recognition Point
+│   ├── timing.py           # Converts WPM into a per-word delay
+│   ├── reader.py           # ReaderSession — ties the above together
+│   ├── transcript_store.py # In-memory store + persistence for transcripts/spaces
+│   ├── settings_store.py   # In-memory store + persistence for app settings
+│   └── storage.py          # Low-level JSON read/write
 ├── gui/
-│ ├── app.py # Main application window
-│ ├── theme.py # Central design tokens: colors, fonts, theme resolution
-│ ├── icons.py # Hand-drawn icons (avoids font-glyph rendering issues)
-│ └── components/ # Every individual UI piece - header, canvas, dialogs, etc.
-├── tests/ # Reserved for an automated test suite (not yet populated)
-├── main.py # Entry point
+│   ├── app.py               # Main application window
+│   ├── theme.py             # Central design tokens: colors, fonts, theme resolution
+│   ├── icons.py              # Hand-drawn icons (avoids font-glyph rendering issues)
+│   └── components/           # Every individual UI piece — header, canvas, dialogs, etc.
+├── tests/                    # Reserved for an automated test suite (not yet populated)
+├── main.py                   # Entry point
 └── requirements.txt
-
+````
 
 ## Built With
 
@@ -175,7 +176,7 @@ Settings are organized into four tabs:
 
 ## License
 
-*Not yet chosen yet decided*
+*Not yet chosen*
 
 ## Acknowledgments
 
