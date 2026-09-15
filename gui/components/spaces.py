@@ -1,10 +1,10 @@
-import tkinter as tk
 import customtkinter as ctk
-from gui.theme import WARM_MOCHA, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, WARM_TAUPE, WARM_LINE, FONT_HEADING, FONT_BODY
+from gui.components.space_selection_dialog import SpaceSelectionDialog
+from gui.theme import WARM_MOCHA, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
 
 
 class Spaces(ctk.CTkFrame):
-    """Space switcher: 'v' button (left) opens a menu to pick a space,
+    """Space switcher: 'v' button (left) opens a dialog to pick a space,
     current name (center, large), '+' (right)."""
 
     def __init__(self, master, spaces: list[str], current_space: str, on_select=None, on_add=None):
@@ -12,6 +12,7 @@ class Spaces(ctk.CTkFrame):
         self.on_select = on_select
         self.on_add = on_add
         self._spaces = list(spaces)
+        self._current_space = current_space
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -22,7 +23,7 @@ class Spaces(ctk.CTkFrame):
         self.menu_button = ctk.CTkButton(
             self, text="v", width=32, corner_radius=8,
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
-            font=menu_font, command=self._open_space_menu,
+            font=menu_font, command=self._open_space_dialog,
         )
         self.menu_button.grid(row=0, column=0, sticky="w", padx=10)
 
@@ -38,23 +39,14 @@ class Spaces(ctk.CTkFrame):
         add_button.grid(row=0, column=2, sticky="e", padx=10)
 
     def set_current_space(self, name: str) -> None:
+        self._current_space = name
         self.name_label.configure(text=name)
 
     def update_spaces(self, spaces: list[str]) -> None:
         self._spaces = list(spaces)
 
-    def _open_space_menu(self) -> None:
-        menu = tk.Menu(
-            self, tearoff=0,
-            bg=WARM_TAUPE, fg=COCOA_INK,
-            activebackground=WARM_LINE, activeforeground=COCOA_INK,
-            relief="flat", bd=0,
-        )
-        for space_name in self._spaces:
-            menu.add_command(label=space_name, command=lambda s=space_name: self._handle_select(s))
-        x = self.menu_button.winfo_rootx()
-        y = self.menu_button.winfo_rooty() + self.menu_button.winfo_height()
-        menu.tk_popup(x, y)
+    def _open_space_dialog(self) -> None:
+        SpaceSelectionDialog(self, spaces=self._spaces, current_space=self._current_space, on_select=self._handle_select)
 
     def _handle_select(self, selected_name: str) -> None:
         if self.on_select:
