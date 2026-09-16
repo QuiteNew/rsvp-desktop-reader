@@ -11,11 +11,6 @@ import os
 import ctypes
 
 # ---- Palettes ----
-# DARK_PALETTE currently mirrors LIGHT_PALETTE exactly — a deliberate
-# placeholder. Selecting "Dark" is fully functional end to end (it's a
-# real, separate palette dict, correctly resolved and applied), it just
-# doesn't look different yet. Designing real dark colors is a distinct,
-# deliberate next step — not something to rush inside this change.
 
 LIGHT_PALETTE = {
     "hearth_paper": "#F6EFE3",
@@ -32,7 +27,20 @@ LIGHT_PALETTE = {
     "text_on_dark": "#F6EFE3",
 }
 
-DARK_PALETTE = dict(LIGHT_PALETTE)  # placeholder — real dark colors: next session
+DARK_PALETTE = {
+    "hearth_paper": "#1D1712",       # soft near-black, warm brown undertone — never blue
+    "cocoa_ink": "#F2E8DC",          # was dark text-on-light; now light text-on-dark
+    "cocoa_ink_light": "#D9CBB8",
+    "warm_taupe": "#2E2419",         # sidebar/header/entry-field panels — a step lighter than base
+    "warm_mocha": "#4A3826",         # Spaces/Footer band — the richest, lightest of the dark surfaces
+    "dusk_blue": "#7C93A3",
+    "dusk_blue_hover": "#6B7F8C",
+    "ember_glow": "#A8672E",         # deliberately darker/more burnt than the light theme's Ember Glow
+    "ember_glow_hover": "#BF7A3B",   # hover goes LIGHTER here, not darker — the visible direction on dark UIs
+    "warm_line": "#7A6248",          # doubles as border color and inactive-space text — needs to read both ways
+    "text_on_light": "#F2E8DC",
+    "text_on_dark": "#1D1712",
+}
 
 
 def _detect_system_prefers_dark() -> bool:

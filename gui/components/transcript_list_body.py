@@ -6,9 +6,6 @@ class TranscriptListBody(ctk.CTkFrame):
     """Scrollable list of saved transcripts. Each row has a delete
     button that only becomes clearly visible when hovering that row."""
 
-    DELETE_MUTED = "#E4D9C4"     # barely visible against a HEARTH_PAPER row at rest
-    DELETE_REVEALED = "#9C8A73"  # a plain, clearly visible warm gray on hover — never blue
-
     def __init__(self, master, on_select=None, on_delete_requested=None):
         super().__init__(master, fg_color=WARM_TAUPE, corner_radius=0)
         self.on_select = on_select
@@ -28,19 +25,22 @@ class TranscriptListBody(ctk.CTkFrame):
         )
         title_label.pack(side="left", fill="x", expand=True, padx=(12, 4), pady=8)
 
+        # WARM_TAUPE (muted, near-blended into the row at rest) and WARM_LINE
+        # (clearly visible on hover) — both real theme tokens now, so this
+        # correctly adapts to dark mode instead of the old fixed hex values.
         delete_button = ctk.CTkButton(
             row, text="X", width=20, height=20, corner_radius=8,
             fg_color="transparent", hover_color=WARM_LINE,
-            text_color=self.DELETE_MUTED, cursor="hand2",
+            text_color=WARM_TAUPE, cursor="hand2",
             command=lambda t=transcript: self._handle_delete_requested(t),
         )
         delete_button.pack(side="right", padx=(0, 10))
 
         def reveal(event=None):
-            delete_button.configure(text_color=self.DELETE_REVEALED)
+            delete_button.configure(text_color=WARM_LINE)
 
         def unreveal(event=None):
-            delete_button.configure(text_color=self.DELETE_MUTED)
+            delete_button.configure(text_color=WARM_TAUPE)
 
         for widget in (row, title_label, delete_button):
             widget.bind("<Enter>", reveal)
