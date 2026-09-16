@@ -336,10 +336,19 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             tab,
+            text="Takes effect the next time you launch the app.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 10))
+
+        ctk.CTkLabel(
+            tab,
             text=(
-                "Takes effect the next time you launch the app. Dark colours "
-                "are being designed in an upcoming session — for now, Dark "
-                "looks identical to Light."
+                "Note: a new transcript's reading colours (font, highlight, "
+                "background) come from the Defaults tab, not from this theme "
+                "setting — they won't automatically match Light or Dark. "
+                "Adjust them under Defaults, or per-transcript from the "
+                "control band at the bottom of the main window, if you'd "
+                "like the reading canvas itself to match."
             ),
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 10))
