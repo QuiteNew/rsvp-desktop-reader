@@ -27,16 +27,11 @@ def get_orp_index(word: str) -> int:
 
 def split_at_orp(word: str) -> ORPWord:
     """Split a word into (before, focus letter, after) around its ORP."""
+    if not word:
+        raise ValueError("split_at_orp() requires a non-empty word")
     index = min(get_orp_index(word), len(word) - 1)
     return ORPWord(
         before=word[:index],
         focus=word[index],
         after=word[index + 1:],
     )
-
-
-if __name__ == "__main__":
-    test_words = ["I", "the", "reading", "wonderful", "extraordinary"]
-    for w in test_words:
-        r = split_at_orp(w)
-        print(f"{w:>15} -> before='{r.before}' focus='{r.focus}' after='{r.after}'")
