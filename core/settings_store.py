@@ -5,7 +5,6 @@ from dataclasses import dataclass, asdict, field
 from core.storage import DEFAULT_DATA_DIR
 
 SETTINGS_DIR = DEFAULT_DATA_DIR
-SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 
 WINDOW_WIDTH_RANGE = (500, 2000)
 WINDOW_HEIGHT_RANGE = (400, 1400)
@@ -34,24 +33,36 @@ class AppSettings:
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
-    transcript/space data."""
+    transcript/space data.
 
-    def __init__(self):
+    settings_directory is optional and defaults to the real
+    ~/.rsvp_reader folder — every existing call site (SettingsStore()
+    with no arguments) is completely unaffected. It exists specifically
+    so tests can point this at a disposable temporary directory instead,
+    the same pattern already used for TranscriptStore's data_directory.
+    Without this, every test run would have silently read and overwritten
+    the user's real settings file — a real, serious gap this test suite
+    is what surfaced in the first place, not a hypothetical one.
+    """
+
+    def __init__(self, settings_directory: str | None = None):
+        self._settings_dir = Path(settings_directory) if settings_directory else SETTINGS_DIR
+        self._settings_file = self._settings_dir / "settings.json"
         self._settings = self._load()
 
     def _load(self) -> AppSettings:
-        if not SETTINGS_FILE.exists():
+        if not self._settings_file.exists():
             return AppSettings()
         try:
-            data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            data = json.loads(self._settings_file.read_text(encoding="utf-8"))
             data.pop("header_height", None)  # gone from AppSettings — drop it if an old file still has it
             return AppSettings(**data)
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
 
     def _save(self) -> None:
-        SETTINGS_DIR.mkdir(exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(asdict(self._settings), indent=2), encoding="utf-8")
+        self._settings_dir.mkdir(exist_ok=True, parents=True)
+        self._settings_file.write_text(json.dumps(asdict(self._settings), indent=2), encoding="utf-8")
 
     @property
     def window_width(self) -> int:
@@ -105,10 +116,6 @@ class SettingsStore:
     def appearance_mode(self) -> str:
         return self._settings.appearance_mode
 
-    def set_appearance_mode(self, mode: str) -> None:
-        self._settings.appearance_mode = mode
-        self._save()
-
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -137,4 +144,8 @@ class SettingsStore:
     def set_skip_behavior(self, word_count: int, pause_on_skip: bool) -> None:
         self._settings.skip_word_count = word_count
         self._settings.pause_on_skip = pause_on_skip
+        self._save()
+
+    def set_appearance_mode(self, mode: str) -> None:
+        self._settings.appearance_mode = mode
         self._save()
