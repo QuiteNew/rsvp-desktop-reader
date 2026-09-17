@@ -72,11 +72,13 @@ class TranscriptStore:
         font_color: str = "#FFFFFF",
         highlight_color: str = "#E74C3C",
         background_color: str = "#1E1E1E",
+        font_size: int = 32,
     ) -> Transcript:
         transcript = Transcript(
             id=self._next_id, title=title, space=space,
             wpm=wpm, font_color=font_color,
             highlight_color=highlight_color, background_color=background_color,
+            font_size=font_size,
         )
         self._next_id += 1
         self._transcripts.append(transcript)
@@ -107,12 +109,6 @@ class TranscriptStore:
             t.is_paused = is_paused
             self._save()
 
-    def set_transcript_stopped(self, transcript_id: int, is_stopped: bool) -> None:
-        t = self._find_transcript(transcript_id)
-        if t:
-            t.is_stopped = is_stopped
-            self._save()
-
     def set_transcript_wpm(self, transcript_id: int, wpm: int) -> None:
         t = self._find_transcript(transcript_id)
         if t:
@@ -137,13 +133,24 @@ class TranscriptStore:
             t.background_color = color
             self._save()
 
+    def set_transcript_font_size(self, transcript_id: int, font_size: int) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.font_size = font_size
+            self._save()
+
     def set_transcript_draft_text(self, transcript_id: int, draft_text: str) -> None:
         t = self._find_transcript(transcript_id)
         if t:
             t.draft_text = draft_text
             self._save()
 
+    def set_transcript_stopped(self, transcript_id: int, is_stopped: bool) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.is_stopped = is_stopped
+            self._save()
+
     def delete_transcript(self, transcript_id: int) -> None:
-        """Permanently remove a transcript and persist the change immediately."""
         self._transcripts = [t for t in self._transcripts if t.id != transcript_id]
         self._save()

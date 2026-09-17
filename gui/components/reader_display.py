@@ -9,6 +9,7 @@ class ReaderDisplay(ctk.CTkFrame):
 
     DEFAULT_FONT_COLOR = COCOA_INK
     DEFAULT_HIGHLIGHT_COLOR = EMBER_GLOW
+    DEFAULT_FONT_SIZE = 32
 
     def __init__(self, master, on_position_changed=None):
         super().__init__(master, fg_color="transparent")
@@ -20,15 +21,18 @@ class ReaderDisplay(ctk.CTkFrame):
         self.word_row = ctk.CTkFrame(self, fg_color="transparent")
         self.word_row.pack(expand=True)
 
-        word_font = ctk.CTkFont(family=FONT_HEADING, size=32)
+        # One shared CTkFont object — before/focus/after labels all point
+        # to this SAME object, so set_font_size() resizes all three with
+        # a single call.
+        self.word_font = ctk.CTkFont(family=FONT_HEADING, size=self.DEFAULT_FONT_SIZE)
 
-        self.before_label = ctk.CTkLabel(self.word_row, text="", font=word_font, text_color=self.DEFAULT_FONT_COLOR)
+        self.before_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_FONT_COLOR)
         self.before_label.pack(side="left")
 
-        self.focus_label = ctk.CTkLabel(self.word_row, text="", font=word_font, text_color=self.DEFAULT_HIGHLIGHT_COLOR)
+        self.focus_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_HIGHLIGHT_COLOR)
         self.focus_label.pack(side="left")
 
-        self.after_label = ctk.CTkLabel(self.word_row, text="", font=word_font, text_color=self.DEFAULT_FONT_COLOR)
+        self.after_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_FONT_COLOR)
         self.after_label.pack(side="left")
 
     def load_session(self, session: ReaderSession, start_paused: bool = False) -> None:
@@ -64,11 +68,6 @@ class ReaderDisplay(ctk.CTkFrame):
         self._schedule_next()
 
     def skip(self, delta: int, force_pause: bool = False) -> bool:
-        """Jump by delta words and redraw immediately. If force_pause is
-        True, always land paused regardless of prior state; otherwise
-        preserve whatever play/pause state was already active. Returns
-        the resulting paused state, mirroring toggle_pause()'s pattern,
-        so the caller can sync a toolbar icon and persist it."""
         if self.session is None:
             return self._is_paused
         self._cancel_pending()
@@ -91,6 +90,9 @@ class ReaderDisplay(ctk.CTkFrame):
         self.before_label.configure(text_color=font_color)
         self.after_label.configure(text_color=font_color)
         self.focus_label.configure(text_color=highlight_color)
+
+    def set_font_size(self, size: int) -> None:
+        self.word_font.configure(size=size)
 
     def _show_current_frame(self) -> None:
         if self.session is None:

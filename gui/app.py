@@ -174,6 +174,7 @@ class RSVPApp(ctk.CTk):
             font_color=self.settings_store.default_font_color,
             highlight_color=self.settings_store.default_highlight_color,
             background_color=self.settings_store.default_background_color,
+            font_size=self.settings_store.default_font_size,
         )
         self._refresh_transcript_list()
 
@@ -266,13 +267,16 @@ class RSVPApp(ctk.CTk):
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             appearance_mode=self.settings_store.appearance_mode,
+            default_font_size=self.settings_store.default_font_size,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
         self.settings_store.set_window_size(values["window_width"], values["window_height"])
         self.geometry(f"{values['window_width']}x{values['window_height']}")
 
-        self.settings_store.set_layout_sizes(values["sidebar_width"], values["bottom_band_height"])
+        self.settings_store.set_layout_sizes(
+            values["sidebar_width"], values["bottom_band_height"]
+        )
         if not self._focus_mode:
             self._apply_layout_sizes()
 
@@ -282,7 +286,18 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_defaults(
             values["default_wpm"], values["default_font_color"],
             values["default_highlight_color"], values["default_background_color"],
+            values["default_font_size"],
         )
+
+        # Word size has no Footer control (unlike WPM/colors, which are
+        # only ever live-edited there) — Settings is its only control
+        # surface, so Apply does double duty: it both updates the future
+        # default AND pushes the new size onto whichever transcript is
+        # currently open, since that's the only way to change an
+        # existing transcript's size at all right now.
+        if self._current_transcript:
+            self.store.set_transcript_font_size(self._current_transcript.id, values["default_font_size"])
+            self.canvas.set_font_size(values["default_font_size"])
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])

@@ -68,6 +68,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self.toolbar.pack(anchor="ne", padx=10, pady=10)
             self.toolbar.set_paused(self.transcript.is_paused)
             self.reader_display.set_colors(self.transcript.font_color, self.transcript.highlight_color, self.transcript.background_color)
+            self.reader_display.set_font_size(self.transcript.font_size)
             self.reader_display.pack(fill="both", expand=True)
             self.reader_display.load_session(
                 ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position),

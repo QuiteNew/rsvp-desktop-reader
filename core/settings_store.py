@@ -12,6 +12,7 @@ SIDEBAR_WIDTH_RANGE = (120, 500)
 BOTTOM_BAND_HEIGHT_RANGE = (80, 400)
 WPM_RANGE = (100, 1000)
 SKIP_WORD_COUNT_RANGE = (1, 50)
+FONT_SIZE_RANGE = (16, 96)
 
 
 @dataclass
@@ -24,26 +25,17 @@ class AppSettings:
     default_font_color: str = "#3B2E27"
     default_highlight_color: str = "#D98A3D"
     default_background_color: str = "#F6EFE3"
+    default_font_size: int = 32
     data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
     freeform_resize_enabled: bool = False
     skip_word_count: int = 10
     pause_on_skip: bool = False
-    appearance_mode: str = "light"  # "light", "dark", or "system"
+    appearance_mode: str = "light"
 
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
-    transcript/space data.
-
-    settings_directory is optional and defaults to the real
-    ~/.rsvp_reader folder — every existing call site (SettingsStore()
-    with no arguments) is completely unaffected. It exists specifically
-    so tests can point this at a disposable temporary directory instead,
-    the same pattern already used for TranscriptStore's data_directory.
-    Without this, every test run would have silently read and overwritten
-    the user's real settings file — a real, serious gap this test suite
-    is what surfaced in the first place, not a hypothetical one.
-    """
+    transcript/space data."""
 
     def __init__(self, settings_directory: str | None = None):
         self._settings_dir = Path(settings_directory) if settings_directory else SETTINGS_DIR
@@ -55,7 +47,7 @@ class SettingsStore:
             return AppSettings()
         try:
             data = json.loads(self._settings_file.read_text(encoding="utf-8"))
-            data.pop("header_height", None)  # gone from AppSettings — drop it if an old file still has it
+            data.pop("header_height", None)
             return AppSettings(**data)
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
@@ -97,6 +89,10 @@ class SettingsStore:
         return self._settings.default_background_color
 
     @property
+    def default_font_size(self) -> int:
+        return self._settings.default_font_size
+
+    @property
     def data_directory(self) -> str:
         return self._settings.data_directory
 
@@ -126,11 +122,12 @@ class SettingsStore:
         self._settings.bottom_band_height = bottom_band_height
         self._save()
 
-    def set_defaults(self, wpm: int, font_color: str, highlight_color: str, background_color: str) -> None:
+    def set_defaults(self, wpm: int, font_color: str, highlight_color: str, background_color: str, font_size: int) -> None:
         self._settings.default_wpm = wpm
         self._settings.default_font_color = font_color
         self._settings.default_highlight_color = highlight_color
         self._settings.default_background_color = background_color
+        self._settings.default_font_size = font_size
         self._save()
 
     def set_data_directory(self, directory: str) -> None:

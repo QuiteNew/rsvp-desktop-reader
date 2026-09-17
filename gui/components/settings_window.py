@@ -5,7 +5,7 @@ from core.settings_store import (
     AppSettings,
     WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
     SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
-    WPM_RANGE, SKIP_WORD_COUNT_RANGE,
+    WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE,
 )
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
 
@@ -23,7 +23,7 @@ class SettingsWindow(ctk.CTkToplevel):
         window_width, window_height,
         sidebar_width, bottom_band_height,
         freeform_resize_enabled,
-        default_wpm, default_font_color, default_highlight_color, default_background_color,
+        default_wpm, default_font_color, default_highlight_color, default_background_color, default_font_size,
         skip_word_count, pause_on_skip,
         data_directory,
         appearance_mode,
@@ -70,7 +70,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._build_defaults_tab(
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
-            default_background_color, skip_word_count, pause_on_skip,
+            default_background_color, default_font_size, skip_word_count, pause_on_skip,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -136,7 +136,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, skip_word_count, pause_on_skip) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, skip_word_count, pause_on_skip) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True)
 
@@ -162,6 +162,20 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.default_background_color = background_color
         self.default_background_swatch = self._color_row(scroll, "Background colour", background_color, self._pick_default_background_color)
+
+        self.default_font_size = font_size
+        size_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        size_row.pack(fill="x", pady=6)
+        ctk.CTkLabel(size_row, text="Word size", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
+        self.default_font_size_label = ctk.CTkLabel(size_row, text=f"{font_size} px", width=70, text_color=COCOA_INK, font=self.label_font)
+        self.default_font_size_label.pack(side="right")
+        self.default_font_size_slider = self._styled_slider(
+            scroll, FONT_SIZE_RANGE[0], FONT_SIZE_RANGE[1], FONT_SIZE_RANGE[1] - FONT_SIZE_RANGE[0],
+            lambda v: (self.default_font_size_label.configure(text=f"{int(v)} px"), setattr(self, "default_font_size", int(v))),
+        )
+        self.default_font_size_slider.set(font_size)
+        self.default_font_size_slider.pack(fill="x", pady=(0, 10))
+
 
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript too — not just future ones",
@@ -254,6 +268,10 @@ class SettingsWindow(ctk.CTkToplevel):
         (self.pause_on_skip_switch.select() if original.pause_on_skip else self.pause_on_skip_switch.deselect())
         if self.on_pause_on_skip_changed:
             self.on_pause_on_skip_changed(original.pause_on_skip)
+
+        self.default_font_size = original.default_font_size
+        self.default_font_size_slider.set(original.default_font_size)
+        self.default_font_size_label.configure(text=f"{original.default_font_size} px")
 
     # ---- Layout tab ----
 
@@ -385,6 +403,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["data_directory"] = self._data_directory
         values["appearance_mode"] = self.appearance_mode_selector.get().lower()
+        values["default_font_size"] = self.default_font_size
 
         self.error_label.configure(text="")
         self.on_apply(values)

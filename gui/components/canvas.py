@@ -81,6 +81,7 @@ class Canvas(ctk.CTkFrame):
             self._show_reader()
             self.toolbar.set_paused(transcript.is_paused)
             self.reader_display.set_colors(transcript.font_color, transcript.highlight_color, transcript.background_color)
+            self.reader_display.set_font_size(transcript.font_size)
             self.reader_display.load_session(
                 ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position),
                 start_paused=transcript.is_paused,
