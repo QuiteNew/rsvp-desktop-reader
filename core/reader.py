@@ -12,7 +12,7 @@ class ReaderSession:
         words = tokenize(clean)
         self.frames: list[ORPWord] = [split_at_orp(w) for w in words]
         self.wpm = wpm
-        self.index = min(start_index, len(self.frames))
+        self.index = max(0, min(start_index, len(self.frames)))
 
     @property
     def total_words(self) -> int:
