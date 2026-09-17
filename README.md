@@ -16,12 +16,12 @@ scanning back and forth across a page, the words come to you.
 I built this because I found [this](https://www.instagram.com/reel/DTf6Bh9jSNn/?stkn=ZWdpeHJlb2o1bGp6) reel on instagram 
 and I immediately wanted to recreate it, not using an extension or a web tool, 
 I wanted something local, lightweight, and fully
-mine, created in a way that I wanted it to look and fucntion
+mine, created in a way that I wanted it to look and function
 
- I built this slowly, in small sessions where I could also apply my knowledge of Python that I got from uni, also learn 
+I built this slowly, in small sessions where I could also apply my knowledge of Python that I got from uni, also learn 
 and use libraries such as [CustomTkinter](https://customtkinter.tomschimansky.com/)
 
- Every piece - the reading engine, the GUI, persistence, the
+Every piece - the reading engine, the GUI, persistence, the
 whole layout system - was built one small, testable step at a time, with a
 real architecture underneath it: a clean split between the pure reading
 logic in `core/` and everything GUI-related in `gui/`, so the two never
@@ -162,16 +162,17 @@ Settings are organized into four tabs:
   reading too)
 - **Layout** - window size, sidebar width, bottom control-band height, and
   a free-form drag-to-resize toggle
-- **Storage** - where your transcript data is saved on disk, changable
+- **Storage** - where your transcript data is saved on disk, changeable
   at any time
 - **Appearance** - Light / Dark / System theme (takes effect on next
   launch, not live)
 
 ## Roadmap
 
-- A real, finished Dark theme color palette (the underlying switching
-  mechanism already exists and is fully functional)
-- An automated test suite under `tests/`
+- ~~A real, finished Dark theme color palette (the underlying switching
+  mechanism already exists and is fully functional)~~
+- ~~An automated test suite under `tests/`~~
+- Configurable size for words shown 
 - Highlited letter position customization
 
 ## License
