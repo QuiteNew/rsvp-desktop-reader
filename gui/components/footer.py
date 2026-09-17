@@ -1,10 +1,13 @@
 import customtkinter as ctk
 from tkinter import colorchooser
 from gui.theme import WARM_MOCHA, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, WARM_LINE, FONT_BODY
+from core.settings_store import FONT_SIZE_RANGE
 
 
 class Footer(ctk.CTkFrame):
-    """Control band: font/background colour (left), WPM + skip controls (middle), highlight colour (right)."""
+    """Control band: font colour + background colour (left, stacked),
+    WPM + skip controls (middle), word size + highlight colour (right,
+    stacked — mirrors the left column)."""
 
     def __init__(
         self,
@@ -15,6 +18,7 @@ class Footer(ctk.CTkFrame):
         on_background_color_changed=None,
         on_skip_back=None,
         on_skip_forward=None,
+        on_font_size_changed=None,
     ):
         super().__init__(master, fg_color=WARM_MOCHA, corner_radius=0)
         self.on_wpm_changed = on_wpm_changed
@@ -23,14 +27,18 @@ class Footer(ctk.CTkFrame):
         self.on_background_color_changed = on_background_color_changed
         self.on_skip_back = on_skip_back
         self.on_skip_forward = on_skip_forward
+        self.on_font_size_changed = on_font_size_changed
+        self._font_size = 32
 
         label_font = ctk.CTkFont(family=FONT_BODY, size=12)
+        wpm_font = ctk.CTkFont(family=FONT_BODY, size=12, weight="bold")
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         self.grid_columnconfigure(2, weight=1)
 
+        # ---- Left: Font (top), Background (bottom) ----
         left = ctk.CTkFrame(self, fg_color="transparent")
         left.grid(row=0, column=0, sticky="nsew")
 
@@ -54,9 +62,10 @@ class Footer(ctk.CTkFrame):
         )
         self.background_swatch.pack(side="left")
 
+        # ---- Middle: WPM (now bold) + skip/slider row — unchanged otherwise ----
         middle = ctk.CTkFrame(self, fg_color="transparent")
         middle.grid(row=0, column=1, sticky="nsew")
-        self.wpm_label = ctk.CTkLabel(middle, text="300 WPM", text_color=COCOA_INK, font=label_font)
+        self.wpm_label = ctk.CTkLabel(middle, text="300 WPM", text_color=COCOA_INK, font=wpm_font)
         self.wpm_label.pack(pady=(10, 0))
 
         slider_row = ctk.CTkFrame(middle, fg_color="transparent")
@@ -85,10 +94,29 @@ class Footer(ctk.CTkFrame):
         )
         self.skip_forward_button.pack(side="left", padx=(8, 0))
 
+        # ---- Right: Word size (top), Highlight (bottom) — mirrors left ----
         right = ctk.CTkFrame(self, fg_color="transparent")
         right.grid(row=0, column=2, sticky="nsew")
+
+        size_row = ctk.CTkFrame(right, fg_color="transparent")
+        size_row.pack(pady=6)
+        self.size_decrease_button = ctk.CTkButton(
+            size_row, text="-", width=24, height=24, corner_radius=8,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            command=self._handle_size_decrease,
+        )
+        self.size_decrease_button.pack(side="left", padx=(0, 6))
+        self.size_label = ctk.CTkLabel(size_row, text="32px", text_color=COCOA_INK, font=label_font, width=40)
+        self.size_label.pack(side="left")
+        self.size_increase_button = ctk.CTkButton(
+            size_row, text="+", width=24, height=24, corner_radius=8,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            command=self._handle_size_increase,
+        )
+        self.size_increase_button.pack(side="left", padx=(6, 0))
+
         highlight_row = ctk.CTkFrame(right, fg_color="transparent")
-        highlight_row.pack(expand=True)
+        highlight_row.pack(pady=6)
         ctk.CTkLabel(highlight_row, text="Highlight", text_color=COCOA_INK, font=label_font).pack(side="left", padx=(0, 8))
         self.highlight_swatch = ctk.CTkButton(
             highlight_row, text="", width=28, height=28, corner_radius=8,
@@ -106,6 +134,8 @@ class Footer(ctk.CTkFrame):
         self.font_swatch.configure(fg_color=transcript.font_color)
         self.background_swatch.configure(fg_color=transcript.background_color)
         self.highlight_swatch.configure(fg_color=transcript.highlight_color)
+        self._font_size = transcript.font_size
+        self.size_label.configure(text=f"{self._font_size}px")
 
     def set_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
@@ -115,6 +145,15 @@ class Footer(ctk.CTkFrame):
         self.highlight_swatch.configure(state=state)
         self.skip_back_button.configure(state=state)
         self.skip_forward_button.configure(state=state)
+        self.size_decrease_button.configure(state=state)
+        self.size_increase_button.configure(state=state)
+
+    def set_font_size(self, size: int) -> None:
+        """Update just the displayed size — used when the change comes
+        from an external source (Settings Apply), as opposed to the
+        user directly clicking +/- here."""
+        self._font_size = size
+        self.size_label.configure(text=f"{size}px")
 
     def _handle_wpm_slide(self, value) -> None:
         wpm = int(value)
@@ -129,6 +168,19 @@ class Footer(ctk.CTkFrame):
     def _handle_skip_forward(self) -> None:
         if self.on_skip_forward:
             self.on_skip_forward()
+
+    def _handle_size_decrease(self) -> None:
+        self._change_font_size(-1)
+
+    def _handle_size_increase(self) -> None:
+        self._change_font_size(1)
+
+    def _change_font_size(self, delta: int) -> None:
+        low, high = FONT_SIZE_RANGE
+        self._font_size = max(low, min(high, self._font_size + delta))
+        self.size_label.configure(text=f"{self._font_size}px")
+        if self.on_font_size_changed:
+            self.on_font_size_changed(self._font_size)
 
     def _pick_font_color(self) -> None:
         color = colorchooser.askcolor(color=self.font_swatch.cget("fg_color"))[1]

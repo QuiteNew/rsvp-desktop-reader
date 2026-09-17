@@ -176,6 +176,12 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_font_size_slider.set(font_size)
         self.default_font_size_slider.pack(fill="x", pady=(0, 10))
 
+        ctk.CTkLabel(
+            scroll,
+            text="Also available as +/- buttons in the main window's control band, which apply immediately to whatever you're currently reading.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 6))
+
 
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript too — not just future ones",

@@ -122,6 +122,11 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.reader_display.set_colors(font_color, highlight_color, background_color)
 
+    def set_font_size(self, size: int) -> None:
+        self.reader_display.set_font_size(size)
+        if self._detached_window:
+            self._detached_window.reader_display.set_font_size(size)
+
     def skip_backward(self) -> None:
         self._skip(-self._skip_word_count)
 
@@ -151,11 +156,6 @@ class Canvas(ctk.CTkFrame):
         self._capture_current_draft()
 
     def _capture_current_draft(self) -> None:
-        """Capture whatever's currently in the paste box whenever it's
-        showing — regardless of whether this transcript is stopped or
-        genuinely fresh. Which underlying field it lands in is decided
-        downstream, in app.py's _handle_draft_changed, based on
-        transcript.is_stopped."""
         if self._input_currently_shown and self.current_transcript:
             text = self.input_view.get_text().strip()
             self._report_draft_changed(self.current_transcript, text)
@@ -216,10 +216,9 @@ class Canvas(ctk.CTkFrame):
         self._detached_transcript = self.current_transcript
 
         draft_text = ""
-        if self.current_transcript.is_stopped or not self.current_transcript.raw_text.strip():
-            # Both cases mean the paste box is what's currently showing —
-            # capture whatever's actually typed right now (including
-            # unsaved edits), not a possibly-stale saved value.
+        if self.current_transcript.is_stopped:
+            draft_text = self.current_transcript.raw_text
+        elif not self.current_transcript.raw_text.strip():
             draft_text = self.input_view.get_text().strip()
             self._report_draft_changed(self.current_transcript, draft_text)
 

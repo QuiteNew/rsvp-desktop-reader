@@ -118,6 +118,7 @@ class RSVPApp(ctk.CTk):
             on_background_color_changed=self._handle_background_color_changed,
             on_skip_back=self.canvas.skip_backward,
             on_skip_forward=self.canvas.skip_forward,
+            on_font_size_changed=self._handle_font_size_changed,
         )
         self.footer.grid(row=4, column=2, sticky="nsew")
 
@@ -229,6 +230,12 @@ class RSVPApp(ctk.CTk):
         self.store.set_transcript_font_color(self._current_transcript.id, color)
         self._apply_current_colors()
 
+    def _handle_font_size_changed(self, size: int) -> None:
+        if not self._current_transcript:
+            return
+        self.store.set_transcript_font_size(self._current_transcript.id, size)
+        self.canvas.set_font_size(size)
+
     def _handle_highlight_color_changed(self, color: str) -> None:
         if not self._current_transcript:
             return
@@ -289,15 +296,15 @@ class RSVPApp(ctk.CTk):
             values["default_font_size"],
         )
 
-        # Persisted immediately, but deliberately NOT applied to the
-        # currently rendering ReaderDisplay — the new size only becomes
-        # visible the next time this transcript's session actually
-        # reloads (switching away and back, or Stop then Start reading
-        # again), not while it's mid-flash right now. Canvas.load_transcript()
-        # already re-applies font_size on every load — this line supplies
-        # the new value for that to pick up later, nothing more.
+        # Word size has no independent Settings-only path — applying it
+        # here updates all three things together: the stored value, the
+        # live canvas render, and the Footer's own displayed label. Same
+        # end result as clicking the Footer's own +/- buttons, just
+        # triggered from Settings instead.
         if self._current_transcript:
             self.store.set_transcript_font_size(self._current_transcript.id, values["default_font_size"])
+            self.canvas.set_font_size(values["default_font_size"])
+            self.footer.set_font_size(values["default_font_size"])
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])
