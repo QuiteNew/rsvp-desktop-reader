@@ -289,15 +289,15 @@ class RSVPApp(ctk.CTk):
             values["default_font_size"],
         )
 
-        # Word size has no Footer control (unlike WPM/colors, which are
-        # only ever live-edited there) — Settings is its only control
-        # surface, so Apply does double duty: it both updates the future
-        # default AND pushes the new size onto whichever transcript is
-        # currently open, since that's the only way to change an
-        # existing transcript's size at all right now.
+        # Persisted immediately, but deliberately NOT applied to the
+        # currently rendering ReaderDisplay — the new size only becomes
+        # visible the next time this transcript's session actually
+        # reloads (switching away and back, or Stop then Start reading
+        # again), not while it's mid-flash right now. Canvas.load_transcript()
+        # already re-applies font_size on every load — this line supplies
+        # the new value for that to pick up later, nothing more.
         if self._current_transcript:
             self.store.set_transcript_font_size(self._current_transcript.id, values["default_font_size"])
-            self.canvas.set_font_size(values["default_font_size"])
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])
