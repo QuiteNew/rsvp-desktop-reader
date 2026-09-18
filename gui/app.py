@@ -275,7 +275,10 @@ class RSVPApp(ctk.CTk):
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             appearance_mode=self.settings_store.appearance_mode,
-            default_font_size=self.settings_store.default_font_size,
+            default_font_size=(
+                self._current_transcript.font_size if self._current_transcript
+                else self.settings_store.default_font_size
+            ),
             font_size_step=self.settings_store.font_size_step,
         )
 
