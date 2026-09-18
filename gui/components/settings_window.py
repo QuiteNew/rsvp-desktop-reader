@@ -43,6 +43,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.on_skip_word_count_changed = on_skip_word_count_changed
         self.on_pause_on_skip_changed = on_pause_on_skip_changed
         self._data_directory = data_directory
+        self._defaults_scroll = None  # set once the Defaults tab's scrollable frame exists
 
         self.lift()
         self.transient(master)
@@ -115,12 +116,35 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.label_font,
         )
 
+    def _redirect_scroll_to_defaults_frame(self, event) -> str:
+        """Prevents this slider from changing its own value when the
+        mouse wheel scrolls over it — CTkSlider is drawn on a Tkinter
+        Canvas internally, and Canvas widgets on Windows have a built-in
+        default where the wheel adjusts the canvas's own content, unrelated
+        to CustomTkinter. This stops that and manually forwards the same
+        scroll to the enclosing CTkScrollableFrame instead, so hovering a
+        slider scrolls the page, same as hovering anywhere else in this tab.
+
+        Reaches into CTkScrollableFrame's `_parent_canvas` — there's no
+        public API for this in the installed CustomTkinter version. Wrapped
+        defensively: if that attribute name differs on your exact version,
+        scrolling over a slider will simply do nothing (rather than crash
+        or keep changing the value) — worth telling me if that happens, so
+        we can find the correct attribute name for your version."""
+        try:
+            self._defaults_scroll._parent_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        except AttributeError:
+            pass
+        return "break"
+
     def _styled_slider(self, master, from_, to, steps, command) -> ctk.CTkSlider:
-        return ctk.CTkSlider(
+        slider = ctk.CTkSlider(
             master, from_=from_, to=to, number_of_steps=steps,
             progress_color=EMBER_GLOW, button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
             fg_color=WARM_LINE, command=command,
         )
+        slider.bind("<MouseWheel>", self._redirect_scroll_to_defaults_frame)
+        return slider
 
     def _styled_switch(self, master, text, command=None) -> ctk.CTkSwitch:
         return ctk.CTkSwitch(
@@ -137,25 +161,12 @@ class SettingsWindow(ctk.CTkToplevel):
             font=self.button_font, command=command,
         )
 
-    def _parse_signed_int(self, text: str) -> int | None:
-        """Like str.isdigit(), but also accepts an optional leading minus
-        sign. Needed specifically for the highlight-offset field below —
-        it's the first setting in this whole dialog whose valid range
-        includes negative numbers, and plain isdigit() rejects a leading
-        '-' outright (so "-3" would otherwise be wrongly flagged as
-        invalid). Also correctly rejects decimals ("3.5") and anything
-        non-numeric, same as every other field's validation."""
-        text = text.strip()
-        digits = text[1:] if text.startswith("-") else text
-        if not digits or not digits.isdigit():
-            return None
-        return int(text)
-
     # ---- Defaults tab ----
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True)
+        self._defaults_scroll = scroll
 
         ctk.CTkLabel(scroll, text="Applied to newly created transcripts only", text_color=COCOA_INK, font=self.small_font).pack(anchor="w", pady=(5, 15))
 
@@ -191,16 +202,15 @@ class SettingsWindow(ctk.CTkToplevel):
             lambda v: (self.default_font_size_label.configure(text=f"{int(v)} px"), setattr(self, "default_font_size", int(v))),
         )
         self.default_font_size_slider.set(font_size)
-        self.default_font_size_slider.pack(fill="x", pady=(0, 10))
+        self.default_font_size_slider.pack(fill="x", pady=(0, 8))
 
         ctk.CTkLabel(
-            scroll,
-            text="Also available as +/- buttons in the main window's control band, which apply immediately to whatever you're currently reading.",
-            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
-        ).pack(anchor="w", pady=(0, 6))
+            scroll, text="Changes for the WPM slider take effect after clicking Apply.",
+            text_color=COCOA_INK, font=self.small_font,
+        ).pack(anchor="w", pady=(0, 20))
 
         step_row = ctk.CTkFrame(scroll, fg_color="transparent")
-        step_row.pack(fill="x", pady=(0, 10))
+        step_row.pack(fill="x", pady=(0, 20))
         ctk.CTkLabel(
             step_row, text="Increase the word size by this many pixels each time +/- is clicked:",
             text_color=COCOA_INK, font=self.small_font, wraplength=300, justify="left", anchor="w",
@@ -211,7 +221,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.font_size_step_entry.pack(side="left", padx=(8, 0))
 
         offset_row = ctk.CTkFrame(scroll, fg_color="transparent")
-        offset_row.pack(fill="x", pady=(10, 0))
+        offset_row.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(
             offset_row, text="Shift the highlighted letter vertically by this many pixels (positive = up, negative = down):",
             text_color=COCOA_INK, font=self.small_font, wraplength=300, justify="left", anchor="w",
@@ -225,12 +235,12 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkLabel(
             scroll, text=f"Applies globally, to every transcript. Allowed range: {low} to {high}.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
-        ).pack(anchor="w", pady=(0, 10))
+        ).pack(anchor="w", pady=(0, 20))
 
         ctk.CTkLabel(
-            scroll, text="Skip controls below apply immediately, to the current transcript too — not just future ones",
+            scroll, text="Skip controls below apply immediately, to the current transcript too not just future ones",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
-        ).pack(anchor="w", pady=(10, 10))
+        ).pack(anchor="w", pady=(0, 10))
 
         skip_row = ctk.CTkFrame(scroll, fg_color="transparent")
         skip_row.pack(fill="x", pady=6)
@@ -449,7 +459,8 @@ class SettingsWindow(ctk.CTkToplevel):
             values[key] = number
 
         offset_text = self.highlight_offset_entry.get().strip()
-        offset_value = self._parse_signed_int(offset_text)
+        digits = offset_text[1:] if offset_text.startswith("-") else offset_text
+        offset_value = int(offset_text) if digits and digits.isdigit() else None
         low, high = HIGHLIGHT_OFFSET_RANGE
         if offset_value is None:
             self.error_label.configure(text="Highlight Position must be a whole number.")
