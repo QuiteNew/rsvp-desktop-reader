@@ -139,7 +139,14 @@ rsvp-desktop-reader/
 │   ├── theme.py             # Central design tokens: colors, fonts, theme resolution
 │   ├── icons.py              # Hand-drawn icons (avoids font-glyph rendering issues)
 │   └── components/           # Every individual UI piece — header, canvas, dialogs, etc.
-├── tests/                    # Reserved for an automated test suite (not yet populated)
+├── tests/                  # Automated test suite covering core engine modules
+│   ├── test_orp.py
+│   ├── test_parser.py
+│   ├── test_reader.py
+│   ├── test_settings_store.py
+│   ├── test_timing.py
+│   ├── test_tokenizer.py
+│   └── test_transcript_store.py
 ├── main.py                   # Entry point
 └── requirements.txt
 ````
@@ -172,7 +179,7 @@ Settings are organized into four tabs:
 - ~~A real, finished Dark theme color palette (the underlying switching
   mechanism already exists and is fully functional)~~
 - ~~An automated test suite under `tests/`~~
-- Configurable size for words shown 
+- ~~Configurable size for words shown~~
 - Highlited letter position customization
 
 ## License
