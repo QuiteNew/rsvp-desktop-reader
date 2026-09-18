@@ -12,7 +12,7 @@ class TranscriptListBody(ctk.CTkFrame):
         self.on_delete_requested = on_delete_requested
 
         self.entries_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.entries_frame.pack(fill="both", expand=True, padx=8, pady=8)
+        self.entries_frame.pack(fill="both", expand=True, padx=(8, 3), pady=8)
 
     def add_entry(self, transcript) -> None:
         row = ctk.CTkFrame(self.entries_frame, fg_color=HEARTH_PAPER, corner_radius=10)
