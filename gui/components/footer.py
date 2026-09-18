@@ -19,6 +19,7 @@ class Footer(ctk.CTkFrame):
         on_skip_back=None,
         on_skip_forward=None,
         on_font_size_changed=None,
+        font_size_step: int = 1,
     ):
         super().__init__(master, fg_color=WARM_MOCHA, corner_radius=0)
         self.on_wpm_changed = on_wpm_changed
@@ -29,6 +30,7 @@ class Footer(ctk.CTkFrame):
         self.on_skip_forward = on_skip_forward
         self.on_font_size_changed = on_font_size_changed
         self._font_size = 32
+        self._font_size_step = font_size_step
 
         label_font = ctk.CTkFont(family=FONT_BODY, size=12)
         wpm_font = ctk.CTkFont(family=FONT_BODY, size=12, weight="bold")
@@ -62,7 +64,7 @@ class Footer(ctk.CTkFrame):
         )
         self.background_swatch.pack(side="left")
 
-        # ---- Middle: WPM (now bold) + skip/slider row — unchanged otherwise ----
+        # ---- Middle: WPM (bold) + skip/slider row ----
         middle = ctk.CTkFrame(self, fg_color="transparent")
         middle.grid(row=0, column=1, sticky="nsew")
         self.wpm_label = ctk.CTkLabel(middle, text="300 WPM", text_color=COCOA_INK, font=wpm_font)
@@ -155,6 +157,9 @@ class Footer(ctk.CTkFrame):
         self._font_size = size
         self.size_label.configure(text=f"{size}px")
 
+    def set_font_size_step(self, step: int) -> None:
+        self._font_size_step = step
+
     def _handle_wpm_slide(self, value) -> None:
         wpm = int(value)
         self.wpm_label.configure(text=f"{wpm} WPM")
@@ -170,10 +175,10 @@ class Footer(ctk.CTkFrame):
             self.on_skip_forward()
 
     def _handle_size_decrease(self) -> None:
-        self._change_font_size(-1)
+        self._change_font_size(-self._font_size_step)
 
     def _handle_size_increase(self) -> None:
-        self._change_font_size(1)
+        self._change_font_size(self._font_size_step)
 
     def _change_font_size(self, delta: int) -> None:
         low, high = FONT_SIZE_RANGE

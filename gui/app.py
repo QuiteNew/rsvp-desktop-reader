@@ -119,6 +119,7 @@ class RSVPApp(ctk.CTk):
             on_skip_back=self.canvas.skip_backward,
             on_skip_forward=self.canvas.skip_forward,
             on_font_size_changed=self._handle_font_size_changed,
+            font_size_step=self.settings_store.font_size_step,
         )
         self.footer.grid(row=4, column=2, sticky="nsew")
 
@@ -275,6 +276,7 @@ class RSVPApp(ctk.CTk):
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             appearance_mode=self.settings_store.appearance_mode,
             default_font_size=self.settings_store.default_font_size,
+            font_size_step=self.settings_store.font_size_step,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
@@ -305,6 +307,9 @@ class RSVPApp(ctk.CTk):
             self.store.set_transcript_font_size(self._current_transcript.id, values["default_font_size"])
             self.canvas.set_font_size(values["default_font_size"])
             self.footer.set_font_size(values["default_font_size"])
+
+        self.settings_store.set_font_size_step(values["font_size_step"])
+        self.footer.set_font_size_step(values["font_size_step"])
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])

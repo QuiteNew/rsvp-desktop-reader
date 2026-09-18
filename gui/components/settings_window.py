@@ -5,7 +5,7 @@ from core.settings_store import (
     AppSettings,
     WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
     SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
-    WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE,
+    WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE,
 )
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
 
@@ -23,7 +23,8 @@ class SettingsWindow(ctk.CTkToplevel):
         window_width, window_height,
         sidebar_width, bottom_band_height,
         freeform_resize_enabled,
-        default_wpm, default_font_color, default_highlight_color, default_background_color, default_font_size,
+        default_wpm, default_font_color, default_highlight_color, default_background_color,
+        default_font_size, font_size_step,
         skip_word_count, pause_on_skip,
         data_directory,
         appearance_mode,
@@ -70,7 +71,8 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._build_defaults_tab(
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
-            default_background_color, default_font_size, skip_word_count, pause_on_skip,
+            default_background_color, default_font_size, font_size_step,
+            skip_word_count, pause_on_skip,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -136,7 +138,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, skip_word_count, pause_on_skip) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, skip_word_count, pause_on_skip) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True)
 
@@ -182,6 +184,16 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 6))
 
+        step_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        step_row.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(
+            step_row, text="Increase the word size by this many pixels each time +/- is clicked:",
+            text_color=COCOA_INK, font=self.small_font, wraplength=300, justify="left", anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        self.font_size_step_entry = self._styled_entry(step_row)
+        self.font_size_step_entry.configure(width=40)
+        self.font_size_step_entry.insert(0, str(font_size_step))
+        self.font_size_step_entry.pack(side="left", padx=(8, 0))
 
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript too — not just future ones",
@@ -266,6 +278,12 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_background_color = original.default_background_color
         self.default_background_swatch.configure(fg_color=original.default_background_color)
 
+        self.default_font_size = original.default_font_size
+        self.default_font_size_slider.set(original.default_font_size)
+        self.default_font_size_label.configure(text=f"{original.default_font_size} px")
+
+        self._set_entry_value(self.font_size_step_entry, original.font_size_step)
+
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
         if self.on_skip_word_count_changed:
@@ -274,10 +292,6 @@ class SettingsWindow(ctk.CTkToplevel):
         (self.pause_on_skip_switch.select() if original.pause_on_skip else self.pause_on_skip_switch.deselect())
         if self.on_pause_on_skip_changed:
             self.on_pause_on_skip_changed(original.pause_on_skip)
-
-        self.default_font_size = original.default_font_size
-        self.default_font_size_slider.set(original.default_font_size)
-        self.default_font_size_label.configure(text=f"{original.default_font_size} px")
 
     # ---- Layout tab ----
 
@@ -385,6 +399,7 @@ class SettingsWindow(ctk.CTkToplevel):
             "window_height": (self.window_height_entry, *WINDOW_HEIGHT_RANGE),
             "sidebar_width": (self.sidebar_width_entry, *SIDEBAR_WIDTH_RANGE),
             "bottom_band_height": (self.bottom_band_height_entry, *BOTTOM_BAND_HEIGHT_RANGE),
+            "font_size_step": (self.font_size_step_entry, *FONT_SIZE_STEP_RANGE),
         }
 
         values = {}
@@ -405,11 +420,11 @@ class SettingsWindow(ctk.CTkToplevel):
         values["default_font_color"] = self.default_font_color
         values["default_highlight_color"] = self.default_highlight_color
         values["default_background_color"] = self.default_background_color
+        values["default_font_size"] = self.default_font_size
         values["skip_word_count"] = int(self.skip_word_count_slider.get())
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["data_directory"] = self._data_directory
         values["appearance_mode"] = self.appearance_mode_selector.get().lower()
-        values["default_font_size"] = self.default_font_size
 
         self.error_label.configure(text="")
         self.on_apply(values)

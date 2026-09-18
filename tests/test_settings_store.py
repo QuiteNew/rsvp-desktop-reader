@@ -77,7 +77,7 @@ def test_set_layout_sizes_does_not_affect_window_size(store):
 # ---- set_defaults ----
 
 def test_set_defaults_updates_all_four_values(store):
-    store.set_defaults(500, "#111111", "#222222", "#333333")
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
     assert store.default_wpm == 500
     assert store.default_font_color == "#111111"
     assert store.default_highlight_color == "#222222"
@@ -85,7 +85,7 @@ def test_set_defaults_updates_all_four_values(store):
 
 def test_set_defaults_does_not_affect_skip_behavior(store):
     store.set_skip_behavior(20, True)
-    store.set_defaults(500, "#111111", "#222222", "#333333")
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
     assert store.skip_word_count == 20
     assert store.pause_on_skip is True
 
@@ -117,7 +117,7 @@ def test_set_skip_behavior_updates_both_values(store):
     assert store.pause_on_skip is True
 
 def test_set_skip_behavior_does_not_affect_defaults(store):
-    store.set_defaults(500, "#111111", "#222222", "#333333")
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
     store.set_skip_behavior(25, True)
     assert store.default_wpm == 500
 
@@ -145,7 +145,7 @@ def test_persists_and_reloads_every_setting_correctly(tmp_path):
     first = SettingsStore(settings_directory=directory)
     first.set_window_size(1500, 900)
     first.set_layout_sizes(350, 175)
-    first.set_defaults(700, "#AAAAAA", "#BBBBBB", "#CCCCCC")
+    first.set_defaults(700, "#AAAAAA", "#BBBBBB", "#CCCCCC", 48)
     first.set_data_directory("/custom/transcripts")
     first.set_freeform_resize_enabled(True)
     first.set_skip_behavior(30, True)
@@ -159,6 +159,7 @@ def test_persists_and_reloads_every_setting_correctly(tmp_path):
     assert second.bottom_band_height == 175
     assert second.default_wpm == 700
     assert second.default_font_color == "#AAAAAA"
+    assert second.default_font_size == 48
     assert second.default_highlight_color == "#BBBBBB"
     assert second.default_background_color == "#CCCCCC"
     assert second.data_directory == "/custom/transcripts"
@@ -248,3 +249,18 @@ def test_no_argument_constructor_still_works():
     store = SettingsStore()
     assert isinstance(store.appearance_mode, str)
     assert isinstance(store.window_width, int)
+
+
+# ---- Tests below were added when the font resize amount mechanic was added in settings
+
+def test_fresh_store_font_size_step_matches_defaults(store):
+    assert store.font_size_step == AppSettings().font_size_step
+
+def test_set_font_size_step_updates_value(store):
+    store.set_font_size_step(5)
+    assert store.font_size_step == 5
+
+def test_set_font_size_step_does_not_affect_other_settings(store):
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
+    store.set_font_size_step(5)
+    assert store.default_wpm == 500
