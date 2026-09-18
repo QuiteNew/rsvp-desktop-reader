@@ -143,7 +143,8 @@ class SettingsWindow(ctk.CTkToplevel):
             progress_color=EMBER_GLOW, button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
             fg_color=WARM_LINE, command=command,
         )
-        slider.bind("<MouseWheel>", self._redirect_scroll_to_defaults_frame)
+        slider._canvas.unbind("<MouseWheel>")
+        slider._canvas.bind("<MouseWheel>", self._redirect_scroll_to_defaults_frame)
         return slider
 
     def _styled_switch(self, master, text, command=None) -> ctk.CTkSwitch:
@@ -213,7 +214,7 @@ class SettingsWindow(ctk.CTkToplevel):
         step_row.pack(fill="x", pady=(0, 20))
         ctk.CTkLabel(
             step_row, text="Increase the word size by this many pixels each time +/- is clicked:",
-            text_color=COCOA_INK, font=self.small_font, wraplength=300, justify="left", anchor="w",
+            text_color=COCOA_INK, font=self.label_font, wraplength=300, justify="left", anchor="w",
         ).pack(side="left", fill="x", expand=True)
         self.font_size_step_entry = self._styled_entry(step_row)
         self.font_size_step_entry.configure(width=40)
@@ -224,7 +225,7 @@ class SettingsWindow(ctk.CTkToplevel):
         offset_row.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(
             offset_row, text="Shift the highlighted letter vertically by this many pixels (positive = up, negative = down):",
-            text_color=COCOA_INK, font=self.small_font, wraplength=300, justify="left", anchor="w",
+            text_color=COCOA_INK, font=self.label_font, wraplength=300, justify="left", anchor="w",
         ).pack(side="left", fill="x", expand=True)
         self.highlight_offset_entry = self._styled_entry(offset_row)
         self.highlight_offset_entry.configure(width=40)
@@ -238,7 +239,7 @@ class SettingsWindow(ctk.CTkToplevel):
         ).pack(anchor="w", pady=(0, 20))
 
         ctk.CTkLabel(
-            scroll, text="Skip controls below apply immediately, to the current transcript too not just future ones",
+            scroll, text="Skip controls below apply immediately, to the current transcript and all future ones",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 10))
 
