@@ -14,6 +14,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
+        highlight_offset_px: int = 0,
     ):
         super().__init__(master)
         self.transcript = transcript
@@ -44,6 +45,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text
         )
         self.reader_display = ReaderDisplay(self, on_position_changed=self._handle_position_changed)
+        self.reader_display.set_highlight_offset(highlight_offset_px)
 
         self._render_current_state()
 
@@ -118,7 +120,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def close(self) -> None:
         self.reader_display.stop()
         draft_text = ""
-        if self.transcript.is_stopped or not self.transcript.raw_text.strip():
+        if not self.transcript.raw_text.strip():
             draft_text = self.get_draft_text().strip()
         self.on_closed(draft_text)
         self.destroy()

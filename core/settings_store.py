@@ -14,6 +14,7 @@ WPM_RANGE = (100, 1000)
 SKIP_WORD_COUNT_RANGE = (1, 50)
 FONT_SIZE_RANGE = (16, 96)
 FONT_SIZE_STEP_RANGE = (1, 10)
+HIGHLIGHT_OFFSET_RANGE = (-3, 3)
 
 
 @dataclass
@@ -28,6 +29,7 @@ class AppSettings:
     default_background_color: str = "#F6EFE3"
     default_font_size: int = 32
     font_size_step: int = 1
+    highlight_offset_px: int = 0  # global, not per-transcript — positive = up, negative = down
     data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
     freeform_resize_enabled: bool = False
     skip_word_count: int = 10
@@ -99,6 +101,10 @@ class SettingsStore:
         return self._settings.font_size_step
 
     @property
+    def highlight_offset_px(self) -> int:
+        return self._settings.highlight_offset_px
+
+    @property
     def data_directory(self) -> str:
         return self._settings.data_directory
 
@@ -138,6 +144,10 @@ class SettingsStore:
 
     def set_font_size_step(self, step: int) -> None:
         self._settings.font_size_step = step
+        self._save()
+
+    def set_highlight_offset_px(self, offset: int) -> None:
+        self._settings.highlight_offset_px = offset
         self._save()
 
     def set_data_directory(self, directory: str) -> None:

@@ -21,9 +21,6 @@ class ReaderDisplay(ctk.CTkFrame):
         self.word_row = ctk.CTkFrame(self, fg_color="transparent")
         self.word_row.pack(expand=True)
 
-        # One shared CTkFont object — before/focus/after labels all point
-        # to this SAME object, so set_font_size() resizes all three with
-        # a single call.
         self.word_font = ctk.CTkFont(family=FONT_HEADING, size=self.DEFAULT_FONT_SIZE)
 
         self.before_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_FONT_COLOR)
@@ -93,6 +90,28 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def set_font_size(self, size: int) -> None:
         self.word_font.configure(size=size)
+
+    def set_highlight_offset(self, offset_px: int) -> None:
+        """Shift only the highlighted (focus) letter vertically, relative
+        to before/after which stay in their normal centered position.
+        Positive = up, negative = down, 0 = default.
+
+        Tkinter's pack() centers a widget's padded box within its cell —
+        so asymmetric padding on one side alone doesn't shift the widget
+        by that full amount, only by HALF the difference between the two
+        sides. Doubling the requested offset and applying it to a single
+        side compensates for that exactly, giving a precise N-pixel shift
+        rather than an approximate one.
+        """
+        if offset_px >= 0:
+            pady = (0, offset_px * 2)   # more padding below -> shifts up
+        else:
+            pady = (abs(offset_px) * 2, 0)  # more padding above -> shifts down
+        # Re-calling pack() on an already-managed widget (no pack_forget
+        # first) updates its options in place without moving it in the
+        # packing order — before/focus/after stay in the correct
+        # left-to-right sequence.
+        self.focus_label.pack(side="left", pady=pady)
 
     def _show_current_frame(self) -> None:
         if self.session is None:

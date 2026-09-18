@@ -1,6 +1,5 @@
 import customtkinter as ctk
 
-
 from gui.components.transcript_list_header import TranscriptListHeader
 from gui.components.transcript_list_body import TranscriptListBody
 from gui.components.header import Header
@@ -82,6 +81,7 @@ class RSVPApp(ctk.CTk):
             on_stopped_changed=self._handle_stopped_changed,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
+            highlight_offset_px=self.settings_store.highlight_offset_px,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -268,6 +268,12 @@ class RSVPApp(ctk.CTk):
             default_font_color=self.settings_store.default_font_color,
             default_highlight_color=self.settings_store.default_highlight_color,
             default_background_color=self.settings_store.default_background_color,
+            default_font_size=(
+                self._current_transcript.font_size if self._current_transcript
+                else self.settings_store.default_font_size
+            ),
+            font_size_step=self.settings_store.font_size_step,
+            highlight_offset_px=self.settings_store.highlight_offset_px,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             data_directory=self.settings_store.data_directory,
@@ -275,11 +281,6 @@ class RSVPApp(ctk.CTk):
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             appearance_mode=self.settings_store.appearance_mode,
-            default_font_size=(
-                self._current_transcript.font_size if self._current_transcript
-                else self.settings_store.default_font_size
-            ),
-            font_size_step=self.settings_store.font_size_step,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
@@ -301,11 +302,6 @@ class RSVPApp(ctk.CTk):
             values["default_font_size"],
         )
 
-        # Word size has no independent Settings-only path — applying it
-        # here updates all three things together: the stored value, the
-        # live canvas render, and the Footer's own displayed label. Same
-        # end result as clicking the Footer's own +/- buttons, just
-        # triggered from Settings instead.
         if self._current_transcript:
             self.store.set_transcript_font_size(self._current_transcript.id, values["default_font_size"])
             self.canvas.set_font_size(values["default_font_size"])
@@ -313,6 +309,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_font_size_step(values["font_size_step"])
         self.footer.set_font_size_step(values["font_size_step"])
+
+        self.settings_store.set_highlight_offset_px(values["highlight_offset_px"])
+        self.canvas.set_highlight_offset(values["highlight_offset_px"])
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])

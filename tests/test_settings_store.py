@@ -150,6 +150,7 @@ def test_persists_and_reloads_every_setting_correctly(tmp_path):
     first.set_freeform_resize_enabled(True)
     first.set_skip_behavior(30, True)
     first.set_appearance_mode("dark")
+    first.set_highlight_offset_px(-2)
 
     second = SettingsStore(settings_directory=directory)
 
@@ -167,6 +168,7 @@ def test_persists_and_reloads_every_setting_correctly(tmp_path):
     assert second.skip_word_count == 30
     assert second.pause_on_skip is True
     assert second.appearance_mode == "dark"
+    assert second.highlight_offset_px == -2
 
 def test_missing_settings_file_falls_back_to_fresh_defaults(tmp_path):
     store = SettingsStore(settings_directory=str(tmp_path))
@@ -263,4 +265,27 @@ def test_set_font_size_step_updates_value(store):
 def test_set_font_size_step_does_not_affect_other_settings(store):
     store.set_defaults(500, "#111111", "#222222", "#333333", 32)
     store.set_font_size_step(5)
+    assert store.default_wpm == 500
+
+def test_fresh_store_highlight_offset_matches_defaults(store):
+    assert store.highlight_offset_px == AppSettings().highlight_offset_px
+
+def test_set_highlight_offset_positive_value(store):
+    store.set_highlight_offset_px(2)
+    assert store.highlight_offset_px == 2
+
+def test_set_highlight_offset_negative_value(store):
+    # The specific case that needed real (not deferred) attention — this
+    # is the first setting in the whole app allowing a negative value.
+    store.set_highlight_offset_px(-3)
+    assert store.highlight_offset_px == -3
+
+def test_set_highlight_offset_zero_resets_to_default_value(store):
+    store.set_highlight_offset_px(3)
+    store.set_highlight_offset_px(0)
+    assert store.highlight_offset_px == 0
+
+def test_set_highlight_offset_does_not_affect_other_settings(store):
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
+    store.set_highlight_offset_px(-2)
     assert store.default_wpm == 500
