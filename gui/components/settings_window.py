@@ -30,6 +30,7 @@ class SettingsWindow(ctk.CTkToplevel):
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
         guide_mark_length_percent,
+        guide_mark_color,
         data_directory,
         appearance_mode,
         on_apply,
@@ -80,7 +81,7 @@ class SettingsWindow(ctk.CTkToplevel):
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
             skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px,
-            guide_mark_length_percent,
+            guide_mark_length_percent, guide_mark_color,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -170,7 +171,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -281,6 +282,14 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
+        self.default_guide_mark_color = guide_mark_color
+        self.guide_mark_color_swatch = self._color_row(scroll, "Mark colour", guide_mark_color, self._pick_guide_mark_color)
+        ctk.CTkLabel(
+            scroll,
+            text="Colour of the vertical guide marks above and below the highlighted letter. Applies globally, to every transcript -- no longer follows the transcript's font colour.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
         self.guide_mark_horizontal_switch = self._styled_switch(scroll, "Show horizontal guide lines")
         (self.guide_mark_horizontal_switch.select() if guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
         self.guide_mark_horizontal_switch.pack(anchor="w", pady=(0, 5))
@@ -347,6 +356,12 @@ class SettingsWindow(ctk.CTkToplevel):
             self.default_background_color = color
             self.default_background_swatch.configure(fg_color=color)
 
+    def _pick_guide_mark_color(self) -> None:
+        color = self._open_native_dialog(colorchooser.askcolor, color=self.default_guide_mark_color)[1]
+        if color:
+            self.default_guide_mark_color = color
+            self.guide_mark_color_swatch.configure(fg_color=color)
+
     def _handle_skip_word_count_slide(self, value) -> None:
         count = int(value)
         self.skip_word_count_label.configure(text=f"{count} words")
@@ -384,6 +399,9 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_guide_mark_length_percent = original.guide_mark_length_percent
         self.guide_mark_length_slider.set(original.guide_mark_length_percent)
         self.guide_mark_length_label.configure(text=f"{original.guide_mark_length_percent}%")
+
+        self.default_guide_mark_color = original.guide_mark_color
+        self.guide_mark_color_swatch.configure(fg_color=original.guide_mark_color)
 
         (self.guide_mark_horizontal_switch.select() if original.guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
 
@@ -541,6 +559,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["guide_mark_horizontal_enabled"] = bool(self.guide_mark_horizontal_switch.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
+        values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory
         values["appearance_mode"] = self.appearance_mode_selector.get().lower()
 

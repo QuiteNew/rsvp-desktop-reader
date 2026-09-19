@@ -18,6 +18,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
         guide_mark_length_percent: int = 35,
+        guide_mark_color: str = "#3B2E27",
     ):
         super().__init__(master)
         self.transcript = transcript
@@ -52,6 +53,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_horizontal_enabled(guide_mark_horizontal_enabled)
         self.reader_display.set_guide_mark_thickness(guide_mark_thickness_px)
         self.reader_display.set_guide_mark_length_percent(guide_mark_length_percent)
+        self.reader_display.set_guide_mark_color(guide_mark_color)
 
         self._render_current_state()
 

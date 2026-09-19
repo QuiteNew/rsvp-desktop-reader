@@ -51,8 +51,18 @@ class ReaderDisplay(ctk.CTkFrame):
                                      # GUIDE_MARK_THICKNESS), so the marks keep scaling with word
                                      # size -- see set_guide_mark_length_percent() docstring.
 
-    GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 1     # px -- fixed; deliberately thinner than the
-                                                # vertical marks, so these read as secondary
+    GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 2     # px -- fixed; TEMPORARY test value, was 1.
+                                                # Debug output confirmed the 1px-tall guide_line
+                                                # widgets were being correctly created, mapped,
+                                                # sized and positioned by Tkinter (winfo_ismapped=1,
+                                                # correct width/x/y, correct fg_color) even though
+                                                # nothing was visible on screen -- the leading
+                                                # hypothesis is that CTkFrame's canvas-based
+                                                # rounded-rect draw routine doesn't paint a visible
+                                                # fill at 1 physical pixel of thickness. This bumps
+                                                # it to 2px (matching the vertical marks' known-
+                                                # working GUIDE_MARK_THICKNESS) as a test -- not yet
+                                                # confirmed as the fix.
     GUIDE_MARK_HORIZONTAL_EDGE_MARGIN_PX = 34  # px kept clear between each tick's end and the
                                                 # reading row's left/right edge -- the "close
                                                 # to the wall but not touching it" gap. This is
@@ -189,13 +199,10 @@ class ReaderDisplay(ctk.CTkFrame):
         self.before_label.configure(text_color=font_color)
         self.after_label.configure(text_color=font_color)
         self.focus_label.configure(text_color=highlight_color)
-        # Guide marks default to the regular text color -- a subtle
-        # reference line, not an attention-grabbing one. Settings will
-        # make this its own choice later. The horizontal ticks are
-        # NOT touched here -- their color is a fixed constant,
-        # independent of per-transcript colors (see class docstring).
-        self.guide_mark_above.configure(fg_color=font_color)
-        self.guide_mark_below.configure(fg_color=font_color)
+        # Vertical guide marks are NOT touched here -- their color is a
+        # flat global value from Settings (see set_guide_mark_color()),
+        # independent of the current transcript's font color, same as
+        # the horizontal ticks are independent via a fixed constant.
 
     def set_font_size(self, size: int) -> None:
         self.word_font.configure(size=size)
@@ -243,6 +250,15 @@ class ReaderDisplay(ctk.CTkFrame):
         together with the Word Size setting."""
         self._guide_mark_length_ratio = percent / 100
         self._update_guide_marks()
+
+    def set_guide_mark_color(self, color: str) -> None:
+        """Color of the two vertical guide marks (above/below the
+        highlighted letter). A flat global value from Settings --
+        unlike before/after text and the highlight letter, these marks
+        no longer follow the current transcript's font color (see
+        set_colors())."""
+        self.guide_mark_above.configure(fg_color=color)
+        self.guide_mark_below.configure(fg_color=color)
 
     def _show_current_frame(self) -> None:
         if self.session is None:

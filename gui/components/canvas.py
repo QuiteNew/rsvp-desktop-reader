@@ -23,6 +23,7 @@ class Canvas(ctk.CTkFrame):
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
         guide_mark_length_percent: int = 35,
+        guide_mark_color: str = "#3B2E27",
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -37,6 +38,7 @@ class Canvas(ctk.CTkFrame):
         self._guide_mark_horizontal_enabled = guide_mark_horizontal_enabled
         self._guide_mark_thickness_px = guide_mark_thickness_px
         self._guide_mark_length_percent = guide_mark_length_percent
+        self._guide_mark_color = guide_mark_color
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -68,6 +70,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_horizontal_enabled(self._guide_mark_horizontal_enabled)
         self.reader_display.set_guide_mark_thickness(self._guide_mark_thickness_px)
         self.reader_display.set_guide_mark_length_percent(self._guide_mark_length_percent)
+        self.reader_display.set_guide_mark_color(self._guide_mark_color)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -162,6 +165,12 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_length_percent(percent)
         if self._detached_window:
             self._detached_window.reader_display.set_guide_mark_length_percent(percent)
+
+    def set_guide_mark_color(self, color: str) -> None:
+        self._guide_mark_color = color
+        self.reader_display.set_guide_mark_color(color)
+        if self._detached_window:
+            self._detached_window.reader_display.set_guide_mark_color(color)
 
     def skip_backward(self) -> None:
         self._skip(-self._skip_word_count)
@@ -273,6 +282,7 @@ class Canvas(ctk.CTkFrame):
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
             guide_mark_length_percent=self._guide_mark_length_percent,
+            guide_mark_color=self._guide_mark_color,
         )
         self._show_detached_placeholder()
 
