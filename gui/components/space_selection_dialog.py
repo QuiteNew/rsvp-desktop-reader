@@ -23,7 +23,7 @@ class SpaceSelectionDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="Spaces", text_color=COCOA_INK, font=title_font).pack(anchor="w", padx=20, pady=(20, 10))
 
         list_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+        list_frame.pack(fill="both", expand=True, padx=(20, 3), pady=(0, 10))
 
         active_font = ctk.CTkFont(family=FONT_HEADING, size=15)
         inactive_font = ctk.CTkFont(family=FONT_BODY, size=13)

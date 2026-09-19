@@ -56,6 +56,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.tabview = ctk.CTkTabview(
             self,
+            corner_radius=1,
             fg_color=HEARTH_PAPER,
             segmented_button_fg_color=WARM_TAUPE,
             segmented_button_selected_color=EMBER_GLOW,
@@ -64,7 +65,8 @@ class SettingsWindow(ctk.CTkToplevel):
             segmented_button_unselected_hover_color=WARM_LINE,
             text_color=COCOA_INK,
         )
-        self.tabview.pack(fill="both", expand=True, padx=15, pady=(15, 5))
+
+        self.tabview.pack(fill="both", expand=True, padx=(15, 0), pady=(15, 5))
 
         defaults_tab = self.tabview.add("Defaults")
         layout_tab = self.tabview.add("Layout")
@@ -166,7 +168,8 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
+        scroll.pack(fill="both", expand=True, padx=(0, 0))
+
         self._defaults_scroll = scroll
 
         ctk.CTkLabel(scroll, text="Applied to newly created transcripts only", text_color=COCOA_INK, font=self.small_font).pack(anchor="w", pady=(5, 15))
