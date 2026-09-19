@@ -36,7 +36,12 @@ class ReaderDisplay(ctk.CTkFrame):
     DEFAULT_HIGHLIGHT_COLOR = EMBER_GLOW
     DEFAULT_FONT_SIZE = 32
 
-    GUIDE_MARK_THICKNESS = 2        # px -- fixed until Settings makes it configurable
+    GUIDE_MARK_THICKNESS = 2        # px -- construction-time default only; the live value comes
+                                     # from Settings via set_guide_mark_thickness(). This is a
+                                     # plain logical-pixel constant (like a font size), not
+                                     # derived from winfo_width(), so CTk's normal DPI
+                                     # auto-scaling applies to it correctly -- it must NOT be
+                                     # routed through _configure_physical_width().
     GUIDE_MARK_MIN_GAP_PX = 6       # px -- safely above HIGHLIGHT_OFFSET_RANGE's max
                                      # magnitude (3), so marks never touch the letter
                                      # even at the largest vertical offset setting
@@ -212,6 +217,15 @@ class ReaderDisplay(ctk.CTkFrame):
         reading row's own width (see GUIDE_MARK_HORIZONTAL_* and
         _guide_mark_horizontal_length())."""
         self._guide_mark_horizontal_enabled = enabled
+        self._update_guide_marks()
+
+    def set_guide_mark_thickness(self, thickness_px: int) -> None:
+        """Width of the two vertical guide marks (above/below the
+        highlighted letter). A plain logical-pixel value -- see the
+        GUIDE_MARK_THICKNESS comment above for why this is configured
+        directly rather than through _configure_physical_width()."""
+        self.guide_mark_above.configure(width=thickness_px)
+        self.guide_mark_below.configure(width=thickness_px)
         self._update_guide_marks()
 
     def _show_current_frame(self) -> None:

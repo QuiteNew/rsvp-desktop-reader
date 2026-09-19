@@ -15,6 +15,7 @@ SKIP_WORD_COUNT_RANGE = (1, 50)
 FONT_SIZE_RANGE = (16, 96)
 FONT_SIZE_STEP_RANGE = (1, 10)
 HIGHLIGHT_OFFSET_RANGE = (-3, 3)
+GUIDE_MARK_THICKNESS_RANGE = (1, 6)
 
 
 @dataclass
@@ -36,6 +37,7 @@ class AppSettings:
     pause_on_skip: bool = False
     appearance_mode: str = "light"
     guide_mark_horizontal_enabled: bool = False  # global, not per-transcript — fixed-style crosshair ticks, on/off only
+    guide_mark_thickness_px: int = 2  # global, not per-transcript — width of the vertical guide marks
 
 
 class SettingsStore:
@@ -129,6 +131,10 @@ class SettingsStore:
     def guide_mark_horizontal_enabled(self) -> bool:
         return self._settings.guide_mark_horizontal_enabled
 
+    @property
+    def guide_mark_thickness_px(self) -> int:
+        return self._settings.guide_mark_thickness_px
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -174,4 +180,8 @@ class SettingsStore:
 
     def set_guide_mark_horizontal_enabled(self, enabled: bool) -> None:
         self._settings.guide_mark_horizontal_enabled = enabled
+        self._save()
+
+    def set_guide_mark_thickness_px(self, thickness_px: int) -> None:
+        self._settings.guide_mark_thickness_px = thickness_px
         self._save()

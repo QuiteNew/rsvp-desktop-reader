@@ -21,6 +21,7 @@ class Canvas(ctk.CTkFrame):
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
+        guide_mark_thickness_px: int = 2,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -33,6 +34,7 @@ class Canvas(ctk.CTkFrame):
         self._pause_on_skip = pause_on_skip
         self._highlight_offset_px = highlight_offset_px
         self._guide_mark_horizontal_enabled = guide_mark_horizontal_enabled
+        self._guide_mark_thickness_px = guide_mark_thickness_px
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -62,6 +64,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display = ReaderDisplay(self.content_area, on_position_changed=self._handle_position_changed)
         self.reader_display.set_highlight_offset(self._highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(self._guide_mark_horizontal_enabled)
+        self.reader_display.set_guide_mark_thickness(self._guide_mark_thickness_px)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -144,6 +147,12 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_horizontal_enabled(enabled)
         if self._detached_window:
             self._detached_window.reader_display.set_guide_mark_horizontal_enabled(enabled)
+
+    def set_guide_mark_thickness(self, thickness_px: int) -> None:
+        self._guide_mark_thickness_px = thickness_px
+        self.reader_display.set_guide_mark_thickness(thickness_px)
+        if self._detached_window:
+            self._detached_window.reader_display.set_guide_mark_thickness(thickness_px)
 
     def skip_backward(self) -> None:
         self._skip(-self._skip_word_count)
@@ -253,6 +262,7 @@ class Canvas(ctk.CTkFrame):
             pause_on_skip=self._pause_on_skip,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
+            guide_mark_thickness_px=self._guide_mark_thickness_px,
         )
         self._show_detached_placeholder()
 

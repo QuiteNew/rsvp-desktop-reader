@@ -6,7 +6,7 @@ from core.settings_store import (
     WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
     SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
     WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE,
-    HIGHLIGHT_OFFSET_RANGE,
+    HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE,
 )
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
 
@@ -28,6 +28,7 @@ class SettingsWindow(ctk.CTkToplevel):
         default_font_size, font_size_step, highlight_offset_px,
         skip_word_count, pause_on_skip,
         guide_mark_horizontal_enabled,
+        guide_mark_thickness_px,
         data_directory,
         appearance_mode,
         on_apply,
@@ -77,7 +78,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_defaults_tab(
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
-            skip_word_count, pause_on_skip, guide_mark_horizontal_enabled,
+            skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -167,7 +168,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -237,6 +238,23 @@ class SettingsWindow(ctk.CTkToplevel):
         self.highlight_offset_entry.pack(side="left", padx=(8, 0))
 
         low, high = HIGHLIGHT_OFFSET_RANGE
+        ctk.CTkLabel(
+            scroll, text=f"Applies globally, to every transcript. Allowed range: {low} to {high}.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
+        thickness_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        thickness_row.pack(fill="x", pady=(0, 4))
+        ctk.CTkLabel(
+            thickness_row, text="Thickness of the vertical guide marks, in pixels:",
+            text_color=COCOA_INK, font=self.label_font, wraplength=300, justify="left", anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        self.guide_mark_thickness_entry = self._styled_entry(thickness_row)
+        self.guide_mark_thickness_entry.configure(width=40)
+        self.guide_mark_thickness_entry.insert(0, str(guide_mark_thickness_px))
+        self.guide_mark_thickness_entry.pack(side="left", padx=(8, 0))
+
+        low, high = GUIDE_MARK_THICKNESS_RANGE
         ctk.CTkLabel(
             scroll, text=f"Applies globally, to every transcript. Allowed range: {low} to {high}.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
@@ -340,6 +358,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._set_entry_value(self.font_size_step_entry, original.font_size_step)
         self._set_entry_value(self.highlight_offset_entry, original.highlight_offset_px)
+        self._set_entry_value(self.guide_mark_thickness_entry, original.guide_mark_thickness_px)
 
         (self.guide_mark_horizontal_switch.select() if original.guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
 
@@ -459,6 +478,7 @@ class SettingsWindow(ctk.CTkToplevel):
             "sidebar_width": (self.sidebar_width_entry, *SIDEBAR_WIDTH_RANGE),
             "bottom_band_height": (self.bottom_band_height_entry, *BOTTOM_BAND_HEIGHT_RANGE),
             "font_size_step": (self.font_size_step_entry, *FONT_SIZE_STEP_RANGE),
+            "guide_mark_thickness_px": (self.guide_mark_thickness_entry, *GUIDE_MARK_THICKNESS_RANGE),
         }
 
         values = {}
