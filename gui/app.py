@@ -84,6 +84,7 @@ class RSVPApp(ctk.CTk):
             highlight_offset_px=self.settings_store.highlight_offset_px,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
+            guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -280,6 +281,7 @@ class RSVPApp(ctk.CTk):
             pause_on_skip=self.settings_store.pause_on_skip,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
+            guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
             data_directory=self.settings_store.data_directory,
             on_apply=self._handle_settings_applied,
             on_skip_word_count_changed=self._handle_skip_word_count_live,
@@ -322,6 +324,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_guide_mark_thickness_px(values["guide_mark_thickness_px"])
         self.canvas.set_guide_mark_thickness(values["guide_mark_thickness_px"])
+
+        self.settings_store.set_guide_mark_length_percent(values["guide_mark_length_percent"])
+        self.canvas.set_guide_mark_length_percent(values["guide_mark_length_percent"])
 
         self.settings_store.set_data_directory(values["data_directory"])
         self.store.set_data_directory(values["data_directory"])

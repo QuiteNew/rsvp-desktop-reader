@@ -17,6 +17,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
+        guide_mark_length_percent: int = 35,
     ):
         super().__init__(master)
         self.transcript = transcript
@@ -50,6 +51,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_highlight_offset(highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(guide_mark_horizontal_enabled)
         self.reader_display.set_guide_mark_thickness(guide_mark_thickness_px)
+        self.reader_display.set_guide_mark_length_percent(guide_mark_length_percent)
 
         self._render_current_state()
 

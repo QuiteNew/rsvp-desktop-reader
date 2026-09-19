@@ -6,7 +6,7 @@ from core.settings_store import (
     WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
     SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
     WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE,
-    HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE,
+    HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
 )
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
 
@@ -29,6 +29,7 @@ class SettingsWindow(ctk.CTkToplevel):
         skip_word_count, pause_on_skip,
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
+        guide_mark_length_percent,
         data_directory,
         appearance_mode,
         on_apply,
@@ -79,6 +80,7 @@ class SettingsWindow(ctk.CTkToplevel):
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
             skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px,
+            guide_mark_length_percent,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -168,7 +170,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -257,6 +259,25 @@ class SettingsWindow(ctk.CTkToplevel):
         low, high = GUIDE_MARK_THICKNESS_RANGE
         ctk.CTkLabel(
             scroll, text=f"Applies globally, to every transcript. Allowed range: {low} to {high}.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
+        length_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        length_row.pack(fill="x", pady=6)
+        ctk.CTkLabel(length_row, text="Mark length", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
+        self.guide_mark_length_label = ctk.CTkLabel(length_row, text=f"{guide_mark_length_percent}%", width=70, text_color=COCOA_INK, font=self.label_font)
+        self.guide_mark_length_label.pack(side="right")
+        self.default_guide_mark_length_percent = guide_mark_length_percent
+        self.guide_mark_length_slider = self._styled_slider(
+            scroll, GUIDE_MARK_LENGTH_PERCENT_RANGE[0], GUIDE_MARK_LENGTH_PERCENT_RANGE[1],
+            GUIDE_MARK_LENGTH_PERCENT_RANGE[1] - GUIDE_MARK_LENGTH_PERCENT_RANGE[0],
+            lambda v: (self.guide_mark_length_label.configure(text=f"{int(v)}%"), setattr(self, "default_guide_mark_length_percent", int(v))),
+        )
+        self.guide_mark_length_slider.set(guide_mark_length_percent)
+        self.guide_mark_length_slider.pack(fill="x", pady=(0, 4))
+        ctk.CTkLabel(
+            scroll,
+            text="Length of the vertical guide marks, as a percentage of the current word size -- so they keep scaling with the Word Size setting above. Applies globally.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -359,6 +380,10 @@ class SettingsWindow(ctk.CTkToplevel):
         self._set_entry_value(self.font_size_step_entry, original.font_size_step)
         self._set_entry_value(self.highlight_offset_entry, original.highlight_offset_px)
         self._set_entry_value(self.guide_mark_thickness_entry, original.guide_mark_thickness_px)
+
+        self.default_guide_mark_length_percent = original.guide_mark_length_percent
+        self.guide_mark_length_slider.set(original.guide_mark_length_percent)
+        self.guide_mark_length_label.configure(text=f"{original.guide_mark_length_percent}%")
 
         (self.guide_mark_horizontal_switch.select() if original.guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
 
@@ -515,6 +540,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["skip_word_count"] = int(self.skip_word_count_slider.get())
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["guide_mark_horizontal_enabled"] = bool(self.guide_mark_horizontal_switch.get())
+        values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["data_directory"] = self._data_directory
         values["appearance_mode"] = self.appearance_mode_selector.get().lower()
 

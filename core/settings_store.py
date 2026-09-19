@@ -16,7 +16,7 @@ FONT_SIZE_RANGE = (16, 96)
 FONT_SIZE_STEP_RANGE = (1, 10)
 HIGHLIGHT_OFFSET_RANGE = (-3, 3)
 GUIDE_MARK_THICKNESS_RANGE = (1, 6)
-
+GUIDE_MARK_LENGTH_PERCENT_RANGE = (15, 60)
 
 @dataclass
 class AppSettings:
@@ -38,7 +38,7 @@ class AppSettings:
     appearance_mode: str = "light"
     guide_mark_horizontal_enabled: bool = False  # global, not per-transcript — fixed-style crosshair ticks, on/off only
     guide_mark_thickness_px: int = 2  # global, not per-transcript — width of the vertical guide marks
-
+    guide_mark_length_percent: int = 35  # global, not per-transcript — length as % of current word size
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -135,6 +135,10 @@ class SettingsStore:
     def guide_mark_thickness_px(self) -> int:
         return self._settings.guide_mark_thickness_px
 
+    @property
+    def guide_mark_length_percent(self) -> int:
+        return self._settings.guide_mark_length_percent
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -184,4 +188,8 @@ class SettingsStore:
 
     def set_guide_mark_thickness_px(self, thickness_px: int) -> None:
         self._settings.guide_mark_thickness_px = thickness_px
+        self._save()
+
+    def set_guide_mark_length_percent(self, percent: int) -> None:
+        self._settings.guide_mark_length_percent = percent
         self._save()

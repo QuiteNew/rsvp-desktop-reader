@@ -2,7 +2,6 @@ import customtkinter as ctk
 from core.reader import ReaderSession
 from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW
 
-
 class ReaderDisplay(ctk.CTkFrame):
     """Displays the flashing word, with the ORP letter rendered in a
     distinct color from the rest of the word.
@@ -45,7 +44,12 @@ class ReaderDisplay(ctk.CTkFrame):
     GUIDE_MARK_MIN_GAP_PX = 6       # px -- safely above HIGHLIGHT_OFFSET_RANGE's max
                                      # magnitude (3), so marks never touch the letter
                                      # even at the largest vertical offset setting
-    GUIDE_MARK_LENGTH_RATIO = 0.35  # mark length as a fraction of the current word size
+    GUIDE_MARK_LENGTH_RATIO = 0.35  # construction-time default only, as a fraction (not %) --
+                                     # the live value comes from Settings via
+                                     # set_guide_mark_length_percent(). Deliberately kept as a
+                                     # ratio of the current font size (not a fixed px value like
+                                     # GUIDE_MARK_THICKNESS), so the marks keep scaling with word
+                                     # size -- see set_guide_mark_length_percent() docstring.
 
     GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 1     # px -- fixed; deliberately thinner than the
                                                 # vertical marks, so these read as secondary
@@ -74,6 +78,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._is_paused = False
         self._highlight_offset_px = 0
         self._guide_mark_horizontal_enabled = False
+        self._guide_mark_length_ratio = self.GUIDE_MARK_LENGTH_RATIO
         self.on_position_changed = on_position_changed
 
         # Anchor geometry from the most recent _position_word() call --
@@ -228,6 +233,17 @@ class ReaderDisplay(ctk.CTkFrame):
         self.guide_mark_below.configure(width=thickness_px)
         self._update_guide_marks()
 
+    def set_guide_mark_length_percent(self, percent: int) -> None:
+        """Length of the two vertical guide marks, as a percentage of
+        the current word-size font (e.g. 35 means 0.35 * font size).
+        Kept as a ratio rather than a fixed px value -- unlike the
+        horizontal ticks, which are deliberately fixed-style and
+        window-relative, the vertical marks anchor the eye to the
+        letter itself, so they're meant to keep growing and shrinking
+        together with the Word Size setting."""
+        self._guide_mark_length_ratio = percent / 100
+        self._update_guide_marks()
+
     def _show_current_frame(self) -> None:
         if self.session is None:
             return
@@ -367,7 +383,7 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def _guide_mark_length(self) -> int:
         size = self.word_font.cget("size")
-        return max(8, round(size * self.GUIDE_MARK_LENGTH_RATIO))
+        return max(8, round(size * self._guide_mark_length_ratio))
 
     def _guide_mark_horizontal_length(self) -> int:
         """How wide the horizontal ticks should be: a constant length
