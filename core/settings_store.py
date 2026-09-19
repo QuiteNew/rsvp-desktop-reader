@@ -35,6 +35,7 @@ class AppSettings:
     skip_word_count: int = 10
     pause_on_skip: bool = False
     appearance_mode: str = "light"
+    guide_mark_horizontal_enabled: bool = False  # global, not per-transcript — fixed-style crosshair ticks, on/off only
 
 
 class SettingsStore:
@@ -124,6 +125,10 @@ class SettingsStore:
     def appearance_mode(self) -> str:
         return self._settings.appearance_mode
 
+    @property
+    def guide_mark_horizontal_enabled(self) -> bool:
+        return self._settings.guide_mark_horizontal_enabled
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -165,4 +170,8 @@ class SettingsStore:
 
     def set_appearance_mode(self, mode: str) -> None:
         self._settings.appearance_mode = mode
+        self._save()
+
+    def set_guide_mark_horizontal_enabled(self, enabled: bool) -> None:
+        self._settings.guide_mark_horizontal_enabled = enabled
         self._save()

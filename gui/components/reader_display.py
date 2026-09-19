@@ -19,6 +19,17 @@ class ReaderDisplay(ctk.CTkFrame):
     below the letter, but only while a session is actively flashing --
     paused, stopped, or finished states hide them, since there's
     nothing to anchor the eye to when nothing is advancing.
+
+    An optional pair of horizontal ticks can also be shown, one at the
+    outer tip of each vertical mark, forming a crosshair. They stay
+    centered on the same fixed anchor x as everything else. Their
+    LENGTH is constant regardless of the current word -- it's derived
+    from the reading row's own width, shrunk by a fixed margin on each
+    side so the ticks sit close to the row's left/right edges without
+    touching them (see _guide_mark_horizontal_length()). Thickness and
+    color are fixed constants (GUIDE_MARK_HORIZONTAL_*), not
+    user-configurable; only whether they're shown at all is, via
+    set_guide_mark_horizontal_enabled().
     """
 
     DEFAULT_FONT_COLOR = COCOA_INK
@@ -31,12 +42,33 @@ class ReaderDisplay(ctk.CTkFrame):
                                      # even at the largest vertical offset setting
     GUIDE_MARK_LENGTH_RATIO = 0.35  # mark length as a fraction of the current word size
 
+    GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 1     # px -- fixed; deliberately thinner than the
+                                                # vertical marks, so these read as secondary
+    GUIDE_MARK_HORIZONTAL_EDGE_MARGIN_PX = 34  # px kept clear between each tick's end and the
+                                                # reading row's left/right edge -- the "close
+                                                # to the wall but not touching it" gap. This is
+                                                # the one number worth tuning by eye -- re-tune
+                                                # this after confirming the width-scaling fix
+                                                # below, since the previously-visible size was
+                                                # an artifact of that bug, not this margin.
+    GUIDE_MARK_HORIZONTAL_MIN_LENGTH_PX = 20   # px floor, in case the row is ever narrower
+                                                # than the margins (e.g. a very small detached
+                                                # window)
+    GUIDE_MARK_HORIZONTAL_COLOR = "#9A9A9A"    # fixed neutral grey -- deliberately outside
+                                                # gui/theme.py's warm palette (which has no
+                                                # neutral grey token). Not user-configurable:
+                                                # these ticks are meant to stay visually
+                                                # constant regardless of theme or per-transcript
+                                                # colors, receding into the background rather
+                                                # than drawing attention.
+
     def __init__(self, master, on_position_changed=None):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
         self._after_id: str | None = None
         self._is_paused = False
         self._highlight_offset_px = 0
+        self._guide_mark_horizontal_enabled = False
         self.on_position_changed = on_position_changed
 
         # Anchor geometry from the most recent _position_word() call --
@@ -46,6 +78,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._anchor_x: float | None = None
         self._focus_y: float | None = None
         self._focus_half_height: float = 0
+        self._row_width: float = 0
 
         self.word_row = ctk.CTkFrame(self, fg_color="transparent")
         self.word_row.pack(fill="both", expand=True)
@@ -68,6 +101,22 @@ class ReaderDisplay(ctk.CTkFrame):
         self.guide_mark_below = ctk.CTkFrame(
             self.word_row, width=self.GUIDE_MARK_THICKNESS, height=8,
             fg_color=self.DEFAULT_FONT_COLOR, corner_radius=0,
+        )
+
+        # Fixed-style horizontal ticks -- a crosshair at the outer tip
+        # of each vertical mark. Thickness and color are hardcoded
+        # constants (see GUIDE_MARK_HORIZONTAL_* above); width is
+        # recomputed on every resize/frame in _update_guide_marks() to
+        # track the reading row's own width. The width given here is
+        # just a placeholder until the first _update_guide_marks() call
+        # reconfigures it.
+        self.guide_line_above = ctk.CTkFrame(
+            self.word_row, width=self.GUIDE_MARK_HORIZONTAL_MIN_LENGTH_PX, height=self.GUIDE_MARK_HORIZONTAL_THICKNESS_PX,
+            fg_color=self.GUIDE_MARK_HORIZONTAL_COLOR, corner_radius=0,
+        )
+        self.guide_line_below = ctk.CTkFrame(
+            self.word_row, width=self.GUIDE_MARK_HORIZONTAL_MIN_LENGTH_PX, height=self.GUIDE_MARK_HORIZONTAL_THICKNESS_PX,
+            fg_color=self.GUIDE_MARK_HORIZONTAL_COLOR, corner_radius=0,
         )
 
     def load_session(self, session: ReaderSession, start_paused: bool = False) -> None:
@@ -132,7 +181,9 @@ class ReaderDisplay(ctk.CTkFrame):
         self.focus_label.configure(text_color=highlight_color)
         # Guide marks default to the regular text color -- a subtle
         # reference line, not an attention-grabbing one. Settings will
-        # make this its own choice later.
+        # make this its own choice later. The horizontal ticks are
+        # NOT touched here -- their color is a fixed constant,
+        # independent of per-transcript colors (see class docstring).
         self.guide_mark_above.configure(fg_color=font_color)
         self.guide_mark_below.configure(fg_color=font_color)
 
@@ -152,6 +203,15 @@ class ReaderDisplay(ctk.CTkFrame):
         than staying fixed at the un-offset center."""
         self._highlight_offset_px = offset_px
         self._position_word()
+        self._update_guide_marks()
+
+    def set_guide_mark_horizontal_enabled(self, enabled: bool) -> None:
+        """Show/hide the horizontal crosshair ticks. This is the only
+        configurable property they have -- thickness and color are
+        fixed constants, and length is a constant derived from the
+        reading row's own width (see GUIDE_MARK_HORIZONTAL_* and
+        _guide_mark_horizontal_length())."""
+        self._guide_mark_horizontal_enabled = enabled
         self._update_guide_marks()
 
     def _show_current_frame(self) -> None:
@@ -198,6 +258,21 @@ class ReaderDisplay(ctk.CTkFrame):
             anchor=anchor,
         )
 
+    def _configure_physical_width(self, widget, width) -> None:
+        """configure(width=...) on a CTk widget applies the exact same
+        DPI auto-scaling that _place_physical() above has to cancel for
+        x/y -- confirmed via debug output on the horizontal guide ticks:
+        setting width=1412 (a physical-pixel value, computed from
+        winfo_width()) rendered an actual on-screen width of 2824,
+        exactly double, on this 200%-scaled display. Dividing by the
+        same factor here cancels that out, the same way _place_physical
+        does for position. Use this instead of widget.configure(width=)
+        directly whenever the width being set was computed from
+        winfo_width()/winfo_reqwidth() (i.e. is already physical) rather
+        than being a plain logical constant like GUIDE_MARK_THICKNESS.
+        """
+        widget.configure(width=self._reverse_widget_scaling(width))
+
     def _position_word(self) -> None:
         """Places before/focus/after so the focus letter's horizontal
         center always lands at the row's fixed center x. Recomputed on
@@ -209,13 +284,29 @@ class ReaderDisplay(ctk.CTkFrame):
         if row_width <= 1 or row_height <= 1:
             return  # not yet mapped/sized -- nothing sensible to compute
 
-        focus_width = self.focus_label.winfo_reqwidth()
-        focus_height = self.focus_label.winfo_reqheight()
-
         anchor_x = row_width / 2
         center_y = row_height / 2
         # Positive offset = up = smaller y.
         focus_y = center_y - self._highlight_offset_px
+
+        if self.session is not None and self.session.is_finished:
+            # No ORP letter to anchor around here -- before_label holds
+            # the whole "(finished)" message with focus/after emptied.
+            # The normal anchor="e" placement below assumes an actual
+            # focus_width to butt up against; with that width near 0 it
+            # left the message sitting to the left of center instead of
+            # centered on it. Center it directly instead.
+            self.focus_label.place_forget()
+            self.after_label.place_forget()
+            self._place_physical(self.before_label, x=anchor_x, y=center_y, anchor="center")
+            self._anchor_x = anchor_x
+            self._focus_y = focus_y
+            self._focus_half_height = 0
+            self._row_width = row_width
+            return
+
+        focus_width = self.focus_label.winfo_reqwidth()
+        focus_height = self.focus_label.winfo_reqheight()
 
         self._place_physical(self.before_label, x=anchor_x - focus_width / 2, y=center_y, anchor="e")
         self._place_physical(self.focus_label, x=anchor_x, y=focus_y, anchor="center")
@@ -224,11 +315,14 @@ class ReaderDisplay(ctk.CTkFrame):
         self._anchor_x = anchor_x
         self._focus_y = focus_y
         self._focus_half_height = focus_height / 2
+        self._row_width = row_width
 
     def _update_guide_marks(self) -> None:
         if not self._is_running() or self._anchor_x is None:
             self.guide_mark_above.place_forget()
             self.guide_mark_below.place_forget()
+            self.guide_line_above.place_forget()
+            self.guide_line_below.place_forget()
             return
 
         length = self._guide_mark_length()
@@ -236,18 +330,40 @@ class ReaderDisplay(ctk.CTkFrame):
         self.guide_mark_above.configure(height=length)
         self.guide_mark_below.configure(height=length)
 
-        self._place_physical(
-            self.guide_mark_above,
-            x=self._anchor_x, y=self._focus_y - self._focus_half_height - gap, anchor="s",
-        )
-        self._place_physical(
-            self.guide_mark_below,
-            x=self._anchor_x, y=self._focus_y + self._focus_half_height + gap, anchor="n",
-        )
+        # Inner edge = nearest the letter, where each vertical mark
+        # starts. Outer edge = its far tip -- that's where the matching
+        # horizontal tick sits, forming a crosshair.
+        inner_top_y = self._focus_y - self._focus_half_height - gap
+        inner_bottom_y = self._focus_y + self._focus_half_height + gap
+        outer_top_y = inner_top_y - length
+        outer_bottom_y = inner_bottom_y + length
+
+        self._place_physical(self.guide_mark_above, x=self._anchor_x, y=inner_top_y, anchor="s")
+        self._place_physical(self.guide_mark_below, x=self._anchor_x, y=inner_bottom_y, anchor="n")
+
+        if self._guide_mark_horizontal_enabled:
+            horizontal_length = self._guide_mark_horizontal_length()
+            self._configure_physical_width(self.guide_line_above, horizontal_length)
+            self._configure_physical_width(self.guide_line_below, horizontal_length)
+            self._place_physical(self.guide_line_above, x=self._anchor_x, y=outer_top_y, anchor="center")
+            self._place_physical(self.guide_line_below, x=self._anchor_x, y=outer_bottom_y, anchor="center")
+        else:
+            self.guide_line_above.place_forget()
+            self.guide_line_below.place_forget()
 
     def _guide_mark_length(self) -> int:
         size = self.word_font.cget("size")
         return max(8, round(size * self.GUIDE_MARK_LENGTH_RATIO))
+
+    def _guide_mark_horizontal_length(self) -> int:
+        """How wide the horizontal ticks should be: a constant length
+        derived from the reading row's own current width, not from the
+        word being shown. Shrinking row_width by a fixed margin on each
+        side keeps the ticks close to the row's left/right edges without
+        ever touching them; the MIN_LENGTH_PX floor only matters if the
+        row is ever narrower than the two margins combined."""
+        length = self._row_width - (2 * self.GUIDE_MARK_HORIZONTAL_EDGE_MARGIN_PX)
+        return max(self.GUIDE_MARK_HORIZONTAL_MIN_LENGTH_PX, round(length))
 
     def _is_running(self) -> bool:
         return self.session is not None and not self.session.is_finished and not self._is_paused

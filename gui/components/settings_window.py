@@ -27,6 +27,7 @@ class SettingsWindow(ctk.CTkToplevel):
         default_wpm, default_font_color, default_highlight_color, default_background_color,
         default_font_size, font_size_step, highlight_offset_px,
         skip_word_count, pause_on_skip,
+        guide_mark_horizontal_enabled,
         data_directory,
         appearance_mode,
         on_apply,
@@ -76,7 +77,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_defaults_tab(
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
-            skip_word_count, pause_on_skip,
+            skip_word_count, pause_on_skip, guide_mark_horizontal_enabled,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -166,7 +167,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -238,6 +239,15 @@ class SettingsWindow(ctk.CTkToplevel):
         low, high = HIGHLIGHT_OFFSET_RANGE
         ctk.CTkLabel(
             scroll, text=f"Applies globally, to every transcript. Allowed range: {low} to {high}.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
+        self.guide_mark_horizontal_switch = self._styled_switch(scroll, "Show horizontal guide lines")
+        (self.guide_mark_horizontal_switch.select() if guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
+        self.guide_mark_horizontal_switch.pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(
+            scroll,
+            text="Adds a fixed grey line above and below the vertical guide marks, sized close to the width of the reading area, to help keep your eyes centered while reading.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -330,6 +340,8 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._set_entry_value(self.font_size_step_entry, original.font_size_step)
         self._set_entry_value(self.highlight_offset_entry, original.highlight_offset_px)
+
+        (self.guide_mark_horizontal_switch.select() if original.guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
 
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
@@ -482,6 +494,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["default_font_size"] = self.default_font_size
         values["skip_word_count"] = int(self.skip_word_count_slider.get())
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
+        values["guide_mark_horizontal_enabled"] = bool(self.guide_mark_horizontal_switch.get())
         values["data_directory"] = self._data_directory
         values["appearance_mode"] = self.appearance_mode_selector.get().lower()
 

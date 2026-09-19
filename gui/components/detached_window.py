@@ -15,6 +15,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
+        guide_mark_horizontal_enabled: bool = False,
     ):
         super().__init__(master)
         self.transcript = transcript
@@ -46,6 +47,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         )
         self.reader_display = ReaderDisplay(self, on_position_changed=self._handle_position_changed)
         self.reader_display.set_highlight_offset(highlight_offset_px)
+        self.reader_display.set_guide_mark_horizontal_enabled(guide_mark_horizontal_enabled)
 
         self._render_current_state()
 
