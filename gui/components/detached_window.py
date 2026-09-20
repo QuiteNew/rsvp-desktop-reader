@@ -4,7 +4,7 @@ from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
-from gui.theme import apply_app_icon
+from gui.theme import apply_app_icon, HEARTH_PAPER
 
 
 class DetachedTranscriptWindow(ctk.CTkToplevel):
@@ -22,6 +22,13 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         guide_mark_color: str = "#3B2E27",
     ):
         super().__init__(master)
+
+        # Hidden until fully built (see the matching alpha restore at the
+        # end of __init__, and gui/components/settings_window.py for the
+        # fuller explanation of why this uses -alpha rather than
+        # withdraw()/deiconify()).
+        self.attributes("-alpha", 0)
+
         self.transcript = transcript
         self.on_text_submitted = on_text_submitted
         self.on_closed = on_closed
@@ -35,6 +42,12 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         apply_app_icon(self)
         self.geometry("500x350")
         self.protocol("WM_DELETE_WINDOW", self.close)
+        # Previously unset -- CTkToplevel's own default theme background
+        # doesn't match this app's palette, so without this the window
+        # showed a mismatched background wherever the toolbar/input/reader
+        # widgets below don't fully cover it (and made the white-flash
+        # symptom above worse specifically for this window).
+        self.configure(fg_color=HEARTH_PAPER)
 
         self.toolbar = CanvasToolbar(
             self,
@@ -58,6 +71,24 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_color(guide_mark_color)
 
         self._render_current_state()
+
+        # Reveal now that everything above is built, colored, and
+        # comfortably past CustomTkinter's own internal titlebar dance
+        # (see the alpha note near the top of __init__). update_idletasks()
+        # right before flipping alpha forces any still-queued layout/redraw
+        # work (including CTk widgets that defer their own first paint via
+        # their own internal after() calls) to actually finish first --
+        # otherwise the reveal can catch some of that mid-flight, showing
+        # pieces of the window popping in over a white background instead
+        # of one clean paint.
+        self.after(80, self._reveal_now)
+
+    def _reveal_now(self) -> None:
+        self.update_idletasks()
+        self.attributes("-alpha", 1)
+
+    def get_draft_text(self) -> str:
+        return self.input_view.get_text()
 
     def get_draft_text(self) -> str:
         return self.input_view.get_text()

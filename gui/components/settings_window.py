@@ -38,6 +38,41 @@ class SettingsWindow(ctk.CTkToplevel):
         on_pause_on_skip_changed=None,
     ):
         super().__init__(master)
+
+        # Hidden until fully built (see the matching alpha restore at the
+        # very end of __init__). CustomTkinter's own CTkToplevel.__init__
+        # -- which super().__init__() above just ran -- withdraws this
+        # window itself for a moment to apply Windows' native dark/light
+        # title bar (DWM's DWMWA_USE_IMMERSIVE_DARK_MODE), then schedules
+        # its own deiconify() ~5ms later. That's independent of anything
+        # in this file, and unrelated to packaging as an .exe -- it's
+        # CustomTkinter's normal behavior on every window, every launch.
+        #
+        # An earlier version of this fix called withdraw() again here to
+        # cooperate with a hook CTkToplevel.withdraw() provides for
+        # exactly that ~5ms cycle. That covered only the ONE call CTk
+        # makes from __init__. It turns out CTkToplevel.resizable() --
+        # which this file calls a few lines down -- independently
+        # triggers the *same* hide/DWM-set/reveal dance a second time,
+        # via its own self.after(10, ...) callback (see
+        # customtkinter/windows/ctk_toplevel.py), completely bypassing
+        # that cooperation flag. That's what turned "flash of blank
+        # background while building" into "the window visibly closes and
+        # reopens": our own deiconify() had already shown the fully-built
+        # window by the time resizable()'s delayed callback fired and
+        # force-hid it a second time, then auto-revealed it again ~5ms
+        # after that.
+        #
+        # Rather than chase every current (and possibly future --
+        # changing the appearance mode later triggers this same dance
+        # too) internal trigger with more withdraw()-flag timing tricks,
+        # this sidesteps the whole mechanism: making the window fully
+        # transparent doesn't touch Tk's own map/withdraw state machine
+        # at all, so CustomTkinter's internal hide-and-reshow cycles can
+        # run their course invisibly, however many times they fire,
+        # without us needing to know about or race their timing.
+        self.attributes("-alpha", 0)
+
         self.title("Settings")
         apply_app_icon(self)
         self.geometry("500x650")
@@ -49,11 +84,6 @@ class SettingsWindow(ctk.CTkToplevel):
         self.on_pause_on_skip_changed = on_pause_on_skip_changed
         self._data_directory = data_directory
         self._defaults_scroll = None  # set once the Defaults tab's scrollable frame exists
-
-        self.lift()
-        self.transient(master)
-        self.after(10, self.grab_set)
-        self.focus_force()
 
         self.label_font = ctk.CTkFont(family=FONT_BODY, size=13)
         self.small_font = ctk.CTkFont(family=FONT_BODY, size=11)
@@ -103,6 +133,60 @@ class SettingsWindow(ctk.CTkToplevel):
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
             font=self.button_font, command=self._handle_apply,
         ).pack(side="right")
+
+        self.lift()
+        self.transient(master)
+        self.after(10, self.grab_set)
+        self.focus_force()
+
+        # Reveal only now, once everything above is built and colored
+        # *and* comfortably after CustomTkinter's own internal Windows
+        # titlebar dance has had time to finish (its slowest leg,
+        # triggered by resizable() above, can take up to ~15ms to
+        # settle -- see the alpha note near the top of __init__). 80ms
+        # leaves a wide margin while staying well under what's
+        # perceptible as a delay. update_idletasks() right before flipping
+        # alpha forces any still-queued layout/redraw work (including CTk
+        # widgets -- there are a lot of them on this window's tabs -- that
+        # defer their own first paint via their own internal after() calls)
+        # to actually finish first, rather than letting the reveal catch
+        # some of that mid-flight and show pieces of the window popping in
+        # over a white background instead of one clean paint.
+        self.after(80, self._reveal_now)
+
+
+    def _reveal_now(self) -> None:
+        # Every CTk widget redraws itself on a real <Configure> event once
+        # its size actually changes (core_widget_classes/ctk_base_class.py,
+        # _update_dimensions_event) -- update_idletasks() doesn't dispatch
+        # those, only update() does (same root cause as the
+        # CTkScrollableFrame fix on Space Selection).
+        #
+        # _parent_canvas.bbox("all") is CustomTkinter's own computed
+        # bounding box of everything inside the Defaults tab's scrollable
+        # area (see ctk_scrollable_frame.py) -- the deepest, most
+        # widget-dense part of this window, and the same private attribute
+        # _redirect_scroll_to_defaults_frame() above already reaches into.
+        # Looping until it's identical two passes in a row is a genuine
+        # "is it finished" signal rather than a guessed pass count --
+        # capped so this can never hang if that attribute name ever
+        # changes across a CustomTkinter version. Measured: this loop
+        # itself typically finishes in 2 passes, under 1ms -- the visible
+        # delay before this window appears is construction time in
+        # __init__ above, not this loop.
+        last_bbox = None
+        for _ in range(30):
+            self.update()
+            try:
+                current_bbox = self._defaults_scroll._parent_canvas.bbox("all")
+            except AttributeError:
+                break
+            if current_bbox == last_bbox:
+                break
+            last_bbox = current_bbox
+        self.attributes("-alpha", 1)
+
+
 
     def _open_native_dialog(self, dialog_fn, **kwargs):
         self.grab_release()
