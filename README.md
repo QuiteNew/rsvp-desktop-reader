@@ -180,7 +180,12 @@ Settings are organized into four tabs:
   mechanism already exists and is fully functional)~~
 - ~~An automated test suite under `tests/`~~
 - ~~Configurable size for words shown~~
-- Highlited letter position customization
+- ~~Highlited letter position customization~~
+- ~~Fixed reading-point guide marks~~
+- ~~Theme-aware color sync for reading panel~~
+- Improvements to core engine
+- Fixing installation guide for Mac
+
 
 ## License
 

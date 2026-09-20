@@ -94,6 +94,45 @@ WARM_LINE = _active["warm_line"]
 TEXT_ON_LIGHT = _active["text_on_light"]
 TEXT_ON_DARK = _active["text_on_dark"]
 
+# ---- Dark-mode reading defaults ----
+# A *newly created* transcript's reading colors (font/highlight/background)
+# normally come straight from AppSettings.default_* -- plain user-chosen
+# hex values, deliberately NOT theme-aware, since per-transcript color
+# customization is meant to be independent of everything else (see
+# core/settings_store.py). Left alone, that means a transcript created
+# while the app is in Dark mode still starts out with the light-mode
+# cream/dark-ink defaults, which reads as a jarring, unintended gap next
+# to the rest of the now-dark chrome, not a deliberate choice.
+#
+# These three are an alternative seed used ONLY at the moment a new
+# transcript is created (see gui/app.py's _handle_new_transcript()), and
+# only when CTK_APPEARANCE_MODE is "Dark" -- never applied retroactively
+# to a transcript that already exists, and never used at all in Light
+# mode, where AppSettings.default_* still applies exactly as before.
+DARK_READING_FONT_COLOR = DARK_PALETTE["cocoa_ink"]        # "#F2E8DC" -- same cream used for every other on-dark text label
+DARK_READING_HIGHLIGHT_COLOR = DARK_PALETTE["ember_glow"]  # "#A8672E" -- same accent color used everywhere else in dark mode
+DARK_READING_BACKGROUND_COLOR = "#241D17"                  # a small, deliberate step lighter than hearth_paper's dark
+                                                             # value ("#1D1712" -- also the transcript-list row color and
+                                                             # the color behind the canvas toolbar), so the reading canvas
+                                                             # still reads as its own region instead of blending in flat
+
+# The global guide-mark color (AppSettings.guide_mark_color) follows the
+# same "still tracking the theme default, unless manually picked" pattern
+# as the per-transcript reading colors above, but it's a single app-wide
+# value, not seeded per-transcript -- see SettingsStore.guide_mark_color /
+# resync_guide_mark_color_default() and gui/app.py's startup resync.
+#
+# In Light mode the existing default ("#3B2E27") already matches the
+# reading font color, so LIGHT_READING_GUIDE_MARK_COLOR is that same value
+# named explicitly, for symmetry with the Dark constant below rather than
+# leaving the Light case implicit in AppSettings' own dataclass default.
+# In Dark mode, the original dark cocoa_ink guide-mark color was reported
+# too dark to see against a dark reading background, so this uses the same
+# soft off-white/cream already used for every other on-dark text label --
+# a real "soft white" as requested, not pure #FFFFFF.
+LIGHT_READING_GUIDE_MARK_COLOR = LIGHT_PALETTE["cocoa_ink"]  # "#3B2E27" -- unchanged from the historical default
+DARK_READING_GUIDE_MARK_COLOR = DARK_PALETTE["cocoa_ink"]    # "#F2E8DC" -- soft cream/white, visible on a dark background
+
 # ---- Fonts ----
 
 FONT_HEADING = "Fredoka SemiBold"

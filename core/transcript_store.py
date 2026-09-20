@@ -116,21 +116,54 @@ class TranscriptStore:
             self._save()
 
     def set_transcript_font_color(self, transcript_id: int, color: str) -> None:
+        # Called only from the footer's own color picker -- a genuine
+        # manual change, so it retires this transcript's font color from
+        # theme-tracking. Only clears the flag if the color actually
+        # changed, so re-picking the same color twice doesn't accidentally
+        # freeze it (see resync_default_reading_colors()).
         t = self._find_transcript(transcript_id)
         if t:
+            if color != t.font_color:
+                t.font_color_is_default = False
             t.font_color = color
             self._save()
 
     def set_transcript_highlight_color(self, transcript_id: int, color: str) -> None:
         t = self._find_transcript(transcript_id)
         if t:
+            if color != t.highlight_color:
+                t.highlight_color_is_default = False
             t.highlight_color = color
             self._save()
 
     def set_transcript_background_color(self, transcript_id: int, color: str) -> None:
         t = self._find_transcript(transcript_id)
         if t:
+            if color != t.background_color:
+                t.background_color_is_default = False
             t.background_color = color
+            self._save()
+
+    def resync_default_reading_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
+        """Update every transcript whose reading colors are still tracking
+        the app-wide default (font_color_is_default etc. -- see
+        core/models.py) to the given values, leaving any transcript with
+        its own deliberately-picked color untouched. Called once at app
+        startup (see gui/app.py) with whichever color set matches the
+        CURRENT theme -- the same "takes effect on next launch" timing the
+        rest of the theme system already uses, not a live update."""
+        changed = False
+        for t in self._transcripts:
+            if t.font_color_is_default and t.font_color != font_color:
+                t.font_color = font_color
+                changed = True
+            if t.highlight_color_is_default and t.highlight_color != highlight_color:
+                t.highlight_color = highlight_color
+                changed = True
+            if t.background_color_is_default and t.background_color != background_color:
+                t.background_color = background_color
+                changed = True
+        if changed:
             self._save()
 
     def set_transcript_font_size(self, transcript_id: int, font_size: int) -> None:

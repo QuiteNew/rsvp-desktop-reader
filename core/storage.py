@@ -6,6 +6,14 @@ from core.models import Transcript
 
 DEFAULT_DATA_DIR = Path.home() / ".rsvp_reader"
 
+# Transcript fields added after this project already had saved data on
+# disk. A save file written before a field existed simply won't have the
+# key -- for these specific three, missing must resolve to False (already
+# has its own colors), not the dataclass's own True default, so this
+# migration never silently rewrites a color on a transcript that already
+# existed. See core/models.py's Transcript and TranscriptStore.
+_COLOR_DEFAULT_FLAG_FIELDS = ("font_color_is_default", "highlight_color_is_default", "background_color_is_default")
+
 
 def save_state(directory: str, spaces: list[str], current_space_index: int, transcripts: list[Transcript], next_id: int) -> None:
     """Write the store's full state to disk as JSON, inside the given directory."""
@@ -29,6 +37,9 @@ def load_state(directory: str):
         return None
     try:
         data = json.loads(data_file.read_text(encoding="utf-8"))
+        for t in data["transcripts"]:
+            for field_name in _COLOR_DEFAULT_FLAG_FIELDS:
+                t.setdefault(field_name, False)
         transcripts = [Transcript(**t) for t in data["transcripts"]]
         return {
             "next_id": data["next_id"],

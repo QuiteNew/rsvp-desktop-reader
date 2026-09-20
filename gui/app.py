@@ -11,7 +11,11 @@ from gui.components.add_transcript_dialog import AddTranscriptDialog
 from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
-from gui.theme import HEARTH_PAPER, unregister_fonts
+from gui.theme import (
+    HEARTH_PAPER, unregister_fonts, CTK_APPEARANCE_MODE,
+    DARK_READING_FONT_COLOR, DARK_READING_HIGHLIGHT_COLOR, DARK_READING_BACKGROUND_COLOR,
+    LIGHT_READING_GUIDE_MARK_COLOR, DARK_READING_GUIDE_MARK_COLOR,
+)
 from core.transcript_store import TranscriptStore
 from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE
 
@@ -29,6 +33,7 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store = SettingsStore()
         self.store = TranscriptStore(data_directory=self.settings_store.data_directory)
+        self._resync_theme_default_colors()
         self._focus_mode = False
         self._current_transcript = None
         self._drag_start_value = None
@@ -173,13 +178,54 @@ class RSVPApp(ctk.CTk):
             on_submit=self._handle_new_transcript,
         )
 
+    def _current_theme_reading_colors(self) -> tuple[str, str, str]:
+        """The (font, highlight, background) reading colors that match the
+        CURRENT appearance mode -- the dedicated dark-reading colors in
+        Dark mode, the plain Settings -> Defaults values otherwise. Shared
+        by both the new-transcript seed and the startup resync (see
+        _handle_new_transcript() and _resync_theme_default_colors()) so the
+        two can never drift apart. CTK_APPEARANCE_MODE is resolved once at
+        app startup (see gui/theme.py), matching how Settings -> Appearance
+        already documents itself as "takes effect on next launch, not
+        live"."""
+        if CTK_APPEARANCE_MODE == "Dark":
+            return DARK_READING_FONT_COLOR, DARK_READING_HIGHLIGHT_COLOR, DARK_READING_BACKGROUND_COLOR
+        return (
+            self.settings_store.default_font_color,
+            self.settings_store.default_highlight_color,
+            self.settings_store.default_background_color,
+        )
+
+    def _resync_theme_default_colors(self) -> None:
+        """Run once at startup, right after the stores are constructed and
+        before any widget reads a color from them: bring every reading
+        color that's still tracking the app-wide theme default -- each
+        transcript's font/highlight/background, and the global guide-mark
+        color -- in line with the CURRENT appearance mode. Anything that
+        was manually picked by hand is left untouched; see
+        TranscriptStore.resync_default_reading_colors() and
+        SettingsStore.resync_guide_mark_color_default() for exactly how
+        that distinction is tracked."""
+        font_color, highlight_color, background_color = self._current_theme_reading_colors()
+        self.store.resync_default_reading_colors(font_color, highlight_color, background_color)
+
+        guide_mark_color = DARK_READING_GUIDE_MARK_COLOR if CTK_APPEARANCE_MODE == "Dark" else LIGHT_READING_GUIDE_MARK_COLOR
+        self.settings_store.resync_guide_mark_color_default(guide_mark_color)
+
     def _handle_new_transcript(self, title: str, space: str) -> None:
+        # A brand-new transcript's reading colors are seeded from whichever
+        # set matches the current theme -- see _current_theme_reading_colors().
+        # This only affects transcripts created from this point on; anything
+        # that already exists is handled separately, once, at startup (see
+        # _resync_theme_default_colors()).
+        font_color, highlight_color, background_color = self._current_theme_reading_colors()
+
         self.store.add_transcript(
             title, space,
             wpm=self.settings_store.default_wpm,
-            font_color=self.settings_store.default_font_color,
-            highlight_color=self.settings_store.default_highlight_color,
-            background_color=self.settings_store.default_background_color,
+            font_color=font_color,
+            highlight_color=highlight_color,
+            background_color=background_color,
             font_size=self.settings_store.default_font_size,
         )
         self._refresh_transcript_list()

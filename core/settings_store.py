@@ -44,6 +44,9 @@ class AppSettings:
     guide_mark_thickness_px: int = 2  # global, not per-transcript — width of the vertical guide marks
     guide_mark_length_percent: int = 35  # global, not per-transcript — length as % of current word size
     guide_mark_color: str = "#3B2E27"  # global, not per-transcript — no longer follows the transcript's font colour
+    guide_mark_color_is_default: bool = True  # whether guide_mark_color is still tracking the app-wide Light/Dark
+                                               # default rather than something picked by hand in Settings -- see
+                                               # SettingsStore.set_guide_mark_color() / resync_guide_mark_color_default()
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -60,6 +63,16 @@ class SettingsStore:
         try:
             data = json.loads(self._settings_file.read_text(encoding="utf-8"))
             data.pop("header_height", None)
+            # guide_mark_color predates guide_mark_color_is_default. For an
+            # old settings.json missing the flag, infer it from whether the
+            # stored color still equals the one-and-only historical default
+            # ("#3B2E27") -- if so, treat it as still-default (will be fixed
+            # by the resync below); if the user had already changed it to
+            # something else, treat it as already-customized (frozen).
+            if "guide_mark_color_is_default" not in data:
+                data["guide_mark_color_is_default"] = (
+                    data.get("guide_mark_color", AppSettings.guide_mark_color) == AppSettings.guide_mark_color
+                )
             return AppSettings(**data)
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
@@ -204,5 +217,22 @@ class SettingsStore:
         self._save()
 
     def set_guide_mark_color(self, color: str) -> None:
+        # Called only from Settings' own color picker -- a genuine manual
+        # change, so it retires guide_mark_color from theme-tracking. Only
+        # clears the flag if the color actually changed, so re-applying the
+        # same color twice doesn't accidentally freeze it (see
+        # resync_guide_mark_color_default()).
+        if color != self._settings.guide_mark_color:
+            self._settings.guide_mark_color_is_default = False
         self._settings.guide_mark_color = color
         self._save()
+
+    def resync_guide_mark_color_default(self, color: str) -> None:
+        """Update guide_mark_color to the given value only if it's still
+        tracking the app-wide theme default (guide_mark_color_is_default --
+        see AppSettings). Called once at app startup with whichever color
+        matches the CURRENT theme -- the same "takes effect on next launch"
+        timing as TranscriptStore.resync_default_reading_colors()."""
+        if self._settings.guide_mark_color_is_default and self._settings.guide_mark_color != color:
+            self._settings.guide_mark_color = color
+            self._save()
