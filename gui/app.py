@@ -403,7 +403,7 @@ class RSVPApp(ctk.CTk):
             self.footer.set_enabled(False)
 
     def _handle_skip_word_count_live(self, count: int) -> None:
-        self.settings_store.set_skip_behavior(count, self.settings_store.pause_on_skip)
+        self.settings_store.set_skip_word_count_live(count)
         self.canvas.set_skip_word_count(count)
 
     def _handle_pause_on_skip_live(self, enabled: bool) -> None:
@@ -412,6 +412,13 @@ class RSVPApp(ctk.CTk):
 
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()
+        # Position/WPM and skip-amount writes are throttled while their
+        # sliders are actively being used (see core/transcript_store.py and
+        # core/settings_store.py) -- this guarantees whatever was last
+        # reached in memory is actually on disk before we quit, even if it
+        # hasn't hit the throttle interval yet.
+        self.store.flush()
+        self.settings_store.flush()
         unregister_fonts()
         self.destroy()
 

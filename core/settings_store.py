@@ -1,8 +1,9 @@
 import json
+import time
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 
-from core.storage import DEFAULT_DATA_DIR
+from core.storage import DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
 
 SETTINGS_DIR = DEFAULT_DATA_DIR
 
@@ -56,6 +57,9 @@ class SettingsStore:
         self._settings_dir = Path(settings_directory) if settings_directory else SETTINGS_DIR
         self._settings_file = self._settings_dir / "settings.json"
         self._settings = self._load()
+        # 0.0 rather than time.monotonic() at startup -- see the matching
+        # comment on TranscriptStore._last_live_save.
+        self._last_live_save = 0.0
 
     def _load(self) -> AppSettings:
         if not self._settings_file.exists():
@@ -80,6 +84,20 @@ class SettingsStore:
     def _save(self) -> None:
         self._settings_dir.mkdir(exist_ok=True, parents=True)
         self._settings_file.write_text(json.dumps(asdict(self._settings), indent=2), encoding="utf-8")
+
+    def _save_throttled(self) -> None:
+        now = time.monotonic()
+        if now - self._last_live_save >= LIVE_SAVE_INTERVAL_SECONDS:
+            self._last_live_save = now
+            self._save()
+
+    def flush(self) -> None:
+        """Force an immediate save, bypassing the live-update throttle --
+        see TranscriptStore.flush() for the full reasoning. Called from
+        gui/app.py on app close, to catch a throttled-but-not-yet-written
+        skip_word_count change from set_skip_word_count_live()."""
+        self._last_live_save = time.monotonic()
+        self._save()
 
     @property
     def window_width(self) -> int:
@@ -196,9 +214,28 @@ class SettingsStore:
         self._save()
 
     def set_skip_behavior(self, word_count: int, pause_on_skip: bool) -> None:
+        """Used by Settings' Apply button and the pause_on_skip switch --
+        both discrete, one-shot actions, so this always saves immediately.
+        The skip-amount slider's own live drag callback goes through
+        set_skip_word_count_live() instead, which is throttled; see there
+        for why the two need to be kept separate."""
         self._settings.skip_word_count = word_count
         self._settings.pause_on_skip = pause_on_skip
         self._save()
+
+    def set_skip_word_count_live(self, word_count: int) -> None:
+        """Same field as set_skip_behavior(), but for the Settings skip-
+        amount slider's live drag callback specifically, which can fire
+        many times across a single drag -- throttled the same way
+        TranscriptStore throttles position/WPM writes (see
+        LIVE_SAVE_INTERVAL_SECONDS in core/storage.py). Deliberately a
+        separate method rather than throttling set_skip_behavior() itself,
+        since that one is also called from the Apply button and the
+        pause_on_skip switch, both discrete actions that must always save
+        immediately -- throttling it there could delay a switch toggle
+        behind an unrelated slider drag that happened moments earlier."""
+        self._settings.skip_word_count = word_count
+        self._save_throttled()
 
     def set_appearance_mode(self, mode: str) -> None:
         self._settings.appearance_mode = mode

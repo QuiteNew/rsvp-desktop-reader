@@ -1,5 +1,7 @@
+import time
+
 from core.models import Transcript
-from core.storage import save_state, load_state, DEFAULT_DATA_DIR
+from core.storage import save_state, load_state, DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
 
 DEFAULT_SPACE = "General"
 
@@ -22,6 +24,12 @@ class TranscriptStore:
             self._current_space_index = 0
             self._transcripts: list[Transcript] = []
             self._next_id = 1
+
+        # 0.0 rather than time.monotonic() at startup -- guarantees the very
+        # first throttled write after launch always goes straight through
+        # instead of waiting out a throttle window against a startup time
+        # it has no real relationship to.
+        self._last_live_save = 0.0
 
     def _save(self) -> None:
         save_state(self._data_directory, self._spaces, self._current_space_index, self._transcripts, self._next_id)
@@ -98,10 +106,33 @@ class TranscriptStore:
             self._save()
 
     def set_transcript_position(self, transcript_id: int, position: int) -> None:
+        """Update the transcript's position and persist it -- but the disk
+        write itself is throttled (see LIVE_SAVE_INTERVAL_SECONDS in
+        core/storage.py), since this is called on every word during
+        playback. The in-memory value is always current regardless; call
+        flush() to force an immediate write of whatever's still pending."""
         t = self._find_transcript(transcript_id)
         if t:
             t.position = position
+            self._save_throttled()
+
+    def _save_throttled(self) -> None:
+        now = time.monotonic()
+        if now - self._last_live_save >= LIVE_SAVE_INTERVAL_SECONDS:
+            self._last_live_save = now
             self._save()
+
+    def flush(self) -> None:
+        """Force an immediate save, bypassing the live-update throttle.
+        Every OTHER setter in this class already calls _save() directly
+        and unconditionally (pause, stop, skip's pause-toggle, colors,
+        etc.), so those already double as safe checkpoints for whatever
+        position/WPM was last recorded in memory -- this is only needed to
+        guarantee a throttled-but-not-yet-written update actually reaches
+        disk when nothing else is going to save afterward. Called from
+        gui/app.py on app close."""
+        self._last_live_save = time.monotonic()
+        self._save()
 
     def set_transcript_paused(self, transcript_id: int, is_paused: bool) -> None:
         t = self._find_transcript(transcript_id)
@@ -110,10 +141,16 @@ class TranscriptStore:
             self._save()
 
     def set_transcript_wpm(self, transcript_id: int, wpm: int) -> None:
+        """Update the transcript's WPM and persist it -- throttled the same
+        way set_transcript_position() is, since this is the footer WPM
+        slider's live drag callback and can fire dozens of times across a
+        single drag. This is currently WPM's only caller, so no separate
+        discrete/unthrottled variant is needed the way skip_word_count
+        needed one in SettingsStore (see set_skip_word_count_live() there)."""
         t = self._find_transcript(transcript_id)
         if t:
             t.wpm = wpm
-            self._save()
+            self._save_throttled()
 
     def set_transcript_font_color(self, transcript_id: int, color: str) -> None:
         # Called only from the footer's own color picker -- a genuine

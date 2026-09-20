@@ -14,6 +14,15 @@ DEFAULT_DATA_DIR = Path.home() / ".rsvp_reader"
 # existed. See core/models.py's Transcript and TranscriptStore.
 _COLOR_DEFAULT_FLAG_FIELDS = ("font_color_is_default", "highlight_color_is_default", "background_color_is_default")
 
+# Shared by TranscriptStore and SettingsStore for any setter that gets
+# called from a live, high-frequency UI event -- continuous playback
+# position, and dragging the WPM or skip-amount sliders -- rather than a
+# discrete one-shot action (a click, a switch, Settings' Apply button).
+# Those setters throttle their disk write to at most once per this
+# interval instead of writing the full state on every single call; see
+# each store's _save_throttled()/flush() for how.
+LIVE_SAVE_INTERVAL_SECONDS = 1.0
+
 
 def save_state(directory: str, spaces: list[str], current_space_index: int, transcripts: list[Transcript], next_id: int) -> None:
     """Write the store's full state to disk as JSON, inside the given directory."""
