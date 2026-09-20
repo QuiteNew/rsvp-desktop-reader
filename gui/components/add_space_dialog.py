@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon
 
 
 class AddSpaceDialog(ctk.CTkToplevel):
@@ -8,6 +8,7 @@ class AddSpaceDialog(ctk.CTkToplevel):
     def __init__(self, master, on_submit):
         super().__init__(master)
         self.title("New Space")
+        apply_app_icon(self)
         self.geometry("320x180")
         self.resizable(False, False)
         self.configure(fg_color=HEARTH_PAPER)

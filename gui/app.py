@@ -12,7 +12,7 @@ from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
 from gui.theme import (
-    HEARTH_PAPER, unregister_fonts, CTK_APPEARANCE_MODE,
+    HEARTH_PAPER, unregister_fonts, CTK_APPEARANCE_MODE, apply_app_icon,
     DARK_READING_FONT_COLOR, DARK_READING_HIGHLIGHT_COLOR, DARK_READING_BACKGROUND_COLOR,
     LIGHT_READING_GUIDE_MARK_COLOR, DARK_READING_GUIDE_MARK_COLOR,
 )
@@ -29,6 +29,7 @@ class RSVPApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("RSVP Reader")
+        apply_app_icon(self)
         self.configure(fg_color=HEARTH_PAPER)
 
         self.settings_store = SettingsStore()

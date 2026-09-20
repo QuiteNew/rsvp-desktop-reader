@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon
 
 
 class AddTranscriptDialog(ctk.CTkToplevel):
@@ -8,6 +8,7 @@ class AddTranscriptDialog(ctk.CTkToplevel):
     def __init__(self, master, spaces: list[str], default_space: str, on_submit):
         super().__init__(master)
         self.title("New Transcript")
+        apply_app_icon(self)
         self.geometry("340x240")
         self.resizable(False, False)
         self.configure(fg_color=HEARTH_PAPER)

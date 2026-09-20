@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
+from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon
 
 
 class DeleteTranscriptDialog(ctk.CTkToplevel):
@@ -8,6 +8,7 @@ class DeleteTranscriptDialog(ctk.CTkToplevel):
     def __init__(self, master, on_confirm):
         super().__init__(master)
         self.title("Transcript deletion")
+        apply_app_icon(self)
         self.geometry("360x170")
         self.resizable(False, False)
         self.configure(fg_color=HEARTH_PAPER)

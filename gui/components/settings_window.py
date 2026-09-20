@@ -8,7 +8,7 @@ from core.settings_store import (
     WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE,
     HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
 )
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon
 
 
 class SettingsWindow(ctk.CTkToplevel):
@@ -39,6 +39,7 @@ class SettingsWindow(ctk.CTkToplevel):
     ):
         super().__init__(master)
         self.title("Settings")
+        apply_app_icon(self)
         self.geometry("500x650")
         self.minsize(420, 420)
         self.resizable(True, True)

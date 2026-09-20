@@ -272,6 +272,9 @@ Settings are organized into four tabs:
 - ~~Theme-aware color sync for reading panel~~
 - ~~Improvements to core engine~~
 - ~~Fixing installation guide for Mac and Linux~~
+- Packaging and distribution (.exe or .app)
+- ~~Creating a custom icon~~
+- Cross-machine continuity 
 
 
 ## License

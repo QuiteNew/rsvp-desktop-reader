@@ -4,6 +4,7 @@ from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
+from gui.theme import apply_app_icon
 
 
 class DetachedTranscriptWindow(ctk.CTkToplevel):
@@ -31,6 +32,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.pause_on_skip = pause_on_skip
 
         self.title(transcript.title)
+        apply_app_icon(self)
         self.geometry("500x350")
         self.protocol("WM_DELETE_WINDOW", self.close)
 

@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon
 
 
 class SpaceSelectionDialog(ctk.CTkToplevel):
@@ -9,6 +9,7 @@ class SpaceSelectionDialog(ctk.CTkToplevel):
     def __init__(self, master, spaces: list[str], current_space: str, on_select):
         super().__init__(master)
         self.title("Select Space")
+        apply_app_icon(self)
         self.geometry("280x320")
         self.resizable(False, False)
         self.configure(fg_color=HEARTH_PAPER)
