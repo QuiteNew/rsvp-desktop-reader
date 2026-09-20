@@ -57,8 +57,8 @@ depend on each other.
 - Deep customization: per-transcript font, highlight, and background
   colors; adjustable sidebar width and control-band height, including live
   drag-to-resize; a relocatable folder for where your data is stored
-- Light / Dark / System theme support (the switching mechanism is fully
-  built - real dark colors are still in progress, see [Roadmap](#roadmap))
+- Light / Dark / System theme support, with reading colors that
+  automatically follow the active theme unless you've customized them
 - Fully offline and self-contained - no browser, offline,
   custom fonts bundled directly into the project
 
@@ -85,13 +85,100 @@ Requires Python 3.10 or newer.
 ```bash
 git clone <your-repo-url>
 cd rsvp-desktop-reader
-
-python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # macOS/Linux
-
-pip install -r requirements.txt
 ```
+
+### Windows
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### macOS
+
+Homebrew's Python doesn't bundle `tkinter` - it needs the separate `python-tk`
+formula, installed alongside Python itself:
+
+```bash
+brew install python@3.13 python-tk@3.13
+
+/opt/homebrew/bin/python3.13 -m venv venv
+source venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Creating the virtual environment with the full interpreter path (rather than a
+bare `python -m venv venv`) makes sure it's built from the Python you just
+installed `tkinter` for, even if you have more than one Python on your Mac.
+
+### Linux
+
+Most distributions split Tkinter out of the base Python package too, so it
+needs installing separately, before creating the virtual environment:
+
+```bash
+# Debian / Ubuntu
+sudo apt install python3-tk
+
+# Fedora
+sudo dnf install python3-tkinter
+
+# Arch
+sudo pacman -S tk
+```
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### Verify it worked
+
+```bash
+python -c "import tkinter; print('Tk:', tkinter.TkVersion)"
+python -c "import customtkinter; print('CustomTkinter:', customtkinter.__version__)"
+```
+
+Both commands should print a version number with no errors. If the second one
+fails, check that `pip` and `python` point at the same interpreter -
+`python -m pip install ...` (rather than a bare `pip install ...`) keeps them
+in sync.
+
+The two fonts the app uses (Fredoka and Quicksand) are already bundled in
+`assets/fonts/` and committed to this repo, so there's nothing extra to
+download - they're registered automatically, just for this app, when it
+launches.
+
+Then run it:
+
+```bash
+python main.py
+```
+
+
+Creating the virtual environment with the full interpreter path (rather than a
+bare `python -m venv venv`) makes sure it's built from the Python you just
+installed `tkinter` for, even if you have more than one Python on your Mac.
+
+### Verify it worked
+
+```bash
+python -c "import tkinter; print('Tk:', tkinter.TkVersion)"
+python -c "import customtkinter; print('CustomTkinter:', customtkinter.__version__)"
+```
+
+Both commands should print a version number with no errors. If the second one
+fails, check that `pip` and `python` point at the same interpreter -
+`python -m pip install ...` (rather than a bare `pip install ...`) keeps them
+in sync.
 
 The two fonts the app uses (Fredoka and Quicksand) are already bundled in
 `assets/fonts/` and committed to this repo, so there's nothing extra to
@@ -123,31 +210,31 @@ python main.py
 ````
 rsvp-desktop-reader/
 ├── assets/
-│   └── fonts/              # Bundled Fredoka & Quicksand font files
-├── core/                   # Pure reading engine — no GUI dependencies
-│   ├── models.py           # The Transcript data model
-│   ├── parser.py           # Strips timestamps from raw transcript text
-│   ├── tokenizer.py        # Splits cleaned text into words
-│   ├── orp.py               # Calculates each word's Optimal Recognition Point
-│   ├── timing.py           # Converts WPM into a per-word delay
-│   ├── reader.py           # ReaderSession — ties the above together
-│   ├── transcript_store.py # In-memory store + persistence for transcripts/spaces
-│   ├── settings_store.py   # In-memory store + persistence for app settings
-│   └── storage.py          # Low-level JSON read/write
+│ └── fonts/ # Bundled Fredoka & Quicksand font files
+├── core/ # Pure reading engine — no GUI dependencies
+│ ├── models.py # The Transcript data model
+│ ├── parser.py # Strips timestamps from raw transcript text
+│ ├── tokenizer.py # Splits cleaned text into words
+│ ├── orp.py # Calculates each word's Optimal Recognition Point
+│ ├── timing.py # Converts WPM into a per-word delay
+│ ├── reader.py # ReaderSession — ties the above together
+│ ├── transcript_store.py # In-memory store + persistence for transcripts/spaces
+│ ├── settings_store.py # In-memory store + persistence for app settings
+│ └── storage.py # Low-level JSON read/write
 ├── gui/
-│   ├── app.py               # Main application window
-│   ├── theme.py             # Central design tokens: colors, fonts, theme resolution
-│   ├── icons.py              # Hand-drawn icons (avoids font-glyph rendering issues)
-│   └── components/           # Every individual UI piece — header, canvas, dialogs, etc.
-├── tests/                  # Automated test suite covering core engine modules
-│   ├── test_orp.py
-│   ├── test_parser.py
-│   ├── test_reader.py
-│   ├── test_settings_store.py
-│   ├── test_timing.py
-│   ├── test_tokenizer.py
-│   └── test_transcript_store.py
-├── main.py                   # Entry point
+│ ├── app.py # Main application window
+│ ├── theme.py # Central design tokens: colors, fonts, theme resolution
+│ ├── icons.py # Hand-drawn icons (avoids font-glyph rendering issues)
+│ └── components/ # Every individual UI piece — header, canvas, dialogs, etc.
+├── tests/ # Automated test suite covering core engine modules
+│ ├── test_orp.py
+│ ├── test_parser.py
+│ ├── test_reader.py
+│ ├── test_settings_store.py
+│ ├── test_timing.py
+│ ├── test_tokenizer.py
+│ └── test_transcript_store.py
+├── main.py # Entry point
 └── requirements.txt
 ````
 
@@ -183,8 +270,8 @@ Settings are organized into four tabs:
 - ~~Highlited letter position customization~~
 - ~~Fixed reading-point guide marks~~
 - ~~Theme-aware color sync for reading panel~~
-- Improvements to core engine
-- Fixing installation guide for Mac
+- ~~Improvements to core engine~~
+- ~~Fixing installation guide for Mac and Linux~~
 
 
 ## License
@@ -199,3 +286,4 @@ Settings are organized into four tabs:
   [SIL Open Font License](https://openfontlicense.org/)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom
   Schimansky
+
