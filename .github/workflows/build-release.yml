@@ -1,0 +1,102 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a draft GitHub release with the built assets'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate macOS .icns from app.png
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir icon.iconset
+          sips -z 16 16     assets/icons/app.png --out icon.iconset/icon_16x16.png
+          sips -z 32 32     assets/icons/app.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     assets/icons/app.png --out icon.iconset/icon_32x32.png
+          sips -z 64 64     assets/icons/app.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   assets/icons/app.png --out icon.iconset/icon_128x128.png
+          sips -z 256 256   assets/icons/app.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   assets/icons/app.png --out icon.iconset/icon_256x256.png
+          sips -z 512 512   assets/icons/app.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   assets/icons/app.png --out icon.iconset/icon_512x512.png
+          sips -z 1024 1024 assets/icons/app.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o assets/icons/app.icns
+
+      - name: Build with PyInstaller
+        run: pyinstaller RSVPReader.spec --noconfirm --clean
+
+      - name: Package (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/RSVPReader -DestinationPath RSVPReader-${{ github.ref_name }}-windows.zip
+
+      - name: Package (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent RSVPReader.app ../RSVPReader-${{ github.ref_name }}-macos.zip
+
+      - name: Package (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          cd dist
+          tar czf ../RSVPReader-${{ github.ref_name }}-linux.tar.gz RSVPReader
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RSVPReader-${{ matrix.platform }}
+          path: RSVPReader-${{ github.ref_name }}-${{ matrix.platform }}.*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: artifacts/**/RSVPReader-*

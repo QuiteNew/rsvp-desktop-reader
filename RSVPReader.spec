@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
+
 from PyInstaller.utils.hooks import collect_data_files
 
 # customtkinter ships its own non-Python data files (theme JSON, bundled
@@ -47,6 +49,20 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# Icon format is platform-specific: Windows wants a multi-resolution
+# .ico, macOS wants .icns (built on the runner from assets/icons/app.png
+# by .github/workflows/build-release.yml's macOS job -- see that file),
+# and on Linux this EXE-level icon= is simply ignored by PyInstaller,
+# since Linux has no equivalent embedded-executable-icon mechanism; the
+# actual window icon there is set at runtime instead, cross-platform,
+# by gui/theme.py's apply_app_icon().
+if sys.platform == "win32":
+    _icon = ['assets/icons/app.ico']
+elif sys.platform == "darwin":
+    _icon = ['assets/icons/app.icns']
+else:
+    _icon = None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -63,7 +79,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets/icons/app.ico'],
+    icon=_icon,
 )
 coll = COLLECT(
     exe,
@@ -74,3 +90,16 @@ coll = COLLECT(
     upx_exclude=[],
     name='RSVPReader',
 )
+
+# macOS only: wraps the onedir COLLECT output in a proper RSVPReader.app
+# bundle, so the result behaves like a normal Mac application (Finder
+# icon, Dock icon, double-clickable) rather than the Windows/Linux-style
+# "folder full of files plus a loose binary" layout. This block has no
+# effect on Windows/Linux -- BUNDLE() only does anything on macOS.
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name='RSVPReader.app',
+        icon='assets/icons/app.icns',
+        bundle_identifier='com.rsvpreader.app',
+    )
