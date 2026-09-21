@@ -1,5 +1,5 @@
 import pytest
-from core.orp import get_orp_index, split_at_orp, ORPWord
+from core.orp import get_orp_index, get_orp_index_for_length, split_at_orp, ORPWord
 
 
 # ---- get_orp_index: exact boundary testing ----
@@ -42,6 +42,56 @@ def test_orp_index_very_long_word_still_returns_4():
     # Confirms the top band has no further ceiling — everything from
     # 14 letters upward lands on the same final index.
     assert get_orp_index("a" * 50) == 4
+
+
+# ---- get_orp_index_for_length: the same thresholds, but banding a
+# length directly rather than a word. Pulled out of get_orp_index() so
+# core/timing.py's effective_pacing_length() (hyphen-aware pacing) can
+# band a padded length without duplicating these boundaries -- see its
+# docstring. Boundary-for-boundary identical to the get_orp_index()
+# tests above, just called a different way. ----
+
+def test_orp_index_for_length_0_returns_0():
+    assert get_orp_index_for_length(0) == 0
+
+def test_orp_index_for_length_1_returns_0():
+    assert get_orp_index_for_length(1) == 0
+
+def test_orp_index_for_length_5_returns_1():
+    assert get_orp_index_for_length(5) == 1
+
+def test_orp_index_for_length_6_returns_2():
+    assert get_orp_index_for_length(6) == 2
+
+def test_orp_index_for_length_9_returns_2():
+    assert get_orp_index_for_length(9) == 2
+
+def test_orp_index_for_length_10_returns_3():
+    assert get_orp_index_for_length(10) == 3
+
+def test_orp_index_for_length_13_returns_3():
+    assert get_orp_index_for_length(13) == 3
+
+def test_orp_index_for_length_14_returns_4():
+    assert get_orp_index_for_length(14) == 4
+
+def test_orp_index_for_length_beyond_14_still_returns_4():
+    assert get_orp_index_for_length(50) == 4
+
+def test_orp_index_for_length_accepts_a_padded_length_beyond_any_real_word():
+    # This is exactly how core/timing.py's effective_pacing_length() uses
+    # it -- with a length that's deliberately larger than the word's own
+    # len(), once hyphen bonuses are added in.
+    assert get_orp_index_for_length(15) == 4
+
+
+def test_get_orp_index_still_agrees_with_get_orp_index_for_length():
+    # get_orp_index() is now a thin wrapper (get_orp_index_for_length(len(word)))
+    # -- this confirms the refactor changed nothing about its own behavior
+    # for a representative spread of real and synthetic words.
+    words = ["", "a", "to", "about", "friendship", "understanding", "a" * 30]
+    for word in words:
+        assert get_orp_index(word) == get_orp_index_for_length(len(word))
 
 
 # ---- split_at_orp: before/focus/after on real words ----

@@ -193,6 +193,10 @@ class ReaderDisplay(ctk.CTkFrame):
         if self.session:
             self.session.set_wpm(wpm)
 
+    def set_length_pacing_enabled(self, enabled: bool) -> None:
+        if self.session:
+            self.session.set_length_pacing_enabled(enabled)
+
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self.configure(fg_color=background_color)
         self.word_row.configure(fg_color=background_color)

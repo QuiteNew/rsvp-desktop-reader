@@ -1,41 +1,49 @@
 from core.parser import clean_transcript
 from core.tokenizer import tokenize
-from core.orp import split_at_orp, ORPWord
-from core.timing import wpm_to_delay_ms, apply_pacing_multiplier
+from core.orp import split_at_orp, get_orp_index_for_length, ORPWord
+from core.timing import wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier, effective_pacing_length
 from core.punctuation import split_punctuation, classify_pacing
 
 
 class ReaderSession:
     """Holds a tokenized, ORP-split transcript and tracks playback position."""
 
-    def __init__(self, raw_text: str, wpm: int = 300, start_index: int = 0):
+    def __init__(
+        self, raw_text: str, wpm: int = 300, start_index: int = 0,
+        length_pacing_enabled: bool = False,
+    ):
         clean = clean_transcript(raw_text)
         words = tokenize(clean)
 
-        # Built together, once, in this same loop -- self._paces stays in
-        # step with self.frames by construction (both are fixed-length
-        # and never reordered afterward; only self.index ever moves), so
-        # there's no risk of the two drifting out of sync later.
+        # Built together, once, in this same loop -- self._paces and
+        # self._length_bands stay in step with self.frames by
+        # construction (all three are fixed-length and never reordered
+        # afterward; only self.index ever moves), so there's no risk of
+        # any of them drifting out of sync later.
         self.frames: list[ORPWord] = []
         self._paces: list[str] = []
+        self._length_bands: list[int] = []
         for word in words:
             leading, core, trailing = split_punctuation(word)
             # A token that's entirely punctuation (e.g. a standalone
-            # "--") has no core to split an ORP letter out of -- fall
-            # back to treating the whole token as the ORP subject
-            # rather than crashing on split_at_orp(""). Rare in a real
-            # transcript, but not impossible, so this has to degrade
-            # gracefully, not raise.
+            # "--") has no core to split an ORP letter -- or measure a
+            # length band -- around. Falling back to the whole raw
+            # token for both, rather than crashing on split_at_orp(""),
+            # mirrors the same "core or the whole word" choice
+            # split_at_orp() itself needs. Rare in a real transcript,
+            # but not impossible, so this has to degrade gracefully,
+            # not raise.
+            orp_subject = core if core else word
+            frame = split_at_orp(orp_subject)
             if core:
-                frame = split_at_orp(core)
                 frame = ORPWord(before=leading + frame.before, focus=frame.focus, after=frame.after + trailing)
-            else:
-                frame = split_at_orp(word)
             self.frames.append(frame)
             self._paces.append(classify_pacing(leading + trailing))
+            self._length_bands.append(get_orp_index_for_length(effective_pacing_length(orp_subject)))
 
         self.wpm = wpm
         self.index = max(0, min(start_index, len(self.frames)))
+        self.length_pacing_enabled = length_pacing_enabled
 
     @property
     def total_words(self) -> int:
@@ -54,7 +62,19 @@ class ReaderSession:
         base = wpm_to_delay_ms(self.wpm)
         if self.is_finished:
             return base
-        return apply_pacing_multiplier(base, self._paces[self.index])
+        punctuation_delay = apply_pacing_multiplier(base, self._paces[self.index])
+        if not self.length_pacing_enabled:
+            return punctuation_delay
+        # Only the larger of the two pauses applies -- they don't stack.
+        # A word that's both long and ends a sentence doesn't get an
+        # unusually long compounded pause; it just gets whichever single
+        # reason to slow down is bigger. Comparing the two already-
+        # applied delays (rather than the two multipliers directly) is
+        # equivalent here, since both start from the same base and
+        # round() is monotonic -- the larger resulting delay always
+        # comes from the larger multiplier.
+        length_delay = apply_length_multiplier(base, self._length_bands[self.index])
+        return max(punctuation_delay, length_delay)
 
     def advance(self) -> None:
         if not self.is_finished:
@@ -71,3 +91,6 @@ class ReaderSession:
 
     def set_wpm(self, new_wpm: int) -> None:
         self.wpm = new_wpm
+
+    def set_length_pacing_enabled(self, enabled: bool) -> None:
+        self.length_pacing_enabled = enabled

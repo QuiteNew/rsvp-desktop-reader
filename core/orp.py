@@ -9,10 +9,16 @@ class ORPWord:
     after: str
 
 
-def get_orp_index(word: str) -> int:
-    """Return the index of a word's Optimal Recognition Point letter,
-    based on word length (standard RSVP length-banding heuristic)."""
-    length = len(word)
+def get_orp_index_for_length(length: int) -> int:
+    """The standard RSVP length-banding heuristic, taking a character
+    count directly rather than a word. Pulled out of get_orp_index()
+    below so a caller that needs to band a length OTHER than a word's
+    literal len() -- core/timing.py's effective_pacing_length(), which
+    pads hyphenated compound words with extra effective length before
+    banding them for pacing purposes -- can reuse these exact
+    thresholds without duplicating them, and without this having any
+    effect on which letter get_orp_index() picks for the ORP
+    highlight."""
     if length <= 1:
         return 0
     elif length <= 5:
@@ -23,6 +29,12 @@ def get_orp_index(word: str) -> int:
         return 3
     else:
         return 4
+
+
+def get_orp_index(word: str) -> int:
+    """Return the index of a word's Optimal Recognition Point letter,
+    based on word length (standard RSVP length-banding heuristic)."""
+    return get_orp_index_for_length(len(word))
 
 
 def split_at_orp(word: str) -> ORPWord:

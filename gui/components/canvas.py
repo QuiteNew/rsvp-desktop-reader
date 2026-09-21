@@ -24,6 +24,7 @@ class Canvas(ctk.CTkFrame):
         guide_mark_thickness_px: int = 2,
         guide_mark_length_percent: int = 35,
         guide_mark_color: str = "#3B2E27",
+        length_pacing_enabled: bool = False,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -39,6 +40,7 @@ class Canvas(ctk.CTkFrame):
         self._guide_mark_thickness_px = guide_mark_thickness_px
         self._guide_mark_length_percent = guide_mark_length_percent
         self._guide_mark_color = guide_mark_color
+        self._length_pacing_enabled = length_pacing_enabled
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -98,7 +100,10 @@ class Canvas(ctk.CTkFrame):
             self.reader_display.set_colors(transcript.font_color, transcript.highlight_color, transcript.background_color)
             self.reader_display.set_font_size(transcript.font_size)
             self.reader_display.load_session(
-                ReaderSession(transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position),
+                ReaderSession(
+                    transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position,
+                    length_pacing_enabled=self._length_pacing_enabled,
+                ),
                 start_paused=transcript.is_paused,
             )
         else:
@@ -197,6 +202,12 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.set_pause_on_skip(enabled)
 
+    def set_length_pacing_enabled(self, enabled: bool) -> None:
+        self._length_pacing_enabled = enabled
+        self.reader_display.set_length_pacing_enabled(enabled)
+        if self._detached_window:
+            self._detached_window.set_length_pacing_enabled(enabled)
+
     def save_pending_draft(self) -> None:
         self._capture_current_draft()
 
@@ -283,6 +294,7 @@ class Canvas(ctk.CTkFrame):
             guide_mark_thickness_px=self._guide_mark_thickness_px,
             guide_mark_length_percent=self._guide_mark_length_percent,
             guide_mark_color=self._guide_mark_color,
+            length_pacing_enabled=self._length_pacing_enabled,
         )
         self._show_detached_placeholder()
 

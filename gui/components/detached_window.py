@@ -15,6 +15,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
+        length_pacing_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -37,6 +38,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.on_stopped_changed = on_stopped_changed
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
+        self.length_pacing_enabled = length_pacing_enabled
 
         self.title(transcript.title)
         apply_app_icon(self)
@@ -96,6 +98,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_pause_on_skip(self, enabled: bool) -> None:
         self.pause_on_skip = enabled
 
+    def set_length_pacing_enabled(self, enabled: bool) -> None:
+        self.length_pacing_enabled = enabled
+        self.reader_display.set_length_pacing_enabled(enabled)
+
     def _render_current_state(self) -> None:
         self.toolbar.pack_forget()
         self.input_view.pack_forget()
@@ -111,7 +117,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self.reader_display.set_font_size(self.transcript.font_size)
             self.reader_display.pack(fill="both", expand=True)
             self.reader_display.load_session(
-                ReaderSession(self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position),
+                ReaderSession(
+                    self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position,
+                    length_pacing_enabled=self.length_pacing_enabled,
+                ),
                 start_paused=self.transcript.is_paused,
             )
         else:

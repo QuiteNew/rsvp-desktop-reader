@@ -165,6 +165,103 @@ def test_current_delay_ms_for_all_punctuation_token_still_paces_correctly():
     assert session.current_delay_ms() == 500
 
 
+# ---- current_delay_ms: length-aware pacing (long words) ----
+
+def test_length_pacing_disabled_by_default():
+    session = ReaderSession("responsibility here", wpm=300)
+    assert session.current_delay_ms() == 200  # no slowdown even for a 14-letter word
+
+def test_length_pacing_enabled_slows_a_long_word():
+    session = ReaderSession("responsibility here", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 340  # base 200 * 1.7 (length band 4)
+
+def test_length_pacing_enabled_leaves_a_short_word_unaffected():
+    session = ReaderSession("go now", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 200
+
+def test_length_pacing_enabled_applies_medium_band():
+    session = ReaderSession("reading now", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 240  # base 200 * 1.2 (length band 2, "reading" is 7 letters)
+
+def test_length_pacing_takes_the_larger_multiplier_not_both():
+    """Design decision: when a word is both long and ends a sentence or
+    clause, only the larger of the two pauses applies -- they don't
+    stack. "friendship," is length band 3 (1.45x = 290ms) and ends in a
+    clause mark (1.5x = 300ms); the clause pause wins since it's bigger,
+    not their product."""
+    session = ReaderSession("friendship, right", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 300
+
+def test_length_pacing_sentence_pause_still_wins_over_a_very_long_word():
+    # "responsibility." is length band 4 (1.7x = 340ms) and ends a
+    # sentence (2.5x = 500ms) -- the sentence pause wins.
+    session = ReaderSession("responsibility. Right", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 500
+
+def test_length_pacing_can_now_beat_a_clause_pause_for_a_very_long_word():
+    # Before the general multiplier raise, VERY_LONG_WORD_MULTIPLIER and
+    # CLAUSE_PAUSE_MULTIPLIER both happened to be 1.5x, so this exact
+    # word used to be a tie. Now that VERY_LONG_WORD_MULTIPLIER is 1.7x,
+    # "responsibility" (length band 4, 1.7x = 340ms) genuinely outpaces
+    # its own trailing clause mark (1.5x = 300ms) -- confirms max() picks
+    # the length pause here rather than staying locked to punctuation.
+    session = ReaderSession("responsibility, right", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 340
+
+def test_hyphen_bonus_can_tip_length_pacing_past_a_clause_pause():
+    # "well-known," on its own length (10 letters) would land in band 3
+    # (1.45x = 290ms) -- LESS than its own trailing comma's clause pause
+    # (1.5x = 300ms), so punctuation would normally win. The hyphen bonus
+    # pushes its effective length to 14, into band 4 (1.7x = 340ms),
+    # which flips the outcome: the word's own length now wins instead.
+    # This is the concrete case the length-pacing tuning was requested
+    # for -- a hyphenated compound getting more pause than its raw
+    # character count alone would have earned it.
+    session = ReaderSession("well-known, right", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 340
+
+def test_length_pacing_live_toggle_via_set_length_pacing_enabled():
+    session = ReaderSession("responsibility here", wpm=300)
+    assert session.current_delay_ms() == 200
+    session.set_length_pacing_enabled(True)
+    assert session.current_delay_ms() == 340
+
+def test_length_pacing_for_finished_session_returns_unmultiplied_base():
+    session = ReaderSession("responsibility.", wpm=300, length_pacing_enabled=True)
+    session.advance()
+    assert session.is_finished is True
+    assert session.current_delay_ms() == 200
+
+
+# ---- current_delay_ms: hyphen-aware length pacing ----
+
+def test_hyphenated_word_reaches_a_higher_band_than_its_raw_length_alone():
+    # "sub-terrain" is 11 characters including the hyphen -- on its own
+    # that's band 3 (1.45x = 290ms). The hyphen bonus (+4 effective
+    # characters) pushes it to an effective length of 15, into band 4
+    # (1.7x = 340ms).
+    session = ReaderSession("sub-terrain here", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 340
+
+def test_plain_word_of_the_same_raw_length_does_not_get_the_hyphen_bonus():
+    # "comfortable" is also 11 characters, but has no hyphen -- it stays
+    # in band 3 rather than jumping to band 4, confirming the bonus is
+    # specific to hyphenated words, not a blanket change to band 3.
+    session = ReaderSession("comfortable here", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 290
+
+def test_multiple_hyphens_each_add_their_own_bonus():
+    # "step-by-step" has two internal hyphens -- both count, taking its
+    # effective length (12 + 2*4 = 20) well past band 4's 14-letter
+    # floor, same top multiplier as a single hyphen would already reach.
+    session = ReaderSession("step-by-step here", wpm=300, length_pacing_enabled=True)
+    assert session.current_delay_ms() == 340
+
+def test_hyphen_bonus_does_not_apply_when_length_pacing_is_disabled():
+    session = ReaderSession("sub-terrain here", wpm=300)
+    assert session.current_delay_ms() == 200
+
+
 # ---- advance ----
 
 def test_advance_moves_to_next_word():

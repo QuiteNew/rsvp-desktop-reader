@@ -40,6 +40,9 @@ class AppSettings:
     freeform_resize_enabled: bool = False
     skip_word_count: int = 10
     pause_on_skip: bool = False
+    length_pacing_enabled: bool = False  # global, not per-transcript -- see core/reader.py's
+                                          # ReaderSession.length_pacing_enabled; slows down long
+                                          # words by length band, independent of punctuation pacing
     appearance_mode: str = "light"
     guide_mark_horizontal_enabled: bool = False  # global, not per-transcript — fixed-style crosshair ticks, on/off only
     guide_mark_thickness_px: int = 2  # global, not per-transcript — width of the vertical guide marks
@@ -185,6 +188,10 @@ class SettingsStore:
         return self._settings.pause_on_skip
 
     @property
+    def length_pacing_enabled(self) -> bool:
+        return self._settings.length_pacing_enabled
+
+    @property
     def appearance_mode(self) -> str:
         return self._settings.appearance_mode
 
@@ -261,6 +268,10 @@ class SettingsStore:
         behind an unrelated slider drag that happened moments earlier."""
         self._settings.skip_word_count = word_count
         self._save_throttled()
+
+    def set_length_pacing_enabled(self, enabled: bool) -> None:
+        self._settings.length_pacing_enabled = enabled
+        self._save()
 
     def set_appearance_mode(self, mode: str) -> None:
         self._settings.appearance_mode = mode

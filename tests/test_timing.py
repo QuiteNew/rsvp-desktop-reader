@@ -1,5 +1,8 @@
 import pytest
-from core.timing import wpm_to_delay_ms, apply_pacing_multiplier
+from core.timing import (
+    wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier,
+    effective_pacing_length, HYPHEN_PACING_BONUS_CHARS,
+)
 from core.punctuation import PACE_NONE, PACE_CLAUSE, PACE_SENTENCE
 
 
@@ -78,3 +81,75 @@ def test_apply_pacing_multiplier_unrecognized_pace_falls_back_to_base_delay():
     # treated as "no extra pause" rather than raising, so an
     # unrecognized or future pacing value can't crash playback.
     assert apply_pacing_multiplier(200, "not-a-real-pace") == 200
+
+
+# ---- apply_length_multiplier: bands 0 and 1 leave the delay unchanged ----
+
+def test_length_band_0_returns_base_delay_unchanged():
+    assert apply_length_multiplier(200, 0) == 200
+
+def test_length_band_1_returns_base_delay_unchanged():
+    assert apply_length_multiplier(200, 1) == 200
+
+
+# ---- apply_length_multiplier: the three active bands ----
+# Values updated alongside MEDIUM/LONG/VERY_LONG_WORD_MULTIPLIER's
+# general raise (1.15/1.3/1.5 -> 1.2/1.45/1.7) -- see core/timing.py.
+
+def test_length_band_2_multiplies_by_1_2():
+    assert apply_length_multiplier(200, 2) == 240
+
+def test_length_band_3_multiplies_by_1_45():
+    assert apply_length_multiplier(200, 3) == 290
+
+def test_length_band_4_multiplies_by_1_7():
+    assert apply_length_multiplier(200, 4) == 340
+
+def test_length_multiplier_increases_with_band():
+    base = 200
+    assert (
+        apply_length_multiplier(base, 1)
+        < apply_length_multiplier(base, 2)
+        < apply_length_multiplier(base, 3)
+        < apply_length_multiplier(base, 4)
+    )
+
+
+# ---- apply_length_multiplier: bands at or above 4 all get the top multiplier ----
+
+def test_length_band_beyond_4_still_gets_top_multiplier():
+    # get_orp_index() never actually returns anything above 4 today, but
+    # this is checked with >= rather than a fixed upper bound specifically
+    # so a value beyond that doesn't silently fall through to "no extra
+    # pause" -- see the docstring.
+    assert apply_length_multiplier(200, 5) == 340
+
+
+# ---- apply_length_multiplier: unrecognized/out-of-range bands degrade safely ----
+
+def test_length_negative_band_falls_back_to_base_delay():
+    assert apply_length_multiplier(200, -1) == 200
+
+
+# ---- effective_pacing_length: hyphen-aware effective length for pacing ----
+
+def test_effective_pacing_length_matches_len_for_a_plain_word():
+    assert effective_pacing_length("understanding") == len("understanding")
+
+def test_effective_pacing_length_for_empty_string_is_zero():
+    assert effective_pacing_length("") == 0
+
+def test_effective_pacing_length_adds_bonus_for_one_internal_hyphen():
+    assert effective_pacing_length("sub-terrain") == len("sub-terrain") + HYPHEN_PACING_BONUS_CHARS
+
+def test_effective_pacing_length_adds_bonus_per_hyphen_for_multiple_hyphens():
+    # "step-by-step" has two internal hyphens -- each one counts, so this
+    # gets two bonuses, not one.
+    assert effective_pacing_length("step-by-step") == len("step-by-step") + 2 * HYPHEN_PACING_BONUS_CHARS
+
+def test_effective_pacing_length_is_strictly_greater_than_len_when_hyphenated():
+    # A structural guarantee: whatever HYPHEN_PACING_BONUS_CHARS is tuned
+    # to later, a hyphenated word's effective length must never come out
+    # equal to or below its own raw length.
+    word = "well-known"
+    assert effective_pacing_length(word) > len(word)

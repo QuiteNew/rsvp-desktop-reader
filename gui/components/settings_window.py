@@ -29,6 +29,7 @@ class SettingsWindow(ctk.CTkToplevel):
         default_wpm, default_font_color, default_highlight_color, default_background_color,
         default_font_size, font_size_step, highlight_offset_px,
         skip_word_count, pause_on_skip,
+        length_pacing_enabled,
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
         guide_mark_length_percent,
@@ -117,8 +118,8 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_defaults_tab(
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
-            skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px,
-            guide_mark_length_percent, guide_mark_color,
+            skip_word_count, pause_on_skip, length_pacing_enabled, guide_mark_horizontal_enabled,
+            guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -309,7 +310,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -437,6 +438,15 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
+        self.length_pacing_switch = self._styled_switch(scroll, "Slow down for long words")
+        (self.length_pacing_switch.select() if length_pacing_enabled else self.length_pacing_switch.deselect())
+        self.length_pacing_switch.pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(
+            scroll,
+            text="Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies -- they don't stack. Applies globally, takes effect after clicking Apply.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript and all future ones",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
@@ -542,6 +552,8 @@ class SettingsWindow(ctk.CTkToplevel):
         self.guide_mark_color_swatch.configure(fg_color=original.guide_mark_color)
 
         (self.guide_mark_horizontal_switch.select() if original.guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
+
+        (self.length_pacing_switch.select() if original.length_pacing_enabled else self.length_pacing_switch.deselect())
 
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
@@ -732,6 +744,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["skip_word_count"] = int(self.skip_word_count_slider.get())
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["guide_mark_horizontal_enabled"] = bool(self.guide_mark_horizontal_switch.get())
+        values["length_pacing_enabled"] = bool(self.length_pacing_switch.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory
