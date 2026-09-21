@@ -45,6 +45,7 @@ class RSVPApp(ctk.CTk):
         self._current_transcript = None
         self._drag_start_value = None
         self._pending_value = None
+        self._settings_window = None  # set whenever Settings is open -- see _open_settings_window()
 
         self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
@@ -314,7 +315,15 @@ class RSVPApp(ctk.CTk):
         self.list_body.render_transcripts(self.store.transcripts_in_current_space)
 
     def _open_settings_window(self) -> None:
-        SettingsWindow(
+        # Stored on self, not just constructed inline, because the
+        # Export/Import handlers below need a live reference to it: any
+        # dialog THEY open (an error, the Replace/Expand/Cancel choice)
+        # has to be parented to THIS window, not to the main app window,
+        # or Windows has no ordering guarantee between the new dialog and
+        # Settings, and the new one can end up drawn behind it -- see the
+        # docstrings on _handle_export_requested() and
+        # _handle_import_requested() below.
+        self._settings_window = SettingsWindow(
             self,
             window_width=self.settings_store.window_width,
             window_height=self.settings_store.window_height,
@@ -401,34 +410,41 @@ class RSVPApp(ctk.CTk):
         (see core/data_bundle.py) and writes it to the path the user
         picked in the Storage tab's save dialog. File I/O deliberately
         lives here, not in core/data_bundle.py -- build_bundle() itself
-        stays pure/path-free so it's testable on its own."""
+        stays pure/path-free so it's testable on its own.
+
+        Any dialog shown here is parented to self._settings_window, not
+        self -- this was triggered from inside Settings, which is the
+        window actually on screen, so a dialog parented to the (possibly
+        hidden-behind-Settings) main window instead has no guaranteed
+        stacking order above it."""
         bundle = data_bundle.build_bundle(self.store, self.settings_store)
         try:
             Path(path).write_text(json.dumps(bundle, indent=2), encoding="utf-8")
         except OSError as e:
-            MessageDialog(self, "Export failed", f"Couldn't write the export file:\n\n{e}")
+            MessageDialog(self._settings_window, "Export failed", f"Couldn't write the export file:\n\n{e}")
             return
-        MessageDialog(self, "Export complete", f"Your data was exported to:\n\n{path}")
+        MessageDialog(self._settings_window, "Export complete", f"Your data was exported to:\n\n{path}")
 
     def _handle_import_requested(self, path: str) -> None:
         """Reads and validates the chosen file, then -- only if it's a
         genuinely valid bundle -- hands the user a Replace/Expand/Cancel
         choice. Nothing is applied yet at this point; see
-        _apply_import()."""
+        _apply_import(). See _handle_export_requested()'s docstring for
+        why every dialog here is parented to self._settings_window."""
         try:
             text = Path(path).read_text(encoding="utf-8")
         except OSError as e:
-            MessageDialog(self, "Import failed", f"Couldn't read that file:\n\n{e}")
+            MessageDialog(self._settings_window, "Import failed", f"Couldn't read that file:\n\n{e}")
             return
 
         try:
             bundle = data_bundle.parse_bundle(text)
         except data_bundle.BundleFormatError as e:
-            MessageDialog(self, "Import failed", str(e))
+            MessageDialog(self._settings_window, "Import failed", str(e))
             return
 
         ImportConfirmDialog(
-            self,
+            self._settings_window,
             on_replace=lambda: self._apply_import(bundle, expand=False),
             on_expand=lambda: self._apply_import(bundle, expand=True),
         )
@@ -448,7 +464,7 @@ class RSVPApp(ctk.CTk):
             data_bundle.apply_bundle_replace(bundle, self.store, self.settings_store)
 
         MessageDialog(
-            self, "Import complete",
+            self._settings_window, "Import complete",
             "Your data was imported. RSVP Reader will now close -- reopen it to see the change.",
             on_close=self._handle_close,
         )

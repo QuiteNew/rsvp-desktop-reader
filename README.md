@@ -220,7 +220,8 @@ rsvp-desktop-reader/
 │ ├── reader.py # ReaderSession — ties the above together
 │ ├── transcript_store.py # In-memory store + persistence for transcripts/spaces
 │ ├── settings_store.py # In-memory store + persistence for app settings
-│ └── storage.py # Low-level JSON read/write
+│ ├── storage.py # Low-level JSON read/write
+│ └── data_bundle.py # Cross-machine export/import: builds and applies a full-app data bundle
 ├── gui/
 │ ├── app.py # Main application window
 │ ├── theme.py # Central design tokens: colors, fonts, theme resolution
@@ -256,8 +257,10 @@ Settings are organized into four tabs:
   reading too)
 - **Layout** - window size, sidebar width, bottom control-band height, and
   a free-form drag-to-resize toggle
-- **Storage** - where your transcript data is saved on disk, changeable
-  at any time
+- **Storage** - where your transcript data is saved on disk, changeable at
+  any time; also where you can export everything (transcripts, spaces, and
+  settings) to a file, or import one from another machine, choosing whether
+  to replace what's here or add to it
 - **Appearance** - Light / Dark / System theme (takes effect on next
   launch, not live)
 
@@ -272,9 +275,13 @@ Settings are organized into four tabs:
 - ~~Theme-aware color sync for reading panel~~
 - ~~Improvements to core engine~~
 - ~~Fixing installation guide for Mac and Linux~~
-- Packaging and distribution (.exe or .app)
+- ~~Packaging and distribution (.exe(Windows) and.tz(Linux))~~ *MacOS still not finished*
 - ~~Creating a custom icon~~
-- Cross-machine continuity 
+- ~~Cross-machine continuity~~ 
+- Improvements to reading engine depth
+- Data insertion beyond copy pasting 
+- Session stats
+- Quality of life polish
 
 
 ## License
@@ -289,4 +296,3 @@ Settings are organized into four tabs:
   [SIL Open Font License](https://openfontlicense.org/)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom
   Schimansky
-

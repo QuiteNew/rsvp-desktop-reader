@@ -200,7 +200,22 @@ class SettingsWindow(ctk.CTkToplevel):
         return result
 
     def _regrab_if_still_open(self) -> None:
-        if self.winfo_exists():
+        # Only re-grab if nothing else currently holds the grab. Without
+        # this check, this races any dialog Export/Import opens right
+        # after the native file dialog closes (the success/failure
+        # MessageDialog on export, ImportConfirmDialog on a valid
+        # import): that new dialog sets its own grab ~10ms after it's
+        # constructed, but THIS callback was already scheduled 50ms
+        # earlier -- at the moment the native dialog closed, before the
+        # new dialog even existed. Both fire; this one fires second and
+        # silently steals the grab back. The new dialog stays visually
+        # on top (nothing here affects stacking, which is a separate
+        # concern -- see gui/app.py's _settings_window handling) but
+        # stops receiving clicks, since Tk only delivers input to
+        # whichever window currently holds the grab. Confirmed as the
+        # actual cause via a real test: Replace/Expand looked front-most
+        # but didn't respond.
+        if self.winfo_exists() and self.grab_current() is None:
             self.grab_set()
 
     def _set_entry_value(self, entry: ctk.CTkEntry, value) -> None:
