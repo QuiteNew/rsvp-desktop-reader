@@ -122,6 +122,49 @@ def test_current_delay_ms_updates_live_after_set_wpm():
     assert session.current_delay_ms() == 100  # reflects the new speed immediately, not cached
 
 
+# ---- current_delay_ms: punctuation-aware pacing ----
+
+def test_current_delay_ms_applies_clause_pause_after_comma():
+    session = ReaderSession("wait, go", wpm=300)
+    # base delay is 200ms; "wait," ends in a clause mark -> 200 * 1.5
+    assert session.current_delay_ms() == 300
+
+def test_current_delay_ms_applies_sentence_pause_after_period():
+    session = ReaderSession("Stop. Go", wpm=300)
+    # base delay is 200ms; "Stop." ends in a sentence mark -> 200 * 2.5
+    assert session.current_delay_ms() == 500
+
+def test_current_delay_ms_pace_tracks_position_as_session_advances():
+    # self._paces is built once, alongside self.frames, and indexed by
+    # self.index the same way -- this walks all three words to confirm
+    # the pause actually follows the right word as playback advances,
+    # not just at a single fixed index.
+    session = ReaderSession("Wait, go now.", wpm=300)
+    delays = []
+    while not session.is_finished:
+        delays.append(session.current_delay_ms())
+        session.advance()
+    assert delays == [300, 200, 500]  # clause, none, sentence
+
+def test_current_delay_ms_for_finished_session_returns_unmultiplied_base():
+    # is_finished short-circuits to the flat base delay -- even though
+    # the last word read ("Hi.") ends a sentence, a finished session
+    # isn't pausing on any word anymore.
+    session = ReaderSession("Hi.", wpm=300)
+    session.advance()
+    assert session.is_finished is True
+    assert session.current_delay_ms() == 200
+
+def test_current_delay_ms_for_all_punctuation_token_still_paces_correctly():
+    # "..." tokenizes as its own word with no alnum core (see
+    # core/punctuation.py and the "core is empty" branch in
+    # ReaderSession.__init__) -- this confirms that branch still
+    # classifies and paces the token correctly rather than silently
+    # treating it as PACE_NONE.
+    session = ReaderSession("Wait ... go", wpm=300, start_index=1)
+    assert session.current_delay_ms() == 500
+
+
 # ---- advance ----
 
 def test_advance_moves_to_next_word():
