@@ -1,6 +1,5 @@
 import customtkinter as ctk
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_HEADING, FONT_BODY, apply_app_icon
-
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 class SpaceSelectionDialog(ctk.CTkToplevel):
     """Popup listing every space — the active one shown at full color and
@@ -17,7 +16,7 @@ class SpaceSelectionDialog(ctk.CTkToplevel):
 
         self.title("Select Space")
         apply_app_icon(self)
-        self.geometry("280x320")
+        center_over_parent(self, 280, 320)
         self.resizable(False, False)
         self.configure(fg_color=HEARTH_PAPER)
         self.on_select = on_select

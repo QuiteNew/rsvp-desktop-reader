@@ -4,7 +4,7 @@ from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
-from gui.theme import apply_app_icon, HEARTH_PAPER
+from gui.theme import apply_app_icon, center_over_parent, HEARTH_PAPER
 
 
 class DetachedTranscriptWindow(ctk.CTkToplevel):
@@ -40,7 +40,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
 
         self.title(transcript.title)
         apply_app_icon(self)
-        self.geometry("500x350")
+        center_over_parent(self, 500, 350)
         self.protocol("WM_DELETE_WINDOW", self.close)
         # Previously unset -- CTkToplevel's own default theme background
         # doesn't match this app's palette, so without this the window
@@ -86,9 +86,6 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _reveal_now(self) -> None:
         self.update_idletasks()
         self.attributes("-alpha", 1)
-
-    def get_draft_text(self) -> str:
-        return self.input_view.get_text()
 
     def get_draft_text(self) -> str:
         return self.input_view.get_text()

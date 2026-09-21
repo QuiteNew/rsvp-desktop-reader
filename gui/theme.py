@@ -8,6 +8,7 @@ That's what lets every component file keep importing plain names like
 HEARTH_PAPER unchanged; this file alone decides what they equal."""
 
 import os
+import sys
 import ctypes
 import tkinter as tk
 
@@ -208,6 +209,59 @@ def set_dpi_awareness() -> None:
             pass
 
 
+def apply_linux_dpi_scaling() -> None:
+    """EXPERIMENTAL, Linux only -- best-effort workaround for a real gap
+    in the installed customtkinter package, not a guess.
+
+    customtkinter's own automatic DPI detection
+    (windows/widgets/scaling/scaling_tracker.py, ScalingTracker.
+    get_window_dpi_scaling()) is a hardcoded no-op on Linux -- its
+    non-Windows/non-macOS branch always `return 1  # DPI awareness on
+    Linux not implemented`, verbatim, straight from the installed
+    package. That means every customtkinter widget and window is always
+    sized as though the display were unscaled, regardless of the
+    desktop's actual scale setting -- confirmed as the cause of windows
+    rendering visibly undersized at 200% Linux display scaling (200%
+    scaling is treated as 100%, so everything draws at half the size it
+    should).
+
+    This works around it using customtkinter's own public manual-scaling
+    hooks (set_window_scaling() / set_widget_scaling()) instead of trying
+    to patch the library. The scale factor itself comes from a plain Tk
+    query -- winfo_fpixels('1i'), pixels-per-inch -- on a throwaway,
+    hidden root window, divided by 96 (the same "96 DPI = 100%" baseline
+    customtkinter's own Windows code already uses, see DPI100pc in that
+    same scaling_tracker.py). Call this once, as early as
+    set_dpi_awareness() -- before register_fonts(), before
+    ctk.set_appearance_mode(), and before the first window is created --
+    since set_window_scaling()/set_widget_scaling() only affect windows
+    created after they're called.
+
+    This has only been verified against one GNOME/X11 setup, where it
+    correctly picked up 200% scaling in testing. winfo_fpixels()'s
+    reliability is known to vary across other Linux desktop environments
+    and session types (Wayland especially) -- this is a genuine attempt
+    at the problem, not a confirmed fix for Linux in general. Wrapped
+    defensively throughout: any failure here just leaves scaling at
+    customtkinter's existing Linux default (always 1), exactly like
+    before this function existed -- never a reason the app fails to
+    launch, and never able to make an already-correct 100% display worse."""
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        probe = tk.Tk()
+        probe.withdraw()
+        dpi = probe.winfo_fpixels("1i")
+        probe.destroy()
+        scale = round(dpi / 96, 2)
+        if scale >= 1.1:  # leave near-100% displays untouched
+            import customtkinter as ctk
+            ctk.set_window_scaling(scale)
+            ctk.set_widget_scaling(scale)
+    except Exception:
+        pass
+
+
 def _set_native_windows_icon(window) -> None:
     """EXPERIMENTAL, not yet confirmed to fix anything -- see the note in
     apply_app_icon() below before touching this.
@@ -334,3 +388,35 @@ def apply_app_icon(window) -> None:
             if _icon_photo_image is None:
                 _icon_photo_image = tk.PhotoImage(file=_ICON_PNG)
             window.iconphoto(True, _icon_photo_image)
+
+
+def center_over_parent(window, width: int, height: int) -> None:
+    """Sets a popup Toplevel's size AND position together, centered over
+    its parent window (window.master) -- both in one geometry() call,
+    since Tk's own width/height introspection on the popup itself isn't
+    reliable until after it's mapped, so we compute the target position
+    from the PARENT's already-known geometry instead.
+
+    Needed because Tk makes no promise about where a new Toplevel with no
+    explicit position lands -- it's entirely up to the window manager.
+    Windows' default has looked fine throughout this project, but testing
+    on Linux (GNOME) confirmed it defaults new Toplevels to the screen's
+    top-left corner instead, regardless of where the parent window
+    actually is on screen. Call this in place of a plain geometry("WxH")
+    call, right where that call already lived in each dialog's __init__.
+
+    Falls back to centering on the whole screen if the parent's geometry
+    can't be read for any reason (e.g. a parent that's still mid
+    construction) -- still strictly better than the top-left default,
+    never worse. Clamps to (0, 0) so a parent sitting very close to a
+    screen edge can't push the popup partially off-screen in the other
+    direction."""
+    try:
+        parent = window.master
+        parent.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - width) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - height) // 2
+    except Exception:
+        x = (window.winfo_screenwidth() - width) // 2
+        y = (window.winfo_screenheight() - height) // 2
+    window.geometry(f"{width}x{height}+{max(x, 0)}+{max(y, 0)}")

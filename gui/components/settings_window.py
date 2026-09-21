@@ -1,3 +1,5 @@
+import sys
+
 import customtkinter as ctk
 from tkinter import colorchooser, filedialog
 
@@ -8,7 +10,7 @@ from core.settings_store import (
     WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE,
     HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
 )
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 
 class SettingsWindow(ctk.CTkToplevel):
@@ -75,7 +77,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.title("Settings")
         apply_app_icon(self)
-        self.geometry("500x650")
+        center_over_parent(self, 500, 650)
         self.minsize(420, 420)
         self.resizable(True, True)
         self.configure(fg_color=HEARTH_PAPER)
@@ -187,7 +189,6 @@ class SettingsWindow(ctk.CTkToplevel):
         self.attributes("-alpha", 1)
 
 
-
     def _open_native_dialog(self, dialog_fn, **kwargs):
         self.grab_release()
         result = dialog_fn(parent=self, **kwargs)
@@ -211,11 +212,29 @@ class SettingsWindow(ctk.CTkToplevel):
     def _redirect_scroll_to_defaults_frame(self, event) -> str:
         """Prevents this slider from changing its own value when the
         mouse wheel scrolls over it — CTkSlider is drawn on a Tkinter
-        Canvas internally, and Canvas widgets on Windows have a built-in
-        default where the wheel adjusts the canvas's own content, unrelated
-        to CustomTkinter. This stops that and manually forwards the same
+        Canvas internally, and Canvas widgets have a built-in default
+        where the wheel adjusts the canvas's own content, unrelated to
+        CustomTkinter. This stops that and manually forwards the same
         scroll to the enclosing CTkScrollableFrame instead, so hovering a
         slider scrolls the page, same as hovering anywhere else in this tab.
+
+        Handles BOTH of CustomTkinter's own two wheel-event conventions,
+        not just one -- confirmed directly from the installed package's
+        ctk_slider.py: CTkSlider binds its own value-changing scroll
+        handler to <MouseWheel> on Windows/macOS, but to <Button-4> and
+        <Button-5> on Linux instead, since X11 reports the wheel as
+        button presses rather than a MouseWheel event at all. An earlier
+        version of this method (and the binding in _styled_slider()
+        below) only ever touched <MouseWheel> -- a harmless no-op on
+        Linux, since nothing was bound there to unbind, which meant
+        CustomTkinter's own Linux scroll-wheel binding kept changing the
+        slider's value underneath us the whole time (confirmed via a real
+        test: scrolling over a slider moved it, instead of scrolling the
+        page). event.num is used for the Linux buttons; event.delta
+        (Windows/macOS) is used otherwise -- same discrimination
+        CustomTkinter's own _mouse_scroll_event() uses internally, so
+        this mirrors an already-proven-safe pattern rather than inventing
+        a new one.
 
         Reaches into CTkScrollableFrame's `_parent_canvas` — there's no
         public API for this in the installed CustomTkinter version. Wrapped
@@ -224,7 +243,13 @@ class SettingsWindow(ctk.CTkToplevel):
         or keep changing the value) — worth telling me if that happens, so
         we can find the correct attribute name for your version."""
         try:
-            self._defaults_scroll._parent_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            canvas = self._defaults_scroll._parent_canvas
+            if event.num == 4:      # Linux scroll up
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:    # Linux scroll down
+                canvas.yview_scroll(1, "units")
+            else:                    # Windows/macOS <MouseWheel>
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
         except AttributeError:
             pass
         return "break"
@@ -235,8 +260,17 @@ class SettingsWindow(ctk.CTkToplevel):
             progress_color=EMBER_GLOW, button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
             fg_color=WARM_LINE, command=command,
         )
-        slider._canvas.unbind("<MouseWheel>")
-        slider._canvas.bind("<MouseWheel>", self._redirect_scroll_to_defaults_frame)
+        # See _redirect_scroll_to_defaults_frame()'s docstring: which
+        # event name to intercept is platform-dependent, matching
+        # whichever one the installed CTkSlider itself actually binds.
+        if "linux" in sys.platform:
+            slider._canvas.unbind("<Button-4>")
+            slider._canvas.unbind("<Button-5>")
+            slider._canvas.bind("<Button-4>", self._redirect_scroll_to_defaults_frame)
+            slider._canvas.bind("<Button-5>", self._redirect_scroll_to_defaults_frame)
+        else:
+            slider._canvas.unbind("<MouseWheel>")
+            slider._canvas.bind("<MouseWheel>", self._redirect_scroll_to_defaults_frame)
         return slider
 
     def _styled_switch(self, master, text, command=None) -> ctk.CTkSwitch:

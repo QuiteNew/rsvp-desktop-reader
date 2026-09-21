@@ -1,6 +1,5 @@
 import customtkinter as ctk
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon
-
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 class AddTranscriptDialog(ctk.CTkToplevel):
     """Popup for creating a new transcript: asks for a title and a space."""
@@ -16,7 +15,7 @@ class AddTranscriptDialog(ctk.CTkToplevel):
 
         self.title("New Transcript")
         apply_app_icon(self)
-        self.geometry("340x240")
+        center_over_parent(self, 340, 240)
         self.resizable(False, False)
         self.configure(fg_color=HEARTH_PAPER)
         self.on_submit = on_submit
@@ -76,14 +75,6 @@ class AddTranscriptDialog(ctk.CTkToplevel):
     def _reveal_now(self) -> None:
         self.update_idletasks()
         self.attributes("-alpha", 1)
-
-    def _handle_create(self) -> None:
-        title = self.title_entry.get().strip()
-        space = self.space_menu.get()
-        if not title:
-            return
-        self.on_submit(title, space)
-        self.destroy()
 
     def _handle_create(self) -> None:
         title = self.title_entry.get().strip()
