@@ -392,18 +392,31 @@ def apply_app_icon(window) -> None:
 
 def center_over_parent(window, width: int, height: int) -> None:
     """Sets a popup Toplevel's size AND position together, centered over
-    its parent window (window.master) -- both in one geometry() call,
-    since Tk's own width/height introspection on the popup itself isn't
-    reliable until after it's mapped, so we compute the target position
-    from the PARENT's already-known geometry instead.
+    its parent (window.master) -- both in one geometry() call, since Tk's
+    own width/height introspection on the popup itself isn't reliable
+    until after it's mapped, so we compute the target position from the
+    PARENT's already-known geometry instead.
 
-    Needed because Tk makes no promise about where a new Toplevel with no
-    explicit position lands -- it's entirely up to the window manager.
-    Windows' default has looked fine throughout this project, but testing
-    on Linux (GNOME) confirmed it defaults new Toplevels to the screen's
-    top-left corner instead, regardless of where the parent window
-    actually is on screen. Call this in place of a plain geometry("WxH")
-    call, right where that call already lived in each dialog's __init__.
+    Uses winfo_rootx()/winfo_rooty() (the parent's absolute position on
+    screen), not winfo_x()/winfo_y() (the parent's position relative to
+    ITS OWN parent container) -- an earlier version of this function used
+    the latter, which happened to work for every dialog opened with the
+    main window itself as master (a top-level window's immediate
+    "parent," for this purpose, is the screen, so the two are identical
+    there) but broke for SpaceSelectionDialog specifically: its master is
+    Spaces, a CTkFrame embedded inside the main window's own layout, not
+    the main window -- confirmed as the cause of it spawning at the
+    screen's far-left edge on both Windows and Linux. winfo_rootx()/
+    winfo_rooty() give the correct absolute position either way.
+
+    Needed in the first place because Tk makes no promise about where a
+    new Toplevel with no explicit position lands -- it's entirely up to
+    the window manager. Windows' default has looked fine throughout this
+    project, but testing on Linux (GNOME) confirmed it defaults new
+    Toplevels to the screen's top-left corner instead, regardless of
+    where the parent window actually is on screen. Call this in place of
+    a plain geometry("WxH") call, right where that call already lived in
+    each dialog's __init__.
 
     Falls back to centering on the whole screen if the parent's geometry
     can't be read for any reason (e.g. a parent that's still mid
@@ -414,8 +427,8 @@ def center_over_parent(window, width: int, height: int) -> None:
     try:
         parent = window.master
         parent.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() - width) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - height) // 2
+        x = parent.winfo_rootx() + (parent.winfo_width() - width) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - height) // 2
     except Exception:
         x = (window.winfo_screenwidth() - width) // 2
         y = (window.winfo_screenheight() - height) // 2

@@ -1,4 +1,5 @@
 import time
+from dataclasses import asdict
 
 from core.models import Transcript
 from core.storage import save_state, load_state, DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
@@ -36,6 +37,58 @@ class TranscriptStore:
 
     def set_data_directory(self, directory: str) -> None:
         self._data_directory = directory
+        self._save()
+
+    def export_state(self) -> dict:
+        """Return this store's full state as a plain dict, in the same
+        shape save_state() writes to data.json -- used to build an export
+        bundle (see core/data_bundle.py)."""
+        return {
+            "next_id": self._next_id,
+            "current_space_index": self._current_space_index,
+            "spaces": list(self._spaces),
+            "transcripts": [asdict(t) for t in self._transcripts],
+        }
+
+    def replace_all(self, state: dict) -> None:
+        """Wholesale-replace every space and transcript with the given
+        state (the "data" section of an import bundle -- see
+        core/data_bundle.py). state must already be normalized by
+        core.storage.parse_data() -- i.e. "transcripts" holds real
+        Transcript objects, not dicts. Used for the "Replace" import
+        mode."""
+        self._spaces = list(state["spaces"]) or [DEFAULT_SPACE]
+        self._current_space_index = min(state["current_space_index"], len(self._spaces) - 1)
+        self._transcripts = list(state["transcripts"])
+        self._next_id = state["next_id"]
+        self._save()
+
+    def merge_all(self, state: dict) -> None:
+        """Add every space and transcript from the given state (already
+        normalized by core.storage.parse_data()) to what's already here,
+        instead of replacing it -- used for the "Expand" import mode.
+
+        Spaces are merged by name: any space in the incoming state that
+        doesn't already exist locally is appended, in the order it
+        appears in state["spaces"]. The current space selection is left
+        untouched -- importing shouldn't change what's currently open.
+
+        Incoming transcripts keep every field except id, which is
+        reassigned starting from this store's own next_id -- the two
+        stores being merged each numbered their transcripts
+        independently from 1, so incoming ids can (and typically will)
+        collide with ids already in use here. Their "space" field is
+        left as-is; it's guaranteed to exist locally as a space name
+        after the merge above runs first."""
+        for space in state["spaces"]:
+            if space not in self._spaces:
+                self._spaces.append(space)
+
+        for t in state["transcripts"]:
+            t.id = self._next_id
+            self._next_id += 1
+            self._transcripts.append(t)
+
         self._save()
 
     @property

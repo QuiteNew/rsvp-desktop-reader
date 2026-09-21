@@ -36,6 +36,8 @@ class SettingsWindow(ctk.CTkToplevel):
         data_directory,
         appearance_mode,
         on_apply,
+        on_export_requested,
+        on_import_requested,
         on_skip_word_count_changed=None,
         on_pause_on_skip_changed=None,
     ):
@@ -82,6 +84,8 @@ class SettingsWindow(ctk.CTkToplevel):
         self.resizable(True, True)
         self.configure(fg_color=HEARTH_PAPER)
         self.on_apply = on_apply
+        self.on_export_requested = on_export_requested
+        self.on_import_requested = on_import_requested
         self.on_skip_word_count_changed = on_skip_word_count_changed
         self.on_pause_on_skip_changed = on_pause_on_skip_changed
         self._data_directory = data_directory
@@ -583,6 +587,15 @@ class SettingsWindow(ctk.CTkToplevel):
         self.data_directory_label.pack(anchor="w", pady=(0, 10))
         self._styled_button(tab, "Choose folder…", self._pick_data_directory, width=140).pack(anchor="w")
 
+        ctk.CTkLabel(
+            tab, text="Move your transcripts, spaces, and settings to or from another machine:",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(20, 10))
+        export_import_row = ctk.CTkFrame(tab, fg_color="transparent")
+        export_import_row.pack(fill="x", pady=(0, 10))
+        self._styled_button(export_import_row, "Export Data…", self._handle_export_data, width=140).pack(side="left")
+        self._styled_button(export_import_row, "Import Data…", self._handle_import_data, width=140).pack(side="left", padx=(10, 0))
+
         self._reset_row(tab, self._handle_reset_storage)
 
     def _pick_data_directory(self) -> None:
@@ -590,6 +603,33 @@ class SettingsWindow(ctk.CTkToplevel):
         if chosen:
             self._data_directory = chosen
             self.data_directory_label.configure(text=chosen)
+
+    def _handle_export_data(self) -> None:
+        """Collects a destination path via a native save dialog and hands
+        it straight to on_export_requested. Unlike "Choose folder…" above
+        -- which only stages a value the Apply button submits later --
+        Export and Import are immediate, one-shot actions with real side
+        effects of their own (writing a file; overwriting stored data), so
+        they bubble straight up to gui/app.py instead of going through
+        _handle_apply()'s values dict."""
+        path = self._open_native_dialog(
+            filedialog.asksaveasfilename,
+            title="Export Data",
+            defaultextension=".json",
+            filetypes=[("RSVP Reader export", "*.json")],
+            initialfile="rsvp-reader-export.json",
+        )
+        if path:
+            self.on_export_requested(path)
+
+    def _handle_import_data(self) -> None:
+        path = self._open_native_dialog(
+            filedialog.askopenfilename,
+            title="Import Data",
+            filetypes=[("RSVP Reader export", "*.json")],
+        )
+        if path:
+            self.on_import_requested(path)
 
     def _handle_reset_storage(self) -> None:
         original = AppSettings()

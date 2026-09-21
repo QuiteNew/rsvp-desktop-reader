@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import customtkinter as ctk
 
 from gui.components.transcript_list_header import TranscriptListHeader
@@ -11,6 +14,8 @@ from gui.components.add_transcript_dialog import AddTranscriptDialog
 from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
+from gui.components.message_dialog import MessageDialog
+from gui.components.import_confirm_dialog import ImportConfirmDialog
 from gui.theme import (
     HEARTH_PAPER, unregister_fonts, CTK_APPEARANCE_MODE, apply_app_icon,
     DARK_READING_FONT_COLOR, DARK_READING_HIGHLIGHT_COLOR, DARK_READING_BACKGROUND_COLOR,
@@ -18,6 +23,7 @@ from gui.theme import (
 )
 from core.transcript_store import TranscriptStore
 from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE
+from core import data_bundle
 
 
 class RSVPApp(ctk.CTk):
@@ -333,6 +339,8 @@ class RSVPApp(ctk.CTk):
             guide_mark_color=self.settings_store.guide_mark_color,
             data_directory=self.settings_store.data_directory,
             on_apply=self._handle_settings_applied,
+            on_export_requested=self._handle_export_requested,
+            on_import_requested=self._handle_import_requested,
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             appearance_mode=self.settings_store.appearance_mode,
@@ -387,6 +395,63 @@ class RSVPApp(ctk.CTk):
         self.canvas.set_pause_on_skip(values["pause_on_skip"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
+
+    def _handle_export_requested(self, path: str) -> None:
+        """Builds a bundle from the two stores' CURRENT in-memory state
+        (see core/data_bundle.py) and writes it to the path the user
+        picked in the Storage tab's save dialog. File I/O deliberately
+        lives here, not in core/data_bundle.py -- build_bundle() itself
+        stays pure/path-free so it's testable on its own."""
+        bundle = data_bundle.build_bundle(self.store, self.settings_store)
+        try:
+            Path(path).write_text(json.dumps(bundle, indent=2), encoding="utf-8")
+        except OSError as e:
+            MessageDialog(self, "Export failed", f"Couldn't write the export file:\n\n{e}")
+            return
+        MessageDialog(self, "Export complete", f"Your data was exported to:\n\n{path}")
+
+    def _handle_import_requested(self, path: str) -> None:
+        """Reads and validates the chosen file, then -- only if it's a
+        genuinely valid bundle -- hands the user a Replace/Expand/Cancel
+        choice. Nothing is applied yet at this point; see
+        _apply_import()."""
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+        except OSError as e:
+            MessageDialog(self, "Import failed", f"Couldn't read that file:\n\n{e}")
+            return
+
+        try:
+            bundle = data_bundle.parse_bundle(text)
+        except data_bundle.BundleFormatError as e:
+            MessageDialog(self, "Import failed", str(e))
+            return
+
+        ImportConfirmDialog(
+            self,
+            on_replace=lambda: self._apply_import(bundle, expand=False),
+            on_expand=lambda: self._apply_import(bundle, expand=True),
+        )
+
+    def _apply_import(self, bundle: dict, expand: bool) -> None:
+        """Actually applies an already-confirmed import, then closes the
+        app -- see core/data_bundle.py's module docstring and
+        gui/components/message_dialog.py's class docstring for why a
+        restart isn't optional here: this app has no live-reload path
+        for a wholesale change to transcripts/spaces/settings, so
+        continuing to run on stale in-memory state risks both a
+        confusing UI and, worse, that stale state getting autosaved
+        straight back over the data this import just wrote."""
+        if expand:
+            data_bundle.apply_bundle_expand(bundle, self.store)
+        else:
+            data_bundle.apply_bundle_replace(bundle, self.store, self.settings_store)
+
+        MessageDialog(
+            self, "Import complete",
+            "Your data was imported. RSVP Reader will now close -- reopen it to see the change.",
+            on_close=self._handle_close,
+        )
 
     def _handle_delete_requested(self, transcript) -> None:
         DeleteTranscriptDialog(self, on_confirm=lambda: self._handle_delete_confirmed(transcript))
@@ -458,5 +523,3 @@ class RSVPApp(ctk.CTk):
             self.grid_rowconfigure(1, minsize=Divider.HIT_THICKNESS)
             self.grid_rowconfigure(3, minsize=Divider.HIT_THICKNESS)
             self._apply_layout_sizes()
-
-        self.canvas.set_maximized(self._focus_mode)

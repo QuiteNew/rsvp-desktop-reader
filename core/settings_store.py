@@ -99,6 +99,31 @@ class SettingsStore:
         self._last_live_save = time.monotonic()
         self._save()
 
+    def export_settings(self) -> dict:
+        """Return every setting except data_directory as a plain dict --
+        used to build an export bundle (see core/data_bundle.py).
+        Excluded deliberately: data_directory is a raw OS-specific
+        filesystem path, meaningless (or actively wrong) on a different
+        machine, so it must never travel inside a bundle -- see
+        replace_from_bundle()."""
+        data = asdict(self._settings)
+        data.pop("data_directory")
+        return data
+
+    def replace_from_bundle(self, settings: dict) -> None:
+        """Replace every setting with the given dict (the "settings"
+        section of an import bundle, as export_settings() produces it --
+        see core/data_bundle.py), except data_directory, which always
+        stays whatever this machine already has configured. Used for the
+        "Replace" import mode; there's no "Expand"/merge equivalent for
+        settings -- they're scalar preferences (a single WPM default, a
+        single window size), not a collection, so there's nothing
+        sensible to merge. "Expand" imports leave settings untouched
+        entirely."""
+        merged = {**settings, "data_directory": self._settings.data_directory}
+        self._settings = AppSettings(**merged)
+        self._save()
+
     @property
     def window_width(self) -> int:
         return self._settings.window_width

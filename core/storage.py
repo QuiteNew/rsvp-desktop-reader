@@ -38,14 +38,21 @@ def save_state(directory: str, spaces: list[str], current_space_index: int, tran
     data_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def load_state(directory: str):
-    """Read saved state from the given directory. Returns None if no valid
-    save exists there yet, so the caller can fall back to sensible defaults."""
-    data_file = Path(directory) / "data.json"
-    if not data_file.exists():
-        return None
+def parse_data(data: dict) -> dict | None:
+    """Validate and normalize an already-parsed data dict -- the shape
+    save_state() writes ("next_id", "current_space_index", "spaces",
+    "transcripts"), whether it came from data.json or from the "data"
+    section of an import bundle (see core/data_bundle.py) -- into the
+    shape TranscriptStore expects, with real Transcript objects rather
+    than plain dicts. Returns None if required keys are missing or the
+    wrong shape, so the caller can treat it the same as "no valid save
+    exists" rather than crashing on a corrupt or unrelated file.
+
+    Split out of load_state() so both the normal startup load and a
+    bundle import get the exact same backward-compatibility handling
+    (the color-flag migration below) from one place, instead of it
+    being duplicated -- and potentially drifting -- between the two."""
     try:
-        data = json.loads(data_file.read_text(encoding="utf-8"))
         for t in data["transcripts"]:
             for field_name in _COLOR_DEFAULT_FLAG_FIELDS:
                 t.setdefault(field_name, False)
@@ -56,5 +63,18 @@ def load_state(directory: str):
             "spaces": data["spaces"],
             "transcripts": transcripts,
         }
-    except (json.JSONDecodeError, KeyError, TypeError):
+    except (KeyError, TypeError):
         return None
+
+
+def load_state(directory: str):
+    """Read saved state from the given directory. Returns None if no valid
+    save exists there yet, so the caller can fall back to sensible defaults."""
+    data_file = Path(directory) / "data.json"
+    if not data_file.exists():
+        return None
+    try:
+        data = json.loads(data_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return parse_data(data)
