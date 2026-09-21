@@ -30,16 +30,30 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=datas,
-    # darkdetect (used only for "System" theme detection, see
-    # gui/theme.py's _detect_system_prefers_dark()) has a documented,
-    # unresolved history of PyInstaller builds not finding it even when
-    # installed -- see https://github.com/TomSchimansky/CustomTkinter/issues/2779.
-    # Naming it here is a real, standard mitigation, not a guaranteed
-    # fix. Worth knowing either way: _detect_system_prefers_dark()
-    # already wraps the import in try/except, so even if this doesn't
-    # fully resolve it, the worst case is "System" mode silently
-    # defaulting to the Light look, not a crash.
-    hiddenimports=['darkdetect'],
+    hiddenimports=[
+        # darkdetect (used only for "System" theme detection, see
+        # gui/theme.py's _detect_system_prefers_dark()) has a documented,
+        # unresolved history of PyInstaller builds not finding it even when
+        # installed -- see https://github.com/TomSchimansky/CustomTkinter/issues/2779.
+        # Naming it here is a real, standard mitigation, not a guaranteed
+        # fix. Worth knowing either way: _detect_system_prefers_dark()
+        # already wraps the import in try/except, so even if this doesn't
+        # fully resolve it, the worst case is "System" mode silently
+        # defaulting to the Light look, not a crash.
+        'darkdetect',
+        # PIL.ImageTk (used internally by every customtkinter widget that
+        # draws an image, e.g. CTkButton icons -- see ctk_image.py) looks
+        # up this tiny helper module at runtime via its own internal
+        # try/except, not a static import, so PyInstaller's dependency
+        # analysis never sees it's needed and leaves it out. Without it,
+        # the app crashes at startup the moment it tries to draw its first
+        # icon button (confirmed via a real crash on Linux: "No module
+        # named 'PIL._tkinter_finder'") -- this is a well-documented
+        # PyInstaller+Pillow interaction, not specific to this app, and
+        # since the code path is identical across platforms, it's a
+        # precaution for the untested macOS build too, not just Linux.
+        'PIL._tkinter_finder',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
