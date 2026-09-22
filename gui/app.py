@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from tkinter import filedialog
 
 import customtkinter as ctk
 
@@ -24,6 +25,7 @@ from gui.theme import (
 from core.transcript_store import TranscriptStore
 from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE
 from core import data_bundle
+from core import importers
 
 
 class RSVPApp(ctk.CTk):
@@ -57,7 +59,10 @@ class RSVPApp(ctk.CTk):
         self.grid_rowconfigure(3, weight=0, minsize=Divider.HIT_THICKNESS)
         self._apply_layout_sizes()
 
-        self.list_header = TranscriptListHeader(self, on_add=self._open_add_transcript_dialog)
+        self.list_header = TranscriptListHeader(
+            self, on_add=self._open_add_transcript_dialog,
+            on_add_from_file=self._handle_add_from_file_requested,
+        )
         self.list_header.grid(row=0, column=0, sticky="nsew")
 
         self.header = Header(self, on_settings=self._open_settings_window)
@@ -221,15 +226,18 @@ class RSVPApp(ctk.CTk):
         guide_mark_color = DARK_READING_GUIDE_MARK_COLOR if CTK_APPEARANCE_MODE == "Dark" else LIGHT_READING_GUIDE_MARK_COLOR
         self.settings_store.resync_guide_mark_color_default(guide_mark_color)
 
-    def _handle_new_transcript(self, title: str, space: str) -> None:
-        # A brand-new transcript's reading colors are seeded from whichever
-        # set matches the current theme -- see _current_theme_reading_colors().
-        # This only affects transcripts created from this point on; anything
-        # that already exists is handled separately, once, at startup (see
-        # _resync_theme_default_colors()).
+    def _create_transcript(self, title: str, space: str):
+        """Shared by _handle_new_transcript() (the blank "+" flow) and
+        _handle_file_transcript_submitted() (the file-import flow): seeds
+        a brand-new transcript with whichever reading colors match the
+        current theme -- see _current_theme_reading_colors() -- and
+        refreshes the sidebar list. Returns the new Transcript so a
+        caller that already has text in hand (a file import) can set it
+        immediately afterward; the blank-transcript flow just ignores
+        the return value, same as before this was split out."""
         font_color, highlight_color, background_color = self._current_theme_reading_colors()
 
-        self.store.add_transcript(
+        transcript = self.store.add_transcript(
             title, space,
             wpm=self.settings_store.default_wpm,
             font_color=font_color,
@@ -238,6 +246,53 @@ class RSVPApp(ctk.CTk):
             font_size=self.settings_store.default_font_size,
         )
         self._refresh_transcript_list()
+        return transcript
+
+    def _handle_new_transcript(self, title: str, space: str) -> None:
+        self._create_transcript(title, space)
+
+    def _handle_add_from_file_requested(self) -> None:
+        """Triggered from the sidebar's "+" menu's "Add from file..."
+        item (see gui/components/transcript_list_header.py). Picks a
+        file, parses it immediately -- so a corrupt or unreadable file
+        fails right here, before bothering the user with a title/space
+        dialog -- then reuses AddTranscriptDialog exactly as the
+        blank-transcript flow does, just pre-filled with a title guessed
+        from the filename. Parented to self, not self._settings_window,
+        since this is triggered from the main window itself, not from
+        inside Settings -- see _handle_export_requested()'s docstring
+        for why that distinction matters when a dialog holds a
+        persistent grab; the main window never does, so there's no
+        native-dialog grab dance to do here."""
+        filetypes = [
+            ("Supported documents", " ".join(f"*{ext}" for ext in sorted(importers.SUPPORTED_EXTENSIONS))),
+            ("Text files", "*.txt"),
+            ("Subtitle files", "*.srt"),
+            ("Word documents", "*.docx"),
+            ("PDF files", "*.pdf"),
+        ]
+        path = filedialog.askopenfilename(title="Add from File", filetypes=filetypes)
+        if not path:
+            return
+
+        try:
+            text = importers.import_file(path)
+        except importers.TranscriptImportError as e:
+            MessageDialog(self, "Couldn't add that file", str(e))
+            return
+
+        AddTranscriptDialog(
+            self,
+            spaces=self.store.spaces,
+            default_space=self.store.current_space,
+            initial_title=Path(path).stem,
+            window_title="Add Transcript from File",
+            on_submit=lambda title, space: self._handle_file_transcript_submitted(title, space, text),
+        )
+
+    def _handle_file_transcript_submitted(self, title: str, space: str, text: str) -> None:
+        transcript = self._create_transcript(title, space)
+        self.store.set_transcript_text(transcript.id, text)
 
     def _open_add_space_dialog(self) -> None:
         AddSpaceDialog(self, on_submit=self._handle_new_space)

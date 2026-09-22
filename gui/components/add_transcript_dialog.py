@@ -2,9 +2,17 @@ import customtkinter as ctk
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 class AddTranscriptDialog(ctk.CTkToplevel):
-    """Popup for creating a new transcript: asks for a title and a space."""
+    """Popup for creating a new transcript: asks for a title and a space.
+    Reused as-is for both ways of creating a transcript -- a blank one
+    from the sidebar's "+", and one seeded from an imported file (see
+    gui/app.py's _handle_add_from_file_requested()) -- the only
+    difference being initial_title/window_title, both optional so the
+    blank-transcript flow is completely unaffected."""
 
-    def __init__(self, master, spaces: list[str], default_space: str, on_submit):
+    def __init__(
+        self, master, spaces: list[str], default_space: str, on_submit,
+        initial_title: str = "", window_title: str = "New Transcript",
+    ):
         super().__init__(master)
 
         # Hidden until fully built (see the matching alpha restore at the
@@ -13,7 +21,7 @@ class AddTranscriptDialog(ctk.CTkToplevel):
         # withdraw()/deiconify()).
         self.attributes("-alpha", 0)
 
-        self.title("New Transcript")
+        self.title(window_title)
         apply_app_icon(self)
         center_over_parent(self, 340, 240)
         self.resizable(False, False)
@@ -31,6 +39,16 @@ class AddTranscriptDialog(ctk.CTkToplevel):
             text_color=COCOA_INK, font=entry_font,
         )
         self.title_entry.pack(fill="x", padx=20)
+        if initial_title:
+            # Pre-filled from the picked file's name for a file import --
+            # selected (not just inserted) and given keyboard focus, so
+            # the user can immediately overwrite it by typing, without
+            # first having to clear it themselves. Left untouched for the
+            # blank-transcript flow, where initial_title is always "".
+            self.title_entry.insert(0, initial_title)
+            self.title_entry.select_range(0, "end")
+            self.title_entry.icursor("end")
+            self.title_entry.focus_set()
 
         ctk.CTkLabel(self, text="Space", text_color=COCOA_INK, font=label_font).pack(anchor="w", padx=20, pady=(16, 4))
         self.space_menu = ctk.CTkOptionMenu(
