@@ -95,6 +95,12 @@ def test_add_transcript_id_not_reused_after_delete(store):
     t2 = store.add_transcript("Second", "General")
     assert t2.id == 2  # continues from next_id, does not reuse the deleted id
 
+def test_add_transcript_defaults_session_stats_to_zero(store):
+    t = store.add_transcript("Title", "General")
+    assert t.times_read == 0
+    assert t.total_words_read == 0
+    assert t.total_time_spent_seconds == 0
+
 
 # ---- transcripts / transcripts_in_current_space ----
 
@@ -184,6 +190,71 @@ def test_setter_on_nonexistent_id_is_a_safe_no_op(store):
     assert store.transcripts[0].raw_text == ""
 
 
+# ---- add_session_stats ----
+
+def test_add_session_stats_adds_words_and_time(store):
+    t = store.add_transcript("Title", "General")
+    store.add_session_stats(t.id, words_read=120, active_seconds=30)
+    updated = store.transcripts[0]
+    assert updated.total_words_read == 120
+    assert updated.total_time_spent_seconds == 30
+
+def test_add_session_stats_increments_times_read_when_at_or_above_floor(store):
+    t = store.add_transcript("Title", "General")
+    store.add_session_stats(t.id, words_read=50, active_seconds=store.MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ)
+    assert store.transcripts[0].times_read == 1
+
+def test_add_session_stats_does_not_increment_times_read_below_floor(store):
+    t = store.add_transcript("Title", "General")
+    store.add_session_stats(t.id, words_read=2, active_seconds=store.MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ - 0.5)
+    assert store.transcripts[0].times_read == 0
+
+def test_add_session_stats_still_adds_words_and_time_below_floor(store):
+    """The times_read floor only gates the read *count* -- a short
+    session's words/time still aren't thrown away, since a few seconds
+    of real reading did happen even if it's not enough to count as a
+    whole "time read" (see add_session_stats()'s docstring)."""
+    t = store.add_transcript("Title", "General")
+    store.add_session_stats(t.id, words_read=4, active_seconds=1)
+    updated = store.transcripts[0]
+    assert updated.times_read == 0
+    assert updated.total_words_read == 4
+    assert updated.total_time_spent_seconds == 1
+
+def test_add_session_stats_accumulates_across_multiple_sessions(store):
+    t = store.add_transcript("Title", "General")
+    store.add_session_stats(t.id, words_read=100, active_seconds=20)
+    store.add_session_stats(t.id, words_read=50, active_seconds=10)
+    updated = store.transcripts[0]
+    assert updated.times_read == 2
+    assert updated.total_words_read == 150
+    assert updated.total_time_spent_seconds == 30
+
+def test_add_session_stats_rounds_active_seconds_for_storage(store):
+    t = store.add_transcript("Title", "General")
+    store.add_session_stats(t.id, words_read=10, active_seconds=12.6)
+    assert store.transcripts[0].total_time_spent_seconds == 13
+
+def test_add_session_stats_zero_words_read_is_not_special_cased(store):
+    """A session that ended without ever advancing past the first word
+    is a normal, expected call -- words_read=0 just adds nothing to the
+    word total, and times_read still follows the same active-time floor
+    as any other call."""
+    t = store.add_transcript("Title", "General")
+    store.add_session_stats(t.id, words_read=0, active_seconds=store.MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ)
+    updated = store.transcripts[0]
+    assert updated.total_words_read == 0
+    assert updated.times_read == 1
+
+def test_add_session_stats_on_nonexistent_id_is_a_safe_no_op(store):
+    store.add_transcript("Title", "General")
+    store.add_session_stats(999, words_read=100, active_seconds=30)  # should not crash or change anything
+    updated = store.transcripts[0]
+    assert updated.times_read == 0
+    assert updated.total_words_read == 0
+    assert updated.total_time_spent_seconds == 0
+
+
 # ---- delete_transcript ----
 
 def test_delete_transcript_removes_it(store):
@@ -231,6 +302,19 @@ def test_persists_and_reloads_full_state_correctly(tmp_path):
     assert reloaded_t1.position == 3
     assert reloaded_t1.is_paused is True
 
+def test_session_stats_persist_across_reload(tmp_path):
+    directory = str(tmp_path)
+
+    first = TranscriptStore(data_directory=directory)
+    t1 = first.add_transcript("Lecture notes", "General")
+    first.add_session_stats(t1.id, words_read=200, active_seconds=45)
+
+    second = TranscriptStore(data_directory=directory)
+    reloaded_t1 = next(t for t in second.transcripts if t.id == t1.id)
+    assert reloaded_t1.times_read == 1
+    assert reloaded_t1.total_words_read == 200
+    assert reloaded_t1.total_time_spent_seconds == 45
+
 def test_next_id_continues_incrementing_after_reload(tmp_path):
     directory = str(tmp_path)
 
@@ -274,6 +358,28 @@ def test_out_of_range_current_space_index_clamps_on_load(tmp_path):
 
     store = TranscriptStore(data_directory=str(tmp_path))
     assert store.current_space == "General"
+
+def test_old_save_file_missing_stats_fields_defaults_them_to_zero(tmp_path):
+    """A save file written before this feature existed won't have
+    times_read/total_words_read/total_time_spent_seconds on its
+    transcripts at all -- confirms core/storage.py's parse_data() falls
+    back to the dataclass's own default (0) for a missing key, the same
+    as any other field added after this project already had saved data
+    on disk, without needing an explicit backfill entry the way the
+    color-flag fields did (see core/models.py)."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text(json.dumps({
+        "next_id": 2,
+        "current_space_index": 0,
+        "spaces": ["General"],
+        "transcripts": [{"id": 1, "title": "Old Transcript", "space": "General"}],
+    }), encoding="utf-8")
+
+    store = TranscriptStore(data_directory=str(tmp_path))
+    t = store.transcripts[0]
+    assert t.times_read == 0
+    assert t.total_words_read == 0
+    assert t.total_time_spent_seconds == 0
 
 
 # ---- set_data_directory ----

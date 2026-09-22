@@ -11,6 +11,15 @@ class TranscriptStore:
     """In-memory store for spaces and transcripts, backed by a JSON file
     in a configurable directory."""
 
+    # Floor below which a finished reading session doesn't count toward
+    # times_read -- filters out things like opening a transcript and
+    # immediately clicking away, without discarding the words/time it did
+    # accumulate (see add_session_stats()). A starting guess, like
+    # gui/app.py's LARGE_IMPORT_WORD_WARNING_THRESHOLD -- not measured
+    # against real usage yet, just long enough to rule out an accidental
+    # open-and-leave, short enough not to exclude a genuine brief skim.
+    MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ = 3
+
     def __init__(self, data_directory: str | None = None):
         self._data_directory = data_directory or str(DEFAULT_DATA_DIR)
 
@@ -273,6 +282,34 @@ class TranscriptStore:
         if t:
             t.is_stopped = is_stopped
             self._save()
+
+    def add_session_stats(self, transcript_id: int, words_read: int, active_seconds: float) -> None:
+        """Roll one finished reading session's numbers into this
+        transcript's running totals -- called once a session actually
+        ends (stopped, finished, switched away from, or the app closing
+        mid-read; see gui/components/reader_display.py's
+        finalize_session()), never for a session still in progress.
+
+        times_read only increments if active_seconds clears
+        MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ -- otherwise opening a
+        transcript and immediately clicking away would count as a read.
+        words_read and active_seconds are still added to the running
+        totals regardless of that floor: a few seconds of real reading
+        still happened even if it's short of counting as a whole "time
+        read," so the totals themselves never silently drop numbers the
+        floor was never meant to touch.
+
+        words_read of 0 is a normal, expected call (e.g. a session ended
+        without ever advancing past the first word) -- nothing special
+        happens for it beyond times_read's own floor check above."""
+        t = self._find_transcript(transcript_id)
+        if t is None:
+            return
+        if active_seconds >= self.MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ:
+            t.times_read += 1
+        t.total_words_read += words_read
+        t.total_time_spent_seconds += round(active_seconds)
+        self._save()
 
     def delete_transcript(self, transcript_id: int) -> None:
         self._transcripts = [t for t in self._transcripts if t.id != transcript_id]
