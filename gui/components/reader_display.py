@@ -1,3 +1,5 @@
+import time
+
 import customtkinter as ctk
 from core.reader import ReaderSession
 from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW
@@ -81,7 +83,7 @@ class ReaderDisplay(ctk.CTkFrame):
                                                 # colors, receding into the background rather
                                                 # than drawing attention.
 
-    def __init__(self, master, on_position_changed=None):
+    def __init__(self, master, on_position_changed=None, on_session_stats=None):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
         self._after_id: str | None = None
@@ -90,6 +92,20 @@ class ReaderDisplay(ctk.CTkFrame):
         self._guide_mark_horizontal_enabled = False
         self._guide_mark_length_ratio = self.GUIDE_MARK_LENGTH_RATIO
         self.on_position_changed = on_position_changed
+        self.on_session_stats = on_session_stats
+
+        # Per-session stats tracking -- see load_session(),
+        # finalize_session(), _start_active_span()/_end_active_span(),
+        # and _advance(). words/active-seconds accumulate for whatever
+        # session is currently loaded and are reset at the start of the
+        # next load_session() call, right after being reported by
+        # finalize_session(). _active_span_start is None whenever
+        # nothing is actively playing right now (paused, finished, or no
+        # session at all); while it's set, it's the time.monotonic()
+        # moment the current unpaused stretch began.
+        self._session_words_read = 0
+        self._session_active_seconds = 0.0
+        self._active_span_start: float | None = None
 
         # Anchor geometry from the most recent _position_word() call --
         # None until the row has been sized at least once. Guide marks
@@ -143,15 +159,51 @@ class ReaderDisplay(ctk.CTkFrame):
         self._cancel_pending()
         self.session = session
         self._is_paused = start_paused
+        self._session_words_read = 0
+        self._session_active_seconds = 0.0
+        self._active_span_start = None
+        if not start_paused:
+            self._start_active_span()
         self._show_current_frame()
         self._schedule_next()
         self._update_guide_marks()
 
     def stop(self) -> None:
+        self.finalize_session()
         self._cancel_pending()
         self.session = None
         self._is_paused = False
         self._update_guide_marks()
+
+    def finalize_session(self) -> None:
+        """Report this session's accumulated words-read/active-time via
+        on_session_stats (ultimately reaching
+        core/transcript_store.py's add_session_stats(), through
+        gui/app.py), then reset the per-session counters so a later
+        call -- whether from stop() below or from an external caller --
+        never double-reports what's already been sent.
+
+        Safe to call when nothing is loaded (self.session is None): a
+        no-op, since Canvas.load_transcript() unconditionally calls
+        stop() even before anything has ever been loaded. Also safe to
+        call while a session is STILL actively playing -- closes out
+        whatever active span is currently open first (see
+        _end_active_span()).
+
+        This is split out from stop() specifically because gui/app.py's
+        WM_DELETE_WINDOW close handler is the one real exit path that
+        does NOT go through stop() -- quitting mid-read never explicitly
+        stops playback first, since the app is about to close anyway --
+        so without a way to call just this part, closing the app while a
+        transcript is actively running would silently lose that tail
+        end of the session's stats."""
+        if self.session is None:
+            return
+        self._end_active_span()
+        if self.on_session_stats:
+            self.on_session_stats(self._session_words_read, self._session_active_seconds)
+        self._session_words_read = 0
+        self._session_active_seconds = 0.0
 
     def toggle_pause(self) -> bool:
         if self.session is None or self.session.is_finished:
@@ -159,8 +211,10 @@ class ReaderDisplay(ctk.CTkFrame):
         self._is_paused = not self._is_paused
         if self._is_paused:
             self._cancel_pending()
+            self._end_active_span()
         else:
             self._schedule_next()
+            self._start_active_span()
         self._update_guide_marks()
         return self._is_paused
 
@@ -170,6 +224,14 @@ class ReaderDisplay(ctk.CTkFrame):
         self._cancel_pending()
         self.session.reset()
         self._is_paused = False
+        # restart() always leaves playback unpaused, whatever state it
+        # was in before (playing, paused, or finished) -- so it always
+        # needs an open active span afterward. _end_active_span() is a
+        # no-op if one wasn't already open (the paused/finished cases);
+        # for the already-playing case this is a same-instant close and
+        # reopen, losing no real time.
+        self._end_active_span()
+        self._start_active_span()
         self._show_current_frame()
         self._report_position()
         self._schedule_next()
@@ -182,8 +244,15 @@ class ReaderDisplay(ctk.CTkFrame):
         self.session.seek(delta)
         self._show_current_frame()
         self._report_position()
-        if force_pause:
+        if force_pause and not self._is_paused:
+            # Only an actual not-paused -> paused transition needs the
+            # active span closed -- if it was already paused, skip()
+            # forcing "paused" again isn't a new transition, and the
+            # span (if any) is already closed. This bypasses
+            # toggle_pause() entirely (force_pause sets _is_paused
+            # directly), so it needs this same bookkeeping on its own.
             self._is_paused = True
+            self._end_active_span()
         if not self._is_paused:
             self._schedule_next()
         self._update_guide_marks()
@@ -433,6 +502,14 @@ class ReaderDisplay(ctk.CTkFrame):
         if self.session is None:
             return
         self.session.advance()
+        self._session_words_read += 1
+        if self.session.is_finished:
+            # Reading has genuinely stopped here, even though nothing
+            # set _is_paused -- close the active span now rather than
+            # leaving it open and silently counting whatever idle time
+            # passes before the user eventually navigates away or
+            # closes the app.
+            self._end_active_span()
         self._show_current_frame()
         self._report_position()
         self._schedule_next()
@@ -441,6 +518,14 @@ class ReaderDisplay(ctk.CTkFrame):
     def _report_position(self) -> None:
         if self.on_position_changed and self.session:
             self.on_position_changed(self.session.index)
+
+    def _start_active_span(self) -> None:
+        self._active_span_start = time.monotonic()
+
+    def _end_active_span(self) -> None:
+        if self._active_span_start is not None:
+            self._session_active_seconds += time.monotonic() - self._active_span_start
+            self._active_span_start = None
 
     def _cancel_pending(self) -> None:
         if self._after_id is not None:

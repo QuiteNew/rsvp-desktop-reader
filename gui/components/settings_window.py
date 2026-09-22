@@ -15,11 +15,12 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW
 
 class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
-    free-form drag-resize), where transcript data is stored, and colour
-    theme. Header height is a fixed constant, not user-configurable —
-    see gui/app.py. Theme changes take effect on next launch, not live —
-    every widget's color is set explicitly at creation, so a live switch
-    would mean reconfiguring the entire widget tree at once."""
+    free-form drag-resize), where transcript data is stored, colour
+    theme, and per-transcript reading stats. Header height is a fixed
+    constant, not user-configurable -- see gui/app.py. Theme changes take
+    effect on next launch, not live -- every widget's color is set
+    explicitly at creation, so a live switch would mean reconfiguring the
+    entire widget tree at once."""
 
     def __init__(
         self, master,
@@ -36,6 +37,7 @@ class SettingsWindow(ctk.CTkToplevel):
         guide_mark_color,
         data_directory,
         appearance_mode,
+        transcripts,
         on_apply,
         on_export_requested,
         on_import_requested,
@@ -114,6 +116,7 @@ class SettingsWindow(ctk.CTkToplevel):
         layout_tab = self.tabview.add("Layout")
         storage_tab = self.tabview.add("Storage")
         appearance_tab = self.tabview.add("Appearance")
+        stats_tab = self.tabview.add("Stats")
 
         self._build_defaults_tab(
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
@@ -124,6 +127,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
         self._build_appearance_tab(appearance_tab, appearance_mode)
+        self._build_stats_tab(stats_tab, transcripts)
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#E74C3C", font=self.small_font)
         self.error_label.pack(padx=15, pady=(0, 5), anchor="w")
@@ -697,6 +701,91 @@ class SettingsWindow(ctk.CTkToplevel):
             ),
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 10))
+
+    # ---- Stats tab ----
+
+    def _build_stats_tab(self, tab, transcripts) -> None:
+        """Read-only overview of per-transcript reading stats (see
+        core/models.py's times_read / total_words_read /
+        total_time_spent_seconds, and TranscriptStore.add_session_stats()).
+        Deliberately shows every transcript across every space, not just
+        the currently selected one -- this window has no notion of "the
+        current space" anywhere else, so silently filtering here would
+        look like missing data rather than a deliberate scope. Sorted by
+        time spent, descending, so what's actually been read surfaces
+        first and untouched transcripts (all zeros) settle to the bottom.
+
+        The explanatory label at the top exists because these numbers are
+        NOT live: they're only reported to the store when a reading
+        session actually ends (gui/components/canvas.py calls
+        reader_display.stop(), which reports them, from the Stop button,
+        switching transcripts, detaching, or deleting -- plus a direct
+        finalize_session() call on app close). Pausing only stops the
+        active-time clock; it does not report anything. So pausing mid-
+        read and opening Settings shows stale numbers, confirmed by a
+        real test -- hence spelling that out here instead of leaving it
+        to look like a bug."""
+        scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=(0, 0))
+
+        ctk.CTkLabel(
+            scroll,
+            text=(
+                "These totals update once a reading session ends -- by "
+                "clicking Stop, switching to another transcript, detaching "
+                "the window, or closing the app -- not while it's simply "
+                "paused. If you've been reading and want the latest "
+                "numbers, stop or switch away from the transcript first, "
+                "then reopen Settings."
+            ),
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(5, 15))
+
+        if not transcripts:
+            ctk.CTkLabel(
+                scroll, text="No transcripts yet.",
+                text_color=COCOA_INK, font=self.label_font,
+            ).pack(anchor="w", pady=(10, 0))
+            return
+
+        ordered = sorted(transcripts, key=lambda t: (-t.total_time_spent_seconds, t.title.lower()))
+
+        for t in ordered:
+            row = ctk.CTkFrame(scroll, fg_color=WARM_TAUPE, corner_radius=8)
+            row.pack(fill="x", pady=(0, 8))
+
+            ctk.CTkLabel(
+                row, text=f"{t.title}  ·  {t.space}",
+                text_color=COCOA_INK, font=self.label_font,
+                anchor="w", wraplength=380, justify="left",
+            ).pack(fill="x", padx=12, pady=(10, 2))
+
+            reads_word = "read" if t.times_read == 1 else "reads"
+            stats_text = (
+                f"{t.times_read} {reads_word}  ·  "
+                f"{t.total_words_read:,} words read  ·  "
+                f"{self._format_duration(t.total_time_spent_seconds)} total"
+            )
+            ctk.CTkLabel(
+                row, text=stats_text,
+                text_color=COCOA_INK, font=self.small_font,
+                anchor="w", wraplength=380, justify="left",
+            ).pack(fill="x", padx=12, pady=(0, 10))
+
+    @staticmethod
+    def _format_duration(total_seconds: int) -> str:
+        """Formats a whole number of seconds as a short, human-readable
+        duration -- "0s", "45s", "12m 34s", or "1h 05m" -- switching units
+        only once each threshold is crossed, so a short read doesn't show
+        a misleading "0h 00m" and a long one doesn't show a wall of
+        seconds."""
+        if total_seconds < 60:
+            return f"{total_seconds}s"
+        minutes, seconds = divmod(total_seconds, 60)
+        if minutes < 60:
+            return f"{minutes}m {seconds:02d}s"
+        hours, minutes = divmod(minutes, 60)
+        return f"{hours}h {minutes:02d}m"
 
     # ---- Apply ----
 

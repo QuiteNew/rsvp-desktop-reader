@@ -17,7 +17,7 @@ class Canvas(ctk.CTkFrame):
         self, master,
         on_text_submitted=None, on_maximize_toggle=None,
         on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
-        on_stopped_changed=None,
+        on_stopped_changed=None, on_session_stats=None,
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
@@ -33,6 +33,7 @@ class Canvas(ctk.CTkFrame):
         self.on_pause_changed = on_pause_changed
         self.on_draft_changed = on_draft_changed
         self.on_stopped_changed = on_stopped_changed
+        self.on_session_stats = on_session_stats
         self._skip_word_count = skip_word_count
         self._pause_on_skip = pause_on_skip
         self._highlight_offset_px = highlight_offset_px
@@ -67,7 +68,11 @@ class Canvas(ctk.CTkFrame):
 
         self.empty_label = ctk.CTkLabel(self.content_area, text="Select or create a transcript to begin")
         self.input_view = TranscriptInput(self.content_area, on_submit=self._handle_text_submitted)
-        self.reader_display = ReaderDisplay(self.content_area, on_position_changed=self._handle_position_changed)
+        self.reader_display = ReaderDisplay(
+            self.content_area,
+            on_position_changed=self._handle_position_changed,
+            on_session_stats=self._handle_session_stats,
+        )
         self.reader_display.set_highlight_offset(self._highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(self._guide_mark_horizontal_enabled)
         self.reader_display.set_guide_mark_thickness(self._guide_mark_thickness_px)
@@ -211,6 +216,24 @@ class Canvas(ctk.CTkFrame):
     def save_pending_draft(self) -> None:
         self._capture_current_draft()
 
+    def flush_active_session_stats(self) -> None:
+        """Report whatever's been accumulated in any reading session
+        currently in flight -- this canvas's own reader_display, and, if
+        a transcript is detached, that window's reader_display too --
+        without otherwise disturbing playback state. Called from
+        gui/app.py's close handler (_handle_close()), the one exit path
+        that never goes through stop() or DetachedTranscriptWindow.
+        close() first: quitting the whole app tears down every Toplevel
+        via Tk's own destroy() cascade, which does NOT invoke a
+        Toplevel's own WM_DELETE_WINDOW handler -- so without this,
+        closing the app mid-read (in either window) would silently lose
+        that session's tail end. Safe to call unconditionally: both
+        finalize_session() calls below are no-ops if nothing is loaded
+        there."""
+        self.reader_display.finalize_session()
+        if self._detached_window:
+            self._detached_window.reader_display.finalize_session()
+
     def _capture_current_draft(self) -> None:
         if self._input_currently_shown and self.current_transcript:
             text = self.input_view.get_text().strip()
@@ -234,6 +257,10 @@ class Canvas(ctk.CTkFrame):
     def _handle_position_changed(self, index: int) -> None:
         if self.on_position_changed and self.current_transcript:
             self.on_position_changed(self.current_transcript, index)
+
+    def _handle_session_stats(self, words_read: int, active_seconds: float) -> None:
+        if self.on_session_stats and self.current_transcript:
+            self.on_session_stats(self.current_transcript, words_read, active_seconds)
 
     def _handle_pause_changed(self, is_paused: bool) -> None:
         if self.on_pause_changed and self.current_transcript:
@@ -287,6 +314,7 @@ class Canvas(ctk.CTkFrame):
             on_position_changed=self.on_position_changed,
             on_pause_changed=self.on_pause_changed,
             on_stopped_changed=self.on_stopped_changed,
+            on_session_stats=self.on_session_stats,
             skip_word_count=self._skip_word_count,
             pause_on_skip=self._pause_on_skip,
             highlight_offset_px=self._highlight_offset_px,

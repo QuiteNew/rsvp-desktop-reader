@@ -13,6 +13,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def __init__(
         self, master, transcript, on_text_submitted, on_closed,
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
+        on_session_stats=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
@@ -36,6 +37,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.on_position_changed = on_position_changed
         self.on_pause_changed = on_pause_changed
         self.on_stopped_changed = on_stopped_changed
+        self.on_session_stats = on_session_stats
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
@@ -65,7 +67,11 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.input_view = TranscriptInput(
             self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text
         )
-        self.reader_display = ReaderDisplay(self, on_position_changed=self._handle_position_changed)
+        self.reader_display = ReaderDisplay(
+            self,
+            on_position_changed=self._handle_position_changed,
+            on_session_stats=self._handle_session_stats,
+        )
         self.reader_display.set_highlight_offset(highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(guide_mark_horizontal_enabled)
         self.reader_display.set_guide_mark_thickness(guide_mark_thickness_px)
@@ -134,6 +140,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _handle_position_changed(self, index: int) -> None:
         if self.on_position_changed:
             self.on_position_changed(self.transcript, index)
+
+    def _handle_session_stats(self, words_read: int, active_seconds: float) -> None:
+        if self.on_session_stats:
+            self.on_session_stats(self.transcript, words_read, active_seconds)
 
     def _handle_stopped_changed(self, is_stopped: bool) -> None:
         if self.on_stopped_changed:

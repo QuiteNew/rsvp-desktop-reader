@@ -107,6 +107,7 @@ class RSVPApp(ctk.CTk):
             on_pause_changed=self._handle_pause_changed,
             on_draft_changed=self._handle_draft_changed,
             on_stopped_changed=self._handle_stopped_changed,
+            on_session_stats=self._handle_session_stats,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             highlight_offset_px=self.settings_store.highlight_offset_px,
@@ -375,6 +376,9 @@ class RSVPApp(ctk.CTk):
     def _handle_stopped_changed(self, transcript, is_stopped: bool) -> None:
         self.store.set_transcript_stopped(transcript.id, is_stopped)
 
+    def _handle_session_stats(self, transcript, words_read: int, active_seconds: float) -> None:
+        self.store.add_session_stats(transcript.id, words_read, active_seconds)
+
     def _handle_draft_changed(self, transcript, text: str) -> None:
         if transcript.is_stopped:
             self.store.set_transcript_text(transcript.id, text)
@@ -458,6 +462,7 @@ class RSVPApp(ctk.CTk):
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             appearance_mode=self.settings_store.appearance_mode,
+            transcripts=self.store.transcripts,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
@@ -602,6 +607,13 @@ class RSVPApp(ctk.CTk):
 
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()
+        # Flushes any reading session still in flight (main canvas or a
+        # detached window) BEFORE the store flush below -- WM_DELETE_WINDOW
+        # is the one exit path that never goes through reader_display.
+        # stop() or DetachedTranscriptWindow.close(), so without this,
+        # quitting mid-read would silently lose that session's words/time.
+        # See Canvas.flush_active_session_stats()'s docstring.
+        self.canvas.flush_active_session_stats()
         # Position/WPM and skip-amount writes are throttled while their
         # sliders are actively being used (see core/transcript_store.py and
         # core/settings_store.py) -- this guarantees whatever was last
