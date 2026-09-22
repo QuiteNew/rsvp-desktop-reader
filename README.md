@@ -213,8 +213,10 @@ rsvp-desktop-reader/
 │ └── fonts/ # Bundled Fredoka & Quicksand font files
 ├── core/ # Pure reading engine — no GUI dependencies
 │ ├── models.py # The Transcript data model
+│ ├── importers.py # Turns a picked file (.txt/.srt/.docx/.pdf) into plain transcript text
 │ ├── parser.py # Strips timestamps from raw transcript text
 │ ├── tokenizer.py # Splits cleaned text into words
+│ ├── punctuation.py # Splits punctuation off each word and classifies the pause that should follow it
 │ ├── orp.py # Calculates each word's Optimal Recognition Point
 │ ├── timing.py # Converts WPM into a per-word delay
 │ ├── reader.py # ReaderSession — ties the above together
@@ -228,8 +230,10 @@ rsvp-desktop-reader/
 │ ├── icons.py # Hand-drawn icons (avoids font-glyph rendering issues)
 │ └── components/ # Every individual UI piece — header, canvas, dialogs, etc.
 ├── tests/ # Automated test suite covering core engine modules
+│ ├── test_importers.py
 │ ├── test_orp.py
 │ ├── test_parser.py
+│ ├── test_punctuation.py
 │ ├── test_reader.py
 │ ├── test_settings_store.py
 │ ├── test_timing.py
@@ -278,8 +282,8 @@ Settings are organized into four tabs:
 - ~~Packaging and distribution (.exe(Windows) and.tz(Linux))~~ *MacOS still not finished*
 - ~~Creating a custom icon~~
 - ~~Cross-machine continuity~~ 
-- Improvements to reading engine depth
-- Data insertion beyond copy pasting 
+- ~~Improvements to reading engine depth~~
+- ~~Data insertion beyond copy pasting~~ 
 - Session stats
 - Quality of life polish
 
