@@ -27,6 +27,7 @@ from core.transcript_store import TranscriptStore
 from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE
 from core import data_bundle
 from core import importers
+from core.tokenizer import tokenize
 
 
 class RSVPApp(ctk.CTk):
@@ -34,6 +35,17 @@ class RSVPApp(ctk.CTk):
     across 5 rows (headers / divider / content / divider / bottom band)."""
 
     HEADER_HEIGHT = 80  # fixed — not user-configurable
+
+    # Word count above which _handle_add_from_file_requested() warns that a
+    # very large import might crash the app. This is a starting guess, NOT
+    # a measured crash boundary -- a user reported the app crashing after
+    # importing "a whole book" as a PDF, but the actual crash was never
+    # reproduced or root-caused, so there's no confirmed threshold to tune
+    # this against yet. Counted with core.tokenizer.tokenize(), the same
+    # splitter core/reader.py itself uses, so this reflects the real word
+    # count the reading engine will process, not a rough len(text.split())
+    # guess that could quietly disagree with it.
+    LARGE_IMPORT_WORD_WARNING_THRESHOLD = 30_000
 
     def __init__(self):
         super().__init__()
@@ -272,7 +284,13 @@ class RSVPApp(ctk.CTk):
         Settings -- see _handle_export_requested()'s docstring for why
         that distinction matters when a dialog holds a persistent grab;
         the main window never does, so there's no native-dialog grab
-        dance to do here."""
+        dance to do here.
+
+        A very large file (a whole book imported as PDF crashed the app,
+        per a user report that was never reproduced or root-caused) gets
+        AddTranscriptDialog's optional `warning` set instead of being
+        blocked outright -- see LARGE_IMPORT_WORD_WARNING_THRESHOLD above
+        for why this is a heads-up, not a hard limit."""
         filetypes = [
             ("Supported documents", " ".join(f"*{ext}" for ext in sorted(importers.SUPPORTED_EXTENSIONS))),
             ("Text files", "*.txt"),
@@ -290,12 +308,23 @@ class RSVPApp(ctk.CTk):
             MessageDialog(self, "Couldn't add that file", str(e))
             return
 
+        word_count = len(tokenize(text))
+        warning = None
+        if word_count > self.LARGE_IMPORT_WORD_WARNING_THRESHOLD:
+            warning = (
+                f"Heads up: this file is about {word_count:,} words long. "
+                "Very large transcripts have been known to crash RSVP "
+                "Reader -- if that happens, try splitting the file into "
+                "smaller parts and importing those instead."
+            )
+
         AddTranscriptDialog(
             self,
             spaces=self.store.spaces,
             default_space=self.store.current_space,
             initial_title=Path(path).stem,
             window_title="Add Transcript from File",
+            warning=warning,
             on_submit=lambda title, space: self._handle_file_transcript_submitted(title, space, text),
         )
 
