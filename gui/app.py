@@ -12,6 +12,7 @@ from gui.components.divider import Divider
 from gui.components.spaces import Spaces
 from gui.components.footer import Footer
 from gui.components.add_transcript_dialog import AddTranscriptDialog
+from gui.components.add_transcript_chooser_dialog import AddTranscriptChooserDialog
 from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
@@ -59,10 +60,7 @@ class RSVPApp(ctk.CTk):
         self.grid_rowconfigure(3, weight=0, minsize=Divider.HIT_THICKNESS)
         self._apply_layout_sizes()
 
-        self.list_header = TranscriptListHeader(
-            self, on_add=self._open_add_transcript_dialog,
-            on_add_from_file=self._handle_add_from_file_requested,
-        )
+        self.list_header = TranscriptListHeader(self, on_add=self._open_add_transcript_chooser)
         self.list_header.grid(row=0, column=0, sticky="nsew")
 
         self.header = Header(self, on_settings=self._open_settings_window)
@@ -184,6 +182,17 @@ class RSVPApp(ctk.CTk):
     def _handle_bottom_band_drag_end(self) -> None:
         self.settings_store.set_layout_sizes(self.settings_store.sidebar_width, self._pending_value)
 
+    def _open_add_transcript_chooser(self) -> None:
+        """Triggered by the sidebar's "+" button. Offers the two ways to
+        add a transcript -- see AddTranscriptChooserDialog's docstring
+        for why this is a themed CTkToplevel rather than the plain
+        tkinter.Menu it replaces."""
+        AddTranscriptChooserDialog(
+            self,
+            on_choose_blank=self._open_add_transcript_dialog,
+            on_choose_file=self._handle_add_from_file_requested,
+        )
+
     def _open_add_transcript_dialog(self) -> None:
         AddTranscriptDialog(
             self,
@@ -252,18 +261,18 @@ class RSVPApp(ctk.CTk):
         self._create_transcript(title, space)
 
     def _handle_add_from_file_requested(self) -> None:
-        """Triggered from the sidebar's "+" menu's "Add from file..."
-        item (see gui/components/transcript_list_header.py). Picks a
-        file, parses it immediately -- so a corrupt or unreadable file
-        fails right here, before bothering the user with a title/space
-        dialog -- then reuses AddTranscriptDialog exactly as the
-        blank-transcript flow does, just pre-filled with a title guessed
-        from the filename. Parented to self, not self._settings_window,
-        since this is triggered from the main window itself, not from
-        inside Settings -- see _handle_export_requested()'s docstring
-        for why that distinction matters when a dialog holds a
-        persistent grab; the main window never does, so there's no
-        native-dialog grab dance to do here."""
+        """Triggered by AddTranscriptChooserDialog's "Add from file…"
+        button (see _open_add_transcript_chooser() above). Picks a file,
+        parses it immediately -- so a corrupt or unreadable file fails
+        right here, before bothering the user with a title/space dialog
+        -- then reuses AddTranscriptDialog exactly as the blank-transcript
+        flow does, just pre-filled with a title guessed from the
+        filename. Parented to self, not self._settings_window, since
+        this is triggered from the main window itself, not from inside
+        Settings -- see _handle_export_requested()'s docstring for why
+        that distinction matters when a dialog holds a persistent grab;
+        the main window never does, so there's no native-dialog grab
+        dance to do here."""
         filetypes = [
             ("Supported documents", " ".join(f"*{ext}" for ext in sorted(importers.SUPPORTED_EXTENSIONS))),
             ("Text files", "*.txt"),
@@ -291,8 +300,18 @@ class RSVPApp(ctk.CTk):
         )
 
     def _handle_file_transcript_submitted(self, title: str, space: str, text: str) -> None:
+        # draft_text, deliberately NOT set_transcript_text(): Canvas.
+        # load_transcript() treats a non-empty raw_text as "already
+        # started -- reopen straight into the reader, unpaused" (the
+        # branch for resuming an in-progress transcript), which is
+        # exactly wrong for text that's never been read yet. draft_text
+        # is what TranscriptInput shows in its paste box -- the same
+        # state a manual paste sits in before "Start reading" is
+        # clicked -- so this gives an imported file the identical
+        # "review, then decide" moment a pasted transcript already gets,
+        # instead of jumping straight into playback.
         transcript = self._create_transcript(title, space)
-        self.store.set_transcript_text(transcript.id, text)
+        self.store.set_transcript_draft_text(transcript.id, text)
 
     def _open_add_space_dialog(self) -> None:
         AddSpaceDialog(self, on_submit=self._handle_new_space)
