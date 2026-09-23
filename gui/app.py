@@ -96,6 +96,7 @@ class RSVPApp(ctk.CTk):
             self,
             on_select=self._handle_open_transcript,
             on_delete_requested=self._handle_delete_requested,
+            on_rename_requested=self._handle_rename_requested,
         )
         self.list_body.grid(row=2, column=0, sticky="nsew")
 
@@ -596,6 +597,17 @@ class RSVPApp(ctk.CTk):
             self._current_transcript = None
             self.header.set_title("No transcript selected")
             self.footer.set_enabled(False)
+
+    def _handle_rename_requested(self, transcript, new_title: str) -> None:
+        self.store.set_transcript_title(transcript.id, new_title)
+        self._refresh_transcript_list()
+        # The header's title is a separate cached copy, set once when a
+        # transcript is opened (see _handle_open_transcript()) -- if the
+        # transcript being renamed is also the one currently open, it
+        # needs updating here too, or it'd keep showing the old title
+        # until the user reopens it.
+        if self._current_transcript is not None and self._current_transcript.id == transcript.id:
+            self.header.set_title(new_title)
 
     def _handle_skip_word_count_live(self, count: int) -> None:
         self.settings_store.set_skip_word_count_live(count)

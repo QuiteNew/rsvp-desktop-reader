@@ -161,6 +161,12 @@ class TranscriptStore:
                 return t
         return None
 
+    def set_transcript_title(self, transcript_id: int, title: str) -> None:
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.title = title
+            self._save()
+
     def set_transcript_text(self, transcript_id: int, raw_text: str) -> None:
         t = self._find_transcript(transcript_id)
         if t:

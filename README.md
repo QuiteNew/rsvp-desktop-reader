@@ -284,7 +284,7 @@ Settings are organized into four tabs:
 - ~~Cross-machine continuity~~ 
 - ~~Improvements to reading engine depth~~
 - ~~Data insertion beyond copy pasting~~ 
-- Session stats
+- ~~Session stats~~
 - Quality of life polish
 
 

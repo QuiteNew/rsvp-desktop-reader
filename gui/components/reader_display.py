@@ -53,18 +53,18 @@ class ReaderDisplay(ctk.CTkFrame):
                                      # GUIDE_MARK_THICKNESS), so the marks keep scaling with word
                                      # size -- see set_guide_mark_length_percent() docstring.
 
-    GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 2     # px -- fixed; TEMPORARY test value, was 1.
-                                                # Debug output confirmed the 1px-tall guide_line
-                                                # widgets were being correctly created, mapped,
-                                                # sized and positioned by Tkinter (winfo_ismapped=1,
-                                                # correct width/x/y, correct fg_color) even though
-                                                # nothing was visible on screen -- the leading
-                                                # hypothesis is that CTkFrame's canvas-based
-                                                # rounded-rect draw routine doesn't paint a visible
-                                                # fill at 1 physical pixel of thickness. This bumps
-                                                # it to 2px (matching the vertical marks' known-
-                                                # working GUIDE_MARK_THICKNESS) as a test -- not yet
-                                                # confirmed as the fix.
+    GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 2     # px -- fixed; confirmed correct value. A 1px
+                                                # CTkFrame fill does not render visibly in this
+                                                # CustomTkinter version -- debug output showed the
+                                                # 1px-tall guide_line widgets were being correctly
+                                                # created, mapped, sized and positioned by Tkinter
+                                                # (winfo_ismapped=1, correct width/x/y, correct
+                                                # fg_color) even though nothing was visible on
+                                                # screen, pointing to CTkFrame's canvas-based
+                                                # rounded-rect draw routine simply not painting a
+                                                # fill that thin. 2px (matching the vertical
+                                                # marks' GUIDE_MARK_THICKNESS) is the smallest
+                                                # value that actually renders, and is what ships.
     GUIDE_MARK_HORIZONTAL_EDGE_MARGIN_PX = 34  # px kept clear between each tick's end and the
                                                 # reading row's left/right edge -- the "close
                                                 # to the wall but not touching it" gap. This is

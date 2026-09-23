@@ -8,10 +8,11 @@ class TranscriptListBody(ctk.CTkFrame):
     """Scrollable list of saved transcripts. Each row has a delete
     button that only becomes clearly visible when hovering that row."""
 
-    def __init__(self, master, on_select=None, on_delete_requested=None):
+    def __init__(self, master, on_select=None, on_delete_requested=None, on_rename_requested=None):
         super().__init__(master, fg_color=WARM_TAUPE, corner_radius=0)
         self.on_select = on_select
         self.on_delete_requested = on_delete_requested
+        self.on_rename_requested = on_rename_requested
 
         self.entries_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.entries_frame.pack(fill="both", expand=True, padx=(8, 3), pady=8)
@@ -55,6 +56,58 @@ class TranscriptListBody(ctk.CTkFrame):
         title_label.pack(side="left", fill="x", expand=True, padx=(12, 4), pady=8)
         self._bind_truncating_label(title_label, transcript.title)
 
+        # Rename entry -- built up front but never packed until a
+        # double-click on title_label starts an edit (see start_rename()
+        # below). It swaps into title_label's exact pack slot for the
+        # duration of the edit, then swaps back out on commit or cancel,
+        # so the row's layout never shifts around it.
+        title_entry = ctk.CTkEntry(row, text_color=COCOA_INK, font=title_font)
+
+        # A plain closure flag rather than title_entry.winfo_ismapped():
+        # committing or cancelling both end with pack_forget(), which can
+        # itself raise a synchronous <FocusOut> on the entry -- relying on
+        # "is it currently mapped" to tell a real edit-in-progress apart
+        # from that self-triggered follow-up event depends on exactly
+        # when Tkinter updates the mapped state relative to firing the
+        # event, which isn't something to depend on. This flag is set
+        # False before pack_forget() runs, so both commit_rename() and
+        # cancel_rename() are safe to call a second time and simply no-op.
+        rename_state = {"editing": False}
+
+        def start_rename(event=None):
+            if rename_state["editing"]:
+                return
+            rename_state["editing"] = True
+            title_entry.delete(0, "end")
+            title_entry.insert(0, transcript.title)
+            title_label.pack_forget()
+            title_entry.pack(side="left", fill="x", expand=True, padx=(12, 4), pady=8)
+            title_entry.focus_set()
+            title_entry.select_range(0, "end")
+            title_entry.icursor("end")
+
+        def end_rename():
+            rename_state["editing"] = False
+            title_entry.pack_forget()
+            title_label.pack(side="left", fill="x", expand=True, padx=(12, 4), pady=8)
+
+        def commit_rename(event=None):
+            if not rename_state["editing"]:
+                return
+            new_title = title_entry.get().strip()
+            end_rename()
+            if new_title and new_title != transcript.title:
+                self._handle_rename_requested(transcript, new_title)
+
+        def cancel_rename(event=None):
+            if not rename_state["editing"]:
+                return
+            end_rename()
+
+        title_entry.bind("<Return>", commit_rename)
+        title_entry.bind("<FocusOut>", commit_rename)
+        title_entry.bind("<Escape>", cancel_rename)
+
         def reveal(event=None):
             delete_button.configure(text_color=WARM_LINE)
 
@@ -66,6 +119,7 @@ class TranscriptListBody(ctk.CTkFrame):
             widget.bind("<Leave>", unreveal)
 
         title_label.bind("<Button-1>", lambda event, t=transcript: self._handle_select(t))
+        title_label.bind("<Double-Button-1>", start_rename)
 
     @staticmethod
     def _bind_truncating_label(label: ctk.CTkLabel, full_text: str) -> None:
@@ -140,3 +194,7 @@ class TranscriptListBody(ctk.CTkFrame):
     def _handle_delete_requested(self, transcript) -> None:
         if self.on_delete_requested:
             self.on_delete_requested(transcript)
+
+    def _handle_rename_requested(self, transcript, new_title: str) -> None:
+        if self.on_rename_requested:
+            self.on_rename_requested(transcript, new_title)
