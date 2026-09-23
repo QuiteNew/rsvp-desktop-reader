@@ -18,6 +18,7 @@ from gui.components.settings_window import SettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
 from gui.components.space_selection_dialog import SpaceSelectionDialog
 from gui.components.delete_space_dialog import DeleteSpaceDialog
+from gui.components.move_transcript_dialog import MoveTranscriptDialog
 from gui.components.message_dialog import MessageDialog
 from gui.components.import_confirm_dialog import ImportConfirmDialog
 from gui.theme import (
@@ -100,6 +101,7 @@ class RSVPApp(ctk.CTk):
             on_select=self._handle_open_transcript,
             on_delete_requested=self._handle_delete_requested,
             on_rename_requested=self._handle_rename_requested,
+            on_move_requested=self._handle_move_requested,
         )
         self.list_body.grid(row=2, column=0, sticky="nsew")
 
@@ -679,6 +681,37 @@ class RSVPApp(ctk.CTk):
         # until the user reopens it.
         if self._current_transcript is not None and self._current_transcript.id == transcript.id:
             self.header.set_title(new_title)
+
+    def _handle_move_requested(self, transcript) -> None:
+        """Triggered by the sidebar row's move ("→") icon. Parented to
+        self, not any other dialog -- like _handle_delete_requested()
+        below it, this is triggered straight from the main window, not
+        from inside another modal, so there's no stacking-order concern
+        to parent around (contrast _handle_export_requested()'s
+        docstring, where that distinction matters)."""
+        other_spaces = [s for s in self.store.spaces if s != transcript.space]
+        if not other_spaces:
+            MessageDialog(
+                self, "No other spaces",
+                "This is your only space -- create another one first, then you'll be able to move transcripts into it.",
+            )
+            return
+
+        MoveTranscriptDialog(
+            self, transcript_title=transcript.title, other_spaces=other_spaces,
+            on_select=lambda space: self._handle_move_confirmed(transcript, space),
+        )
+
+    def _handle_move_confirmed(self, transcript, space: str) -> None:
+        self.store.set_transcript_space(transcript.id, space)
+        # The transcript no longer belongs to the currently-viewed space,
+        # so it drops out of the sidebar list here -- but if it was
+        # already open in the reader, it stays open: self._current_transcript
+        # is the very same Transcript object set_transcript_space() just
+        # mutated in place (transcripts_in_current_space() -> add_entry()
+        # never copies), not a separate copy, so filing it into another
+        # space doesn't interrupt a session already in progress.
+        self._refresh_transcript_list()
 
     def _handle_skip_word_count_live(self, count: int) -> None:
         self.settings_store.set_skip_word_count_live(count)

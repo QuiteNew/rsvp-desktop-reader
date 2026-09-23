@@ -239,6 +239,21 @@ class TranscriptStore:
             t.title = title
             self._save()
 
+    def set_transcript_space(self, transcript_id: int, space: str) -> None:
+        """Reassign a transcript to a different space -- e.g. via the
+        sidebar's per-row move icon (see gui/components/
+        move_transcript_dialog.py and gui/app.py's
+        _handle_move_confirmed()). Silently no-ops if space isn't a real
+        space name -- a defensive backstop only: the UI always offers a
+        destination drawn straight from self.spaces (MoveTranscriptDialog
+        is built from that same list, never free text), so unlike
+        rename_space()'s bool return, there's no realistic rejection case
+        a caller needs to react to here."""
+        t = self._find_transcript(transcript_id)
+        if t and space in self._spaces:
+            t.space = space
+            self._save()
+
     def set_transcript_text(self, transcript_id: int, raw_text: str) -> None:
         t = self._find_transcript(transcript_id)
         if t:

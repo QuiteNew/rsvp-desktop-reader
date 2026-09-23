@@ -1,3 +1,4 @@
+import tkinter as tk
 import tkinter.font as tkfont
 
 import customtkinter as ctk
@@ -5,14 +6,27 @@ from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, FONT_BODY
 
 
 class TranscriptListBody(ctk.CTkFrame):
-    """Scrollable list of saved transcripts. Each row has a delete
-    button that only becomes clearly visible when hovering that row."""
+    """Scrollable list of saved transcripts. Each row has a delete ("X")
+    button that only becomes clearly visible when hovering that row, a
+    double-click-to-rename title, and a right-click menu to move the
+    transcript to another space.
 
-    def __init__(self, master, on_select=None, on_delete_requested=None, on_rename_requested=None):
+    Move deliberately has no icon of its own -- an earlier version added
+    a dedicated always-there-on-hover "→" button next to delete, but that
+    cost ~24px of the row's width on top of what delete already reserves
+    (see the packing comment in add_entry() below), squeezing an already
+    narrow sidebar's title text for a feature expected to be used far
+    less often than delete or rename. Rename solves the same problem for
+    itself with a gesture instead of an icon (double-click); move reuses
+    that idea via a right-click context menu, which costs the row
+    nothing until it's actually opened."""
+
+    def __init__(self, master, on_select=None, on_delete_requested=None, on_rename_requested=None, on_move_requested=None):
         super().__init__(master, fg_color=WARM_TAUPE, corner_radius=0)
         self.on_select = on_select
         self.on_delete_requested = on_delete_requested
         self.on_rename_requested = on_rename_requested
+        self.on_move_requested = on_move_requested
 
         self.entries_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.entries_frame.pack(fill="both", expand=True, padx=(8, 3), pady=8)
@@ -121,6 +135,29 @@ class TranscriptListBody(ctk.CTkFrame):
         title_label.bind("<Button-1>", lambda event, t=transcript: self._handle_select(t))
         title_label.bind("<Double-Button-1>", start_rename)
 
+        # Right-click ("<Button-3>", the standard Windows/Linux secondary-
+        # click event -- macOS's Ctrl-click also maps to it under Tk) on
+        # either the row's own background or the title opens a plain
+        # context menu with the transcript's only currently-menu-only
+        # action. A fresh tk.Menu is built per click rather than one
+        # reused instance -- cheap, and sidesteps having to keep a
+        # per-row menu object around just to close over `transcript`.
+        # This is a native/undecorated tk.Menu, not a themed CTk widget
+        # -- CustomTkinter doesn't provide a themed popup menu, but a
+        # plain OS-native context menu here is normal and expected, the
+        # same way even most fully-themed desktop apps still show the
+        # system's native right-click menu.
+        def show_context_menu(event):
+            menu = tk.Menu(self, tearoff=0)
+            menu.add_command(label="Move to Space...", command=lambda: self._handle_move_requested(transcript))
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+        row.bind("<Button-3>", show_context_menu)
+        title_label.bind("<Button-3>", show_context_menu)
+
     @staticmethod
     def _bind_truncating_label(label: ctk.CTkLabel, full_text: str) -> None:
         """CTkLabel, like a plain Tk label, never truncates long text on
@@ -198,3 +235,7 @@ class TranscriptListBody(ctk.CTkFrame):
     def _handle_rename_requested(self, transcript, new_title: str) -> None:
         if self.on_rename_requested:
             self.on_rename_requested(transcript, new_title)
+
+    def _handle_move_requested(self, transcript) -> None:
+        if self.on_move_requested:
+            self.on_move_requested(transcript)
