@@ -16,6 +16,8 @@ from gui.components.add_transcript_chooser_dialog import AddTranscriptChooserDia
 from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
+from gui.components.space_selection_dialog import SpaceSelectionDialog
+from gui.components.delete_space_dialog import DeleteSpaceDialog
 from gui.components.message_dialog import MessageDialog
 from gui.components.import_confirm_dialog import ImportConfirmDialog
 from gui.theme import (
@@ -61,6 +63,7 @@ class RSVPApp(ctk.CTk):
         self._drag_start_value = None
         self._pending_value = None
         self._settings_window = None  # set whenever Settings is open -- see _open_settings_window()
+        self._space_selection_dialog = None  # set whenever it's open -- see _open_space_selection_dialog()
 
         self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
@@ -138,10 +141,9 @@ class RSVPApp(ctk.CTk):
 
         self.spaces = Spaces(
             self,
-            spaces=self.store.spaces,
             current_space=self.store.current_space,
-            on_select=self._handle_space_selected,
             on_add=self._open_add_space_dialog,
+            on_open_spaces=self._open_space_selection_dialog,
         )
         self.spaces.grid(row=4, column=0, sticky="nsew")
 
@@ -349,14 +351,83 @@ class RSVPApp(ctk.CTk):
 
     def _handle_new_space(self, name: str) -> None:
         current = self.store.add_space(name)
-        self.spaces.update_spaces(self.store.spaces)
         self.spaces.set_current_space(current)
         self._refresh_transcript_list()
+
+    def _open_space_selection_dialog(self) -> None:
+        # Stored on self, not just constructed inline, for the same
+        # reason self._settings_window is -- see _open_settings_window()'s
+        # docstring. Any dialog THIS dialog itself goes on to open (the
+        # delete confirmation, or a "can't delete that" message -- see
+        # _handle_space_delete_requested() below) needs to be parented to
+        # THIS window, not the main app window, or there's no guaranteed
+        # stacking order between them.
+        self._space_selection_dialog = SpaceSelectionDialog(
+            self,
+            spaces=self.store.spaces,
+            current_space=self.store.current_space,
+            on_select=self._handle_space_selected,
+            on_rename_requested=self._handle_space_rename_requested,
+            on_delete_requested=self._handle_space_delete_requested,
+        )
 
     def _handle_space_selected(self, name: str) -> None:
         current = self.store.switch_to_space(name)
         self.spaces.set_current_space(current)
         self._refresh_transcript_list()
+
+    def _handle_space_rename_requested(self, old_name: str, new_name: str) -> bool:
+        """Returns whether the rename actually happened, straight through
+        from TranscriptStore.rename_space() -- SpaceSelectionDialog's own
+        commit_rename() needs that to know whether to update its row's
+        displayed text (see its docstring for why a rejected rename, e.g.
+        a duplicate name, must NOT be reflected in the dialog)."""
+        renamed = self.store.rename_space(old_name, new_name)
+        if renamed:
+            self.spaces.set_current_space(self.store.current_space)
+        return renamed
+
+    def _handle_space_delete_requested(self, name: str) -> None:
+        """Triggered by the delete "X" on a row in SpaceSelectionDialog.
+        Does its own upfront checks -- rather than just calling
+        store.delete_space() and reacting to a bool -- because a refused
+        delete needs to tell the user WHY, not just silently do nothing
+        (this is a deliberate, once-off action the user clicked a button
+        for, unlike e.g. AddSpaceDialog silently no-op'ing on a blank
+        name). Only opens the actual confirmation dialog once a delete is
+        already known to be possible."""
+        if len(self.store.spaces) <= 1:
+            MessageDialog(
+                self._space_selection_dialog, "Can't delete this space",
+                "This is your only space -- there always has to be at least one.",
+            )
+            return
+
+        transcripts_in_space = self.store.transcripts_in_space(name)
+        if transcripts_in_space:
+            count = len(transcripts_in_space)
+            MessageDialog(
+                self._space_selection_dialog, "Can't delete this space",
+                f"\"{name}\" still has {count} transcript{'s' if count != 1 else ''} "
+                "in it. Move or delete those first, then try again.",
+            )
+            return
+
+        DeleteSpaceDialog(
+            self._space_selection_dialog, space_name=name,
+            on_confirm=lambda: self._handle_space_delete_confirmed(name),
+        )
+
+    def _handle_space_delete_confirmed(self, name: str) -> None:
+        self.store.delete_space(name)
+        self.spaces.set_current_space(self.store.current_space)
+        self._refresh_transcript_list()
+        # Closes the space-picker itself too -- see
+        # SpaceSelectionDialog's class docstring for why a delete, unlike
+        # a rename, takes the whole dialog down with it rather than just
+        # updating in place.
+        if self._space_selection_dialog is not None:
+            self._space_selection_dialog.destroy()
 
     def _handle_open_transcript(self, transcript) -> None:
         self._current_transcript = transcript

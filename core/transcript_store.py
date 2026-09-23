@@ -116,9 +116,12 @@ class TranscriptStore:
     def transcripts(self) -> list[Transcript]:
         return list(self._transcripts)
 
+    def transcripts_in_space(self, name: str) -> list[Transcript]:
+        return [t for t in self._transcripts if t.space == name]
+
     @property
     def transcripts_in_current_space(self) -> list[Transcript]:
-        return [t for t in self._transcripts if t.space == self.current_space]
+        return self.transcripts_in_space(self.current_space)
 
     def add_space(self, name: str) -> str:
         name = name.strip()
@@ -133,6 +136,75 @@ class TranscriptStore:
             self._current_space_index = self._spaces.index(name)
             self._save()
         return self.current_space
+
+    def rename_space(self, old_name: str, new_name: str) -> bool:
+        """Rename a space, reassigning every transcript currently in it to
+        the new name in the same call -- spaces are identified purely by
+        their string name (see self._spaces), not a separate stable id,
+        so a transcript whose .space field wasn't also updated here would
+        silently fall out of the renamed space (transcripts_in_space()
+        filters by exact string match).
+
+        Silently rejects (same permissive-on-invalid-input convention as
+        add_space()) and returns False if old_name doesn't exist, new_name
+        is blank or unchanged, or new_name is already used by a DIFFERENT
+        space -- space names must stay unique, same as add_space() already
+        enforces for a brand-new space. Returns True only for a rename
+        that actually happened, so a caller (see gui/app.py's
+        _handle_space_rename_requested() and
+        gui/components/space_selection_dialog.py's commit_rename()) can
+        tell a genuine rename apart from a rejected one and only update
+        its own displayed text for the former -- otherwise the dialog
+        could end up showing a name that was never actually applied.
+
+        Renaming the CURRENT space is fine without any extra handling:
+        it's renamed in place at the same index, so current_space just
+        reads back the new name automatically afterward."""
+        new_name = new_name.strip()
+        if old_name not in self._spaces:
+            return False
+        if not new_name or new_name == old_name:
+            return False
+        if new_name in self._spaces:
+            return False
+        index = self._spaces.index(old_name)
+        self._spaces[index] = new_name
+        for t in self._transcripts:
+            if t.space == old_name:
+                t.space = new_name
+        self._save()
+        return True
+
+    def delete_space(self, name: str) -> bool:
+        """Delete a space by name -- but only if it's empty (no
+        transcripts currently assigned to it) and it isn't the only space
+        left (there always has to be at least one). Returns whether the
+        delete actually happened, so a caller (see gui/app.py's
+        _handle_space_delete_requested(), which does its own upfront
+        checks and only ever calls this once it already expects True) can
+        tell an accepted delete apart from a silently-refused one.
+
+        If the deleted space was the current one, falls back to whichever
+        space is now first -- there's nothing special about index 0
+        beyond that (default_space is unused outside the tests, per a
+        repo-wide check), so "the first remaining space" is just a
+        simple, predictable choice, not a protected default. Re-derives
+        the new current_space_index from the PREVIOUS current space's
+        name (found again after the removal) rather than adjusting the
+        old index by hand, so this is correct regardless of whether the
+        deleted space came before or after the current one in the list."""
+        if name not in self._spaces or len(self._spaces) <= 1:
+            return False
+        if self.transcripts_in_space(name):
+            return False
+        current_name = self.current_space
+        self._spaces.remove(name)
+        if current_name == name:
+            self._current_space_index = 0
+        else:
+            self._current_space_index = self._spaces.index(current_name)
+        self._save()
+        return True
 
     def add_transcript(
         self,
