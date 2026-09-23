@@ -657,7 +657,10 @@ class RSVPApp(ctk.CTk):
         )
 
     def _handle_delete_requested(self, transcript) -> None:
-        DeleteTranscriptDialog(self, on_confirm=lambda: self._handle_delete_confirmed(transcript))
+        DeleteTranscriptDialog(
+            self, transcript_title=transcript.title,
+            on_confirm=lambda: self._handle_delete_confirmed(transcript),
+        )
 
     def _handle_delete_confirmed(self, transcript) -> None:
         was_current = self._current_transcript is not None and self._current_transcript.id == transcript.id

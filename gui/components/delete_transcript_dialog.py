@@ -3,9 +3,14 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FON
 
 
 class DeleteTranscriptDialog(ctk.CTkToplevel):
-    """Confirmation popup before permanently deleting a transcript."""
+    """Confirmation popup before permanently deleting a transcript. Names
+    the transcript in its message -- same reasoning as DeleteSpaceDialog's
+    class docstring: with several transcripts open across spaces, "are you
+    sure you want to delete the transcript?" doesn't say WHICH one, which
+    matters most right when the user is about to confirm something
+    irreversible."""
 
-    def __init__(self, master, on_confirm):
+    def __init__(self, master, transcript_title: str, on_confirm):
         super().__init__(master)
 
         # Hidden until fully built (see the matching alpha restore at the
@@ -25,7 +30,7 @@ class DeleteTranscriptDialog(ctk.CTkToplevel):
         button_font = ctk.CTkFont(family=FONT_BODY, size=13)
 
         ctk.CTkLabel(
-            self, text="Are you sure you want to permanently delete the transcript?",
+            self, text=f"Are you sure you want to permanently delete \"{transcript_title}\"?",
             text_color=COCOA_INK, font=message_font,
             wraplength=320, justify="left",
         ).pack(padx=20, pady=(25, 20))
