@@ -2,24 +2,53 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 import customtkinter as ctk
-from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, FONT_BODY
+from gui.components.divider import Divider
+from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
 
 
 class TranscriptListBody(ctk.CTkFrame):
-    """Scrollable list of saved transcripts. Each row has a delete ("X")
-    button that only becomes clearly visible when hovering that row, a
-    double-click-to-rename title, and a right-click menu to move the
-    transcript to another space.
+    """Scrollable list of saved transcripts, with a search box and sort
+    menu pinned above it. Each row has a delete ("X") button that only
+    becomes clearly visible when hovering that row, a double-click-to-
+    rename title, and a right-click menu to move the transcript to
+    another space."""
 
-    Move deliberately has no icon of its own -- an earlier version added
-    a dedicated always-there-on-hover "→" button next to delete, but that
-    cost ~24px of the row's width on top of what delete already reserves
-    (see the packing comment in add_entry() below), squeezing an already
-    narrow sidebar's title text for a feature expected to be used far
-    less often than delete or rename. Rename solves the same problem for
-    itself with a gesture instead of an icon (double-click); move reuses
-    that idea via a right-click context menu, which costs the row
-    nothing until it's actually opened."""
+    # Every available sort mode: label -> (key function, reverse). A
+    # plain dict rather than a list of tuples -- Python dicts keep
+    # insertion order, so this doubles as the menu's display order in
+    # _show_sort_menu() below, while also giving _rerender() a direct
+    # O(1) lookup instead of a linear scan.
+    #
+    # "Date added" has no dedicated timestamp field to sort by (see
+    # core/models.py -- Transcript has no created_at/last_opened_at of
+    # any kind). id stands in for it instead: TranscriptStore._next_id
+    # only ever increases and ids are never reused or reassigned, and
+    # add_transcript() always appends, never inserts -- so id order IS
+    # creation order, exactly.
+    #
+    # "Most read" and "Most time spent reading" repurpose two of the
+    # Stats tab's own running totals (times_read, total_time_spent_seconds
+    # -- see core/models.py and TranscriptStore.add_session_stats()) as
+    # sort keys. Both are single-direction (most-first) only, not offered
+    # in a "least first" variant -- unlike title/date, there's no obvious
+    # everyday reason to want to see your LEAST-read transcripts surfaced
+    # first, so that direction was left out rather than doubling the menu
+    # for a combination nothing asked for.
+    SORT_MODES = {
+        "Title (A–Z)": (lambda t: t.title.lower(), False),
+        "Title (Z–A)": (lambda t: t.title.lower(), True),
+        "Date added (newest first)": (lambda t: t.id, True),
+        "Date added (oldest first)": (lambda t: t.id, False),
+        "Most read": (lambda t: t.times_read, True),
+        "Most time spent reading": (lambda t: t.total_time_spent_seconds, True),
+    }
+
+    # Matches the list's own pre-existing, sort-feature-free order
+    # (self._transcripts in TranscriptStore is only ever appended to,
+    # never reordered -- see add_transcript()), so a freshly launched
+    # app looks exactly as it always has until the user deliberately
+    # picks a different sort.
+    DEFAULT_SORT_LABEL = "Date added (oldest first)"
 
     def __init__(self, master, on_select=None, on_delete_requested=None, on_rename_requested=None, on_move_requested=None):
         super().__init__(master, fg_color=WARM_TAUPE, corner_radius=0)
@@ -28,8 +57,140 @@ class TranscriptListBody(ctk.CTkFrame):
         self.on_rename_requested = on_rename_requested
         self.on_move_requested = on_move_requested
 
+        # The full, unfiltered/unsorted list handed in by the most recent
+        # render_transcripts() call. Search and sort both re-derive what
+        # they display from this each time (see _rerender()) rather than
+        # needing app.py to re-supply it on every keystroke or menu pick
+        # -- neither the search text nor the chosen sort mode is
+        # something app.py or TranscriptStore has any need to know about;
+        # it's purely a display-layer concern local to this widget, and
+        # both are deliberately left un-persisted (in-memory only, same
+        # as e.g. AddTranscriptDialog's own transient state) -- they
+        # reset to "no search, default sort" on every launch, same as
+        # the list itself always has, rather than adding a settings-store
+        # field for something this low-stakes to get wrong or stale.
+        self._all_transcripts: list = []
+        self._sort_label = self.DEFAULT_SORT_LABEL
+
+        toolbar = ctk.CTkFrame(self, fg_color="transparent")
+        toolbar.pack(fill="x", padx=8, pady=(8, 6))
+
+        # sort_button is packed BEFORE search_entry, same reasoning as
+        # delete_button before title_label in add_entry() below: reserve
+        # the fixed-size icon's cavity first so search_entry -- which
+        # fills whatever's left -- can never push it out of the toolbar,
+        # even at the sidebar's minimum width (SIDEBAR_WIDTH_RANGE in
+        # core/settings_store.py allows down to 120px, far too narrow for
+        # a text-labeled sort dropdown to reliably fit).
+        sort_font = ctk.CTkFont(family=FONT_BODY, size=13)
+        sort_button = ctk.CTkButton(
+            toolbar, text="⇅", width=28, height=28, corner_radius=8,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            font=sort_font, command=self._show_sort_menu,
+        )
+        sort_button.pack(side="right")
+        self._sort_button = sort_button
+
+        # trace_add fires on every change to the entry's text -- typing,
+        # pasting, cutting, or a programmatic .set() -- unlike binding a
+        # key event, which would miss paste/cut/clear. render_transcripts()
+        # (called by app.py on every add/delete/rename/move/space-switch)
+        # already triggers its own _rerender(); this covers the other
+        # two triggers, a changed search text or a changed sort mode,
+        # neither of which needs new data from app.py at all.
+        self._search_var = tk.StringVar()
+        self._search_var.trace_add("write", lambda *_args: self._rerender())
+
+        entry_font = ctk.CTkFont(family=FONT_BODY, size=13)
+        search_entry = ctk.CTkEntry(
+            toolbar, textvariable=self._search_var, placeholder_text="Search…",
+            height=28, fg_color=HEARTH_PAPER, border_color=WARM_LINE, border_width=1,
+            text_color=COCOA_INK, font=entry_font,
+        )
+        search_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        # Purely decorative -- separates the search/sort toolbar above
+        # from the scrollable list below so the two don't visually run
+        # together. Reuses the same Divider used for the app's actual
+        # resize handles (the sidebar/bottom-band splits in gui/app.py),
+        # but never calls set_resizable(True) on it, so it stays in its
+        # default disabled state: _enabled is False from construction,
+        # and every one of Divider's press/motion handlers early-returns
+        # whenever _enabled is False (see divider.py) -- no hover cursor,
+        # no drag, nothing to grab. Just the thin WARM_LINE line itself.
+        divider = Divider(self, orientation="horizontal")
+        divider.pack(fill="x", padx=8)
+
         self.entries_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.entries_frame.pack(fill="both", expand=True, padx=(8, 3), pady=8)
+        self.entries_frame.pack(fill="both", expand=True, padx=(8, 3), pady=(6, 8))
+
+    def _show_sort_menu(self) -> None:
+        """Popup menu of every sort mode, opened from sort_button -- the
+        same fresh-tk.Menu-per-click pattern as add_entry()'s right-click
+        move menu below, for the same reason (CustomTkinter has no themed
+        popup-menu widget of its own, and building a new plain tk.Menu on
+        each click is cheap and avoids keeping a persistent one around).
+
+        Uses add_radiobutton bound to a fresh StringVar seeded with the
+        CURRENTLY active sort label, rather than add_command, purely for
+        the free radio-dot next to whichever mode is already selected --
+        a small, genuinely useful "what am I sorted by right now" cue
+        that a plain command menu wouldn't give without extra work. The
+        StringVar only needs to last for as long as the menu is open, so
+        unlike self._search_var it doesn't need to be a persistent
+        attribute -- it's referenced by the menu's own radiobutton items,
+        which keeps it alive until the menu (and this function's local
+        scope, which is what actually holds it) is done."""
+        menu = tk.Menu(self, tearoff=0)
+        sort_var = tk.StringVar(value=self._sort_label)
+        for label in self.SORT_MODES:
+            menu.add_radiobutton(
+                label=label, value=label, variable=sort_var,
+                command=lambda lbl=label: self._handle_sort_selected(lbl),
+            )
+        x = self._sort_button.winfo_rootx()
+        y = self._sort_button.winfo_rooty() + self._sort_button.winfo_height()
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def _handle_sort_selected(self, label: str) -> None:
+        self._sort_label = label
+        self._rerender()
+
+    def _rerender(self) -> None:
+        """Re-derive the displayed rows from self._all_transcripts,
+        applying the current search text and sort mode. Called after
+        render_transcripts() stores a fresh list from app.py, and also
+        directly whenever the search box or sort menu changes -- neither
+        of those needs new data, just a different view of what's already
+        here."""
+        search_text = self._search_var.get().strip().lower()
+        filtered = [t for t in self._all_transcripts if search_text in t.title.lower()]
+
+        key_func, reverse = self.SORT_MODES[self._sort_label]
+        ordered = sorted(filtered, key=key_func, reverse=reverse)
+
+        self.clear()
+
+        if search_text and not ordered:
+            # Only for a search that matched nothing -- a space with
+            # zero transcripts and no active search still renders as a
+            # plain empty list, exactly as it always has (that's
+            # pre-existing behavior this feature was never asked to
+            # change). This message exists specifically to distinguish
+            # "nothing here" from "nothing matches what you typed,"
+            # a distinction that only becomes possible to confuse once
+            # search exists at all.
+            ctk.CTkLabel(
+                self.entries_frame, text="No transcripts match your search.",
+                text_color=WARM_LINE, font=ctk.CTkFont(family=FONT_BODY, size=13),
+            ).pack(pady=20)
+            return
+
+        for t in ordered:
+            self.add_entry(t)
 
     def add_entry(self, transcript) -> None:
         row = ctk.CTkFrame(self.entries_frame, fg_color=HEARTH_PAPER, corner_radius=10)
@@ -220,9 +381,8 @@ class TranscriptListBody(ctk.CTkFrame):
             widget.destroy()
 
     def render_transcripts(self, transcripts) -> None:
-        self.clear()
-        for t in transcripts:
-            self.add_entry(t)
+        self._all_transcripts = list(transcripts)
+        self._rerender()
 
     def _handle_select(self, transcript) -> None:
         if self.on_select:
