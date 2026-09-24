@@ -357,7 +357,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_font_size_slider.pack(fill="x", pady=(0, 8))
 
         ctk.CTkLabel(
-            scroll, text="Changes for the WPM slider take effect after clicking Apply.",
+            scroll, text="Changes for the WPM affect the current trancript aswell",
             text_color=COCOA_INK, font=self.small_font,
         ).pack(anchor="w", pady=(0, 20))
 
@@ -841,3 +841,11 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.error_label.configure(text="")
         self.on_apply(values)
+        # Every validation failure above returns before this point, so
+        # reaching here means every field passed and on_apply() already
+        # ran -- safe to close. on_apply (gui/app.py's
+        # _handle_settings_applied()) takes the values dict by value and
+        # never reaches back into this window or opens a dialog of its
+        # own, unlike _handle_export_data()/_handle_import_data() above,
+        # so there's nothing still in flight that closing here could cut off.
+        self.destroy()
