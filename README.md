@@ -285,7 +285,11 @@ Settings are organized into four tabs:
 - ~~Improvements to reading engine depth~~
 - ~~Data insertion beyond copy pasting~~ 
 - ~~Session stats~~
-- Quality of life polish
+- ~~Quality of life polish~~
+- Keyboard shortcuts
+- Comment clean up
+- Transcript draft normalization
+
 
 
 ## License

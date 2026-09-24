@@ -163,6 +163,7 @@ class RSVPApp(ctk.CTk):
         )
         self.footer.grid(row=4, column=2, sticky="nsew")
 
+        self._bind_shortcuts()
         self._apply_freeform_resize_state()
         self._refresh_transcript_list()
 
@@ -176,6 +177,87 @@ class RSVPApp(ctk.CTk):
         self.vertical_divider.set_resizable(enabled)
         self.bottom_divider_left.set_resizable(enabled)
         self.bottom_divider_right.set_resizable(enabled)
+
+    def _bind_shortcuts(self) -> None:
+        """Reading-control keyboard shortcuts for the MAIN window only --
+        the detached transcript window (a separate CTkToplevel, built
+        later) needs its own identical bindings, added separately: Tk's
+        "a child with no more specific binding falls through to its own
+        toplevel" behavior only reaches as far as the window that owns
+        the binding.
+
+        Bound directly on self (the CTk root), not on any one child
+        widget or via bind_all(): Tk automatically includes a window's
+        own bindings in the lookup chain for every one of its descendant
+        widgets, so this fires no matter which child currently has
+        keyboard focus, without reaching into every other open Tk window
+        in the process the way bind_all() would.
+
+        Both case variants of R are bound (Caps Lock, or an accidental
+        Shift, would otherwise land on a keysym this doesn't catch) --
+        Space and the arrow keys have no such case variant.
+
+        Each handler checks _shortcut_should_fire() first -- see that
+        method's docstring for why. The underlying Canvas methods
+        (toggle_pause/restart/skip_backward/skip_forward) are themselves
+        already safe to call with nothing loaded, or while the paste/edit
+        view is showing instead of the reader: ReaderDisplay.
+        toggle_pause()/restart()/skip() all early-return whenever
+        self.session is None, so no separate "is a transcript actually
+        playing" guard is needed here on top of that.
+
+        NOT yet verified: whether a CTkButton that still has keyboard
+        focus right after being clicked (e.g. just clicked Restart) will
+        intercept Space for its own "activate me" behavior before this
+        binding ever sees it -- a button's own class-level binding runs
+        earlier in Tk's lookup chain than a window-level one. Worth
+        testing deliberately: click a toolbar button, then immediately
+        press Space, and see whether that button's own action fires a
+        second time instead of (or alongside) pause/resume."""
+        self.bind("<space>", self._handle_shortcut_pause_toggle)
+        self.bind("<Left>", self._handle_shortcut_skip_backward)
+        self.bind("<Right>", self._handle_shortcut_skip_forward)
+        self.bind("<r>", self._handle_shortcut_restart)
+        self.bind("<R>", self._handle_shortcut_restart)
+
+    def _shortcut_should_fire(self) -> bool:
+        """False while an Entry- or Text-family widget holds keyboard
+        focus -- the search box, a rename field, the transcript
+        paste/edit box, a Settings field, and so on -- so typing a
+        space, an "r", or moving the cursor with the arrow keys behaves
+        normally there instead of also triggering a reading shortcut.
+
+        CustomTkinter's CTkEntry/CTkTextbox each wrap a real, plain
+        tkinter.Entry/tkinter.Text internally for actual keyboard input
+        -- the same wrapping pattern already relied on elsewhere in this
+        codebase (see transcript_list_body.py's _bind_truncating_label()
+        reading label._label). focus_get() returns that inner widget
+        while typing, not the CTk wrapper frame around it, so checking
+        its winfo_class() here is expected to correctly catch both.
+        Still worth confirming directly once this is running: type a
+        space into the search box and into a transcript title, and press
+        the arrow keys with text selected in a field, to make sure
+        nothing here misfires."""
+        focused = self.focus_get()
+        if focused is None:
+            return True
+        return focused.winfo_class() not in ("Entry", "Text")
+
+    def _handle_shortcut_pause_toggle(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.canvas.toggle_pause()
+
+    def _handle_shortcut_skip_backward(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.canvas.skip_backward()
+
+    def _handle_shortcut_skip_forward(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.canvas.skip_forward()
+
+    def _handle_shortcut_restart(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.canvas.restart()
 
     def _handle_sidebar_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.sidebar_width

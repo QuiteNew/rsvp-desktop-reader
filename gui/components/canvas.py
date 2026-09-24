@@ -55,10 +55,17 @@ class Canvas(ctk.CTkFrame):
         self.stop_button = StopButton(self.button_row, on_stop=self._handle_stop)
         self.stop_button.grid(row=0, column=0, sticky="w")
 
+        # on_pause_toggle/on_restart point at the PUBLIC toggle_pause()/
+        # restart() below (not a private _handle_* pair) -- gui/app.py's
+        # keyboard-shortcut bindings need to call these from outside
+        # Canvas entirely, the same way it already reaches
+        # skip_backward()/skip_forward() directly. Behavior is unchanged;
+        # this is a rename only, so this toolbar wiring keeps working
+        # exactly as it did before.
         self.toolbar = CanvasToolbar(
             self.button_row,
-            on_pause_toggle=self._handle_pause_toggle,
-            on_restart=self._handle_restart,
+            on_pause_toggle=self.toggle_pause,
+            on_restart=self.restart,
             on_maximize_toggle=self._handle_maximize_toggle,
             on_detach=self._handle_detach,
         )
@@ -266,12 +273,12 @@ class Canvas(ctk.CTkFrame):
         if self.on_pause_changed and self.current_transcript:
             self.on_pause_changed(self.current_transcript, is_paused)
 
-    def _handle_pause_toggle(self) -> None:
+    def toggle_pause(self) -> None:
         is_paused = self.reader_display.toggle_pause()
         self.toolbar.set_paused(is_paused)
         self._handle_pause_changed(is_paused)
 
-    def _handle_restart(self) -> None:
+    def restart(self) -> None:
         self.reader_display.restart()
         self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
