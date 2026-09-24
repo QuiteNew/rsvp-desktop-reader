@@ -7,11 +7,11 @@ from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, EMBER_GLOW
 
 
 class TranscriptListBody(ctk.CTkFrame):
-    """Scrollable list of saved transcripts, with a search box and sort
-    menu pinned above it. Each row has a delete ("X") button that only
-    becomes clearly visible when hovering that row, a double-click-to-
-    rename title, and a right-click menu to move the transcript to
-    another space."""
+    """Scrollable list of saved transcripts, with a clearable search box
+    and sort menu pinned above it. Each row has a delete ("X") button
+    that only becomes clearly visible when hovering that row, a
+    double-click-to-rename title, and a right-click menu to move the
+    transcript to another space."""
 
     # Every available sort mode: label -> (key function, reverse). A
     # plain dict rather than a list of tuples -- Python dicts keep
@@ -75,11 +75,12 @@ class TranscriptListBody(ctk.CTkFrame):
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.pack(fill="x", padx=8, pady=(8, 6))
 
-        # sort_button is packed BEFORE search_entry, same reasoning as
-        # delete_button before title_label in add_entry() below: reserve
-        # the fixed-size icon's cavity first so search_entry -- which
-        # fills whatever's left -- can never push it out of the toolbar,
-        # even at the sidebar's minimum width (SIDEBAR_WIDTH_RANGE in
+        # sort_button is packed BEFORE clear_button, which is packed
+        # BEFORE search_entry -- same reasoning as delete_button before
+        # title_label in add_entry() below: reserve every fixed-size
+        # icon's cavity first so search_entry -- which fills whatever's
+        # left -- can never push either of them out of the toolbar, even
+        # at the sidebar's minimum width (SIDEBAR_WIDTH_RANGE in
         # core/settings_store.py allows down to 120px, far too narrow for
         # a text-labeled sort dropdown to reliably fit).
         sort_font = ctk.CTkFont(family=FONT_BODY, size=13)
@@ -91,15 +92,38 @@ class TranscriptListBody(ctk.CTkFrame):
         sort_button.pack(side="right")
         self._sort_button = sort_button
 
+        # The search box's "x" -- reserved here and never packed/
+        # unpacked again, so its cavity in the toolbar is fixed for
+        # good. Visibility is instead toggled purely by color in
+        # _update_clear_button(): WARM_TAUPE text on a transparent
+        # background, with hover_color also set to WARM_TAUPE, matches
+        # this toolbar's own backdrop exactly (self is WARM_TAUPE,
+        # toolbar itself is transparent) -- so with no search text yet,
+        # the button is genuinely invisible, glyph and hover box both,
+        # rather than just hidden behind pack_forget(). That sidesteps
+        # repeating the exact class of bug documented on delete_button/
+        # title_label below (a widget packed/unpacked after a
+        # fill+expand sibling can end up squeezed out entirely) for a
+        # button that would otherwise need to appear and disappear on
+        # every keystroke.
+        clear_button = ctk.CTkButton(
+            toolbar, text="X", width=24, height=28, corner_radius=8,
+            fg_color="transparent", hover_color=WARM_TAUPE, text_color=WARM_TAUPE,
+            font=sort_font, command=self._handle_clear_search,
+        )
+        clear_button.pack(side="right", padx=(0, 4))
+        self._clear_button = clear_button
+
         # trace_add fires on every change to the entry's text -- typing,
-        # pasting, cutting, or a programmatic .set() -- unlike binding a
-        # key event, which would miss paste/cut/clear. render_transcripts()
+        # pasting, cutting, or a programmatic .set() (including the one
+        # _handle_clear_search() below makes) -- unlike binding a key
+        # event, which would miss paste/cut/clear. render_transcripts()
         # (called by app.py on every add/delete/rename/move/space-switch)
         # already triggers its own _rerender(); this covers the other
         # two triggers, a changed search text or a changed sort mode,
         # neither of which needs new data from app.py at all.
         self._search_var = tk.StringVar()
-        self._search_var.trace_add("write", lambda *_args: self._rerender())
+        self._search_var.trace_add("write", self._handle_search_changed)
 
         entry_font = ctk.CTkFont(family=FONT_BODY, size=13)
         search_entry = ctk.CTkEntry(
@@ -108,6 +132,13 @@ class TranscriptListBody(ctk.CTkFrame):
             text_color=COCOA_INK, font=entry_font,
         )
         search_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        # Escape-to-clear, the same "back out of what you're doing"
+        # convention add_entry()'s title_entry already uses for
+        # cancel_rename() below -- clearing through the StringVar means
+        # this needs no logic of its own beyond calling the same handler
+        # the "x" button uses.
+        search_entry.bind("<Escape>", lambda event: self._handle_clear_search())
+        self._search_entry = search_entry
 
         # Purely decorative -- separates the search/sort toolbar above
         # from the scrollable list below so the two don't visually run
@@ -158,6 +189,42 @@ class TranscriptListBody(ctk.CTkFrame):
     def _handle_sort_selected(self, label: str) -> None:
         self._sort_label = label
         self._rerender()
+
+    def _handle_search_changed(self, *_args) -> None:
+        """The trace_add callback for self._search_var -- fires on every
+        change to the search box's text, typed, pasted, cut, or set
+        programmatically by _handle_clear_search() below. Keeps the
+        clear button's visibility and the rendered list in sync with
+        the search text on every single change, rather than splitting
+        that into two separate traces on the same variable."""
+        self._update_clear_button()
+        self._rerender()
+
+    def _update_clear_button(self) -> None:
+        """Shows or hides the search box's "x" purely by color -- see
+        the constructor's comment on clear_button for why it's never
+        packed or unpacked. Empty search box: nothing to clear, so the
+        "x" is colored to exactly match the toolbar's own WARM_TAUPE
+        backdrop (invisible) and its hover highlight is switched off
+        too, rather than leaving a blank-but-still-hoverable square
+        behind. Non-empty: a legible COCOA_INK "x" with the same
+        WARM_LINE hover feedback the app's other small icon buttons
+        use."""
+        if self._search_var.get():
+            self._clear_button.configure(text_color=COCOA_INK, hover_color=WARM_LINE)
+        else:
+            self._clear_button.configure(text_color=WARM_TAUPE, hover_color=WARM_TAUPE)
+
+    def _handle_clear_search(self) -> None:
+        """Wired to both the "x" button's command and the search box's
+        <Escape> binding. Clearing through the StringVar (rather than
+        deleting the entry's contents directly) sends this through the
+        exact same trace_add path a manual delete would take, so there's
+        no separate call to _rerender()/_update_clear_button() needed
+        here. Refocusing the entry afterward leaves the box ready to
+        type into again, whichever of the two ways it was triggered."""
+        self._search_var.set("")
+        self._search_entry.focus_set()
 
     def _rerender(self) -> None:
         """Re-derive the displayed rows from self._all_transcripts,
