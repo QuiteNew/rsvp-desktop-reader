@@ -6,7 +6,7 @@ from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
 from gui.components.stop_button import StopButton
 from gui.components.detached_window import DetachedTranscriptWindow
-from gui.theme import HEARTH_PAPER, COCOA_INK, COCOA_INK_LIGHT, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
+from gui.theme import HEARTH_PAPER
 
 
 class Canvas(ctk.CTkFrame):
@@ -66,19 +66,7 @@ class Canvas(ctk.CTkFrame):
 
         self.content_area = ctk.CTkFrame(self, fg_color="transparent")
 
-        # COCOA_INK_LIGHT -- a softer, "one step lighter than the main
-        # ink" token gui/theme.py already defines in both palettes but
-        # that (until now) nothing in the app actually used -- is the
-        # right fit for this and the "Transcript window detached" label
-        # below: neither is active content, both are secondary/ambient
-        # status text, same category as the sidebar's own "No
-        # transcripts match your search." message (transcript_list_body.
-        # py), which is what its FONT_BODY/size-13 pairing is matched to
-        # here.
-        self.empty_label = ctk.CTkLabel(
-            self.content_area, text="Select or create a transcript to begin",
-            text_color=COCOA_INK_LIGHT, font=ctk.CTkFont(family=FONT_BODY, size=13),
-        )
+        self.empty_label = ctk.CTkLabel(self.content_area, text="Select or create a transcript to begin")
         self.input_view = TranscriptInput(self.content_area, on_submit=self._handle_text_submitted)
         self.reader_display = ReaderDisplay(
             self.content_area,
@@ -93,14 +81,10 @@ class Canvas(ctk.CTkFrame):
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
-            self.detached_placeholder, text="Transcript window detached",
-            text_color=COCOA_INK_LIGHT, font=ctk.CTkFont(family=FONT_BODY, size=13),
+            self.detached_placeholder, text="Transcript window detached", text_color="gray60"
         ).pack(expand=True, pady=(0, 10))
         ctk.CTkButton(
-            self.detached_placeholder, text="✕  Bring back", width=130, corner_radius=10,
-            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
-            font=ctk.CTkFont(family=FONT_BODY, size=13),
-            command=self._handle_reattach,
+            self.detached_placeholder, text="✕  Bring back", width=130, command=self._handle_reattach
         ).pack()
 
         self._show_empty()

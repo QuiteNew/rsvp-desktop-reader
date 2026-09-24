@@ -20,6 +20,7 @@ or hands the returned text to AddTranscriptDialog, same shape as the
 existing blank-transcript flow.
 """
 
+import logging
 import re
 from pathlib import Path
 
@@ -27,6 +28,25 @@ import docx
 import pypdf
 
 from core.parser import clean_transcript
+
+# pypdf logs (doesn't raise) a warning through Python's logging module
+# every time extract_text() meets a font it can only partially decode
+# without the optional fontTools package -- see import_pdf() below.
+# Harmless as a one-off notice, but confirmed against pypdf's own source
+# (_cmap.py's _parse_to_unicode()) that this is NOT cached across pages:
+# a PDF where many pages share the same such font re-triggers the
+# identical warning once per page, each one built from and printed with
+# that font's FULL width table. On a large, font-heavy PDF that can mean
+# constructing and writing out hundreds of these multi-hundred-number
+# strings before any actual text extraction happens -- a real, measurable
+# cost sitting directly in import_pdf()'s per-page loop. Whether it's
+# THE cause of a hang on a specific huge PDF isn't confirmed -- a complex
+# enough document can be slow to extract for unrelated reasons too -- but
+# it's worth eliminating regardless: this app never shows the user a
+# console, so these warnings were always pure waste, not just noise.
+# Raising the logger's level is pypdf's own documented way to quiet it:
+# https://pypdf.readthedocs.io/en/stable/user/suppress-warnings.html
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 # The only formats v1 supports -- also used by gui/app.py to build the
 # native file dialog's filetypes list, so the two can never drift apart.

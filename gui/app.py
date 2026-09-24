@@ -21,6 +21,7 @@ from gui.components.delete_space_dialog import DeleteSpaceDialog
 from gui.components.move_transcript_dialog import MoveTranscriptDialog
 from gui.components.message_dialog import MessageDialog
 from gui.components.import_confirm_dialog import ImportConfirmDialog
+from gui.components.importing_dialog import ImportingDialog
 from gui.theme import (
     HEARTH_PAPER, unregister_fonts, CTK_APPEARANCE_MODE, apply_app_icon,
     DARK_READING_FONT_COLOR, DARK_READING_HIGHLIGHT_COLOR, DARK_READING_BACKGROUND_COLOR,
@@ -292,6 +293,13 @@ class RSVPApp(ctk.CTk):
         the main window never does, so there's no native-dialog grab
         dance to do here.
 
+        importers.import_file() is a single blocking call -- see
+        ImportingDialog's own docstring for why that means the app is
+        fully unresponsive for however long it takes, and why the best
+        this can do about that is show a message beforehand rather than
+        an animated one. The dialog is torn down (finish()) on BOTH the
+        success and failure path, before anything else opens.
+
         A very large file (a whole book imported as PDF crashed the app,
         per a user report that was never reproduced or root-caused) gets
         AddTranscriptDialog's optional `warning` set instead of being
@@ -308,11 +316,14 @@ class RSVPApp(ctk.CTk):
         if not path:
             return
 
+        importing_dialog = ImportingDialog(self, Path(path).name)
         try:
             text = importers.import_file(path)
         except importers.TranscriptImportError as e:
+            importing_dialog.finish()
             MessageDialog(self, "Couldn't add that file", str(e))
             return
+        importing_dialog.finish()
 
         word_count = len(tokenize(text))
         warning = None
