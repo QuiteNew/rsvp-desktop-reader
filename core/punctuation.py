@@ -1,20 +1,15 @@
 """Separates leading/trailing punctuation from a word token, and
-classifies what kind of pause (if any) should follow it during RSVP
-playback.
+classifies what pause (if any) should follow it during RSVP playback.
 
-Tokenizing (core/tokenizer.py) only ever splits on whitespace, so a
-raw token like "reading." still has its period attached. Without this
-module, that period would count toward the word's length when
-core/orp.py picks the Optimal Recognition Point letter -- a real
-correctness bug, not just a pacing gap -- and there'd be no signal
-anywhere for core/timing.py to know a word ends a sentence or clause.
+core/tokenizer.py only splits on whitespace, so "reading." still has
+its period attached. Left alone, that period would throw off
+core/orp.py's Optimal Recognition Point letter, and there'd be no
+signal for core/timing.py to know a word ends a sentence or clause.
 
-split_punctuation() strips a RUN of non-alphanumeric characters from
-each end of a token, working inward until it hits a real letter or
-digit -- deliberately only from the ends, never the middle, so
-internal punctuation (the hyphen in "well-known", the decimal point
-in "$5.99") is left untouched, and only genuine leading/trailing marks
-(quotes, sentence punctuation, parentheses) are separated out."""
+split_punctuation() strips non-alphanumeric characters from each end
+of a token, working inward. It only works from the ends, never the
+middle, so "well-known" and "$5.99" keep their internal punctuation
+intact."""
 
 PACE_NONE = "none"
 PACE_CLAUSE = "clause"
@@ -25,11 +20,9 @@ _CLAUSE_MARKS = set(",;:")
 
 
 def split_punctuation(token: str) -> tuple[str, str, str]:
-    """Split a raw token into (leading, core, trailing). core is the
-    longest run of alphanumeric characters bounded by, at most, one
-    leading and one trailing run of everything else -- core is empty
-    if the token is entirely punctuation (e.g. a standalone "--"), in
-    which case leading ends up holding the whole token."""
+    """Split a token into (leading, core, trailing) punctuation/word
+    parts. core is empty for an all-punctuation token (e.g. "--"), with
+    everything landing in leading in that case."""
     start = 0
     end = len(token)
     while start < end and not token[start].isalnum():
@@ -40,18 +33,14 @@ def split_punctuation(token: str) -> tuple[str, str, str]:
 
 
 def classify_pacing(stripped_marks: str) -> str:
-    """Classify the pause that should follow a word, from the
-    punctuation split_punctuation() stripped off it -- callers pass
-    leading + trailing combined, not just trailing, so an
-    all-punctuation token (where everything lands in "leading" -- see
-    split_punctuation()) is still classified correctly rather than
-    silently coming out as PACE_NONE.
+    """Classify the pause that should follow a word, from the stripped
+    punctuation split_punctuation() returned. Callers pass leading +
+    trailing combined so an all-punctuation token still classifies
+    correctly instead of defaulting to PACE_NONE.
 
-    Checked as "does any character in there match", not "does it end
-    with exactly one mark", so combinations like "?!", "...", or a
-    closing-quote-after-a-period ('."') are still classified in one
-    pass. Sentence marks win if a token improbably has both a sentence
-    and a clause mark."""
+    Matches "does any character match," not "does it end with exactly
+    one mark," so "?!", "...", or '."' still classify in one pass.
+    Sentence marks win over clause marks if both are present."""
     marks = set(stripped_marks)
     if marks & _SENTENCE_MARKS:
         return PACE_SENTENCE

@@ -17,49 +17,24 @@ class Transcript:
     is_paused: bool = False
     draft_text: str = ""
     is_stopped: bool = False
-    # Whether each reading color is still tracking the app-wide Light/Dark
-    # default rather than something the user picked by hand -- see
-    # TranscriptStore.resync_default_reading_colors() and gui/app.py.
-    # Defaults to True here (a freshly-constructed transcript is always
-    # seeded from a default) -- core/storage.py explicitly backfills False
-    # when loading a save file from before this field existed, so an
-    # already-established transcript's colors are never silently rewritten
-    # by this feature.
+    # Whether each color is still following the app's Light/Dark default,
+    # or was picked by hand. See TranscriptStore.resync_default_reading_colors().
+    # Old save files, from before this field existed, get backfilled to
+    # False in core/storage.py, so existing transcripts keep their colors
+    # instead of suddenly following the theme.
     font_color_is_default: bool = True
     highlight_color_is_default: bool = True
     background_color_is_default: bool = True
 
-    # Running totals across every finished reading session for this
-    # transcript -- updated by TranscriptStore.add_session_stats(), called
-    # once a session actually ends (stopped, finished, switched away from,
-    # or the app closes mid-read; see gui/components/reader_display.py).
-    # These never reflect a session that's still in progress -- only what's
-    # already been finalized.
-    #
-    # times_read only increments if a flushed session had some minimum
-    # real active time in it (see add_session_stats()), so opening a
-    # transcript and immediately clicking away doesn't count as a read.
-    #
-    # total_words_read counts only words the reader actually auto-advanced
-    # through at the RSVP pace -- skipping forward with the >> button does
-    # NOT add to this, so it can't be inflated by skipping to the end
-    # without reading. Skipping backward to reread also never subtracts.
-    #
-    # total_time_spent_seconds is active reading time only -- the clock
-    # stops while paused, so time spent paused (or sitting on a finished
-    # transcript) is never counted. Whole seconds; no need for finer
-    # precision here.
-    #
-    # Unlike font_color_is_default/highlight_color_is_default/
-    # background_color_is_default above, these three do NOT need a
-    # core/storage.py backfill entry: a save file written before this
-    # feature existed simply won't have these keys, and core/storage.py's
-    # parse_data() already falls back to a dataclass's own default when a
-    # key is missing -- which is 0 here, the correct value for a
-    # pre-existing transcript that's never had a session recorded against
-    # it. The color flags needed an explicit backfill only because their
-    # correct "missing" value (False) differs from their dataclass default
-    # (True); there's no such mismatch here.
+    # Lifetime stats for this transcript, updated by TranscriptStore.
+    # add_session_stats() whenever a session ends. times_read only counts
+    # sessions with some real active time, so opening and immediately
+    # leaving doesn't count. total_words_read only counts words the
+    # reader auto-advanced through, since skipping ahead doesn't inflate
+    # it. total_time_spent_seconds is active time only; paused time
+    # doesn't count. All three default to 0, which is also the right
+    # value for old save files that predate this feature, so no backfill
+    # is needed here the way the color flags above needed one.
     times_read: int = 0
     total_words_read: int = 0
     total_time_spent_seconds: int = 0

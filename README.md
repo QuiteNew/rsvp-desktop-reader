@@ -286,7 +286,7 @@ Settings are organized into four tabs:
 - ~~Data insertion beyond copy pasting~~ 
 - ~~Session stats~~
 - ~~Quality of life polish~~
-- Keyboard shortcuts
+- ~~Keyboard shortcuts~~
 - Comment clean up
 - Transcript draft normalization
 
