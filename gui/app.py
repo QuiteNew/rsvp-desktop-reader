@@ -180,11 +180,13 @@ class RSVPApp(ctk.CTk):
 
     def _bind_shortcuts(self) -> None:
         """Reading-control keyboard shortcuts for the MAIN window only --
-        the detached transcript window (a separate CTkToplevel, built
-        later) needs its own identical bindings, added separately: Tk's
-        "a child with no more specific binding falls through to its own
-        toplevel" behavior only reaches as far as the window that owns
-        the binding.
+        the detached transcript window has its own identical Space/Left/
+        Right/R bindings (added separately, in DetachedTranscriptWindow
+        itself), since Tk's "a child with no more specific binding falls
+        through to its own toplevel" behavior only reaches as far as the
+        window that owns the binding. F (Focus mode) is deliberately NOT
+        mirrored there -- the detached window has no sidebar/header to
+        hide, so there's nothing for it to toggle.
 
         Bound directly on self (the CTk root), not on any one child
         widget or via bind_all(): Tk automatically includes a window's
@@ -193,9 +195,9 @@ class RSVPApp(ctk.CTk):
         keyboard focus, without reaching into every other open Tk window
         in the process the way bind_all() would.
 
-        Both case variants of R are bound (Caps Lock, or an accidental
-        Shift, would otherwise land on a keysym this doesn't catch) --
-        Space and the arrow keys have no such case variant.
+        Both case variants of R and F are bound (Caps Lock, or an
+        accidental Shift, would otherwise land on a keysym this doesn't
+        catch) -- Space and the arrow keys have no such case variant.
 
         Each handler checks _shortcut_should_fire() first -- see that
         method's docstring for why. The underlying Canvas methods
@@ -204,7 +206,9 @@ class RSVPApp(ctk.CTk):
         view is showing instead of the reader: ReaderDisplay.
         toggle_pause()/restart()/skip() all early-return whenever
         self.session is None, so no separate "is a transcript actually
-        playing" guard is needed here on top of that.
+        playing" guard is needed here on top of that. _toggle_focus_mode()
+        doesn't touch the reader at all, so it has no such concern either
+        way.
 
         NOT yet verified: whether a CTkButton that still has keyboard
         focus right after being clicked (e.g. just clicked Restart) will
@@ -219,6 +223,8 @@ class RSVPApp(ctk.CTk):
         self.bind("<Right>", self._handle_shortcut_skip_forward)
         self.bind("<r>", self._handle_shortcut_restart)
         self.bind("<R>", self._handle_shortcut_restart)
+        self.bind("<f>", self._handle_shortcut_focus_mode)
+        self.bind("<F>", self._handle_shortcut_focus_mode)
 
     def _shortcut_should_fire(self) -> bool:
         """False while an Entry- or Text-family widget holds keyboard
@@ -258,6 +264,10 @@ class RSVPApp(ctk.CTk):
     def _handle_shortcut_restart(self, event=None) -> None:
         if self._shortcut_should_fire():
             self.canvas.restart()
+
+    def _handle_shortcut_focus_mode(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._toggle_focus_mode()
 
     def _handle_sidebar_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.sidebar_width
@@ -838,6 +848,7 @@ class RSVPApp(ctk.CTk):
 
     def _toggle_focus_mode(self) -> None:
         self._focus_mode = not self._focus_mode
+        self.canvas.set_maximized(self._focus_mode)
 
         if self._focus_mode:
             self.list_header.grid_remove()
