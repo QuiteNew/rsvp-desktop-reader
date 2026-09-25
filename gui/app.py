@@ -181,7 +181,7 @@ class RSVPApp(ctk.CTk):
     def _bind_shortcuts(self) -> None:
         """Reading-control keyboard shortcuts for the MAIN window only --
         the detached transcript window has its own identical Space/Left/
-        Right/R bindings (added separately, in DetachedTranscriptWindow
+        Right/R/Esc bindings (added separately, in DetachedTranscriptWindow
         itself), since Tk's "a child with no more specific binding falls
         through to its own toplevel" behavior only reaches as far as the
         window that owns the binding. F (Focus mode) is deliberately NOT
@@ -197,18 +197,30 @@ class RSVPApp(ctk.CTk):
 
         Both case variants of R and F are bound (Caps Lock, or an
         accidental Shift, would otherwise land on a keysym this doesn't
-        catch) -- Space and the arrow keys have no such case variant.
+        catch) -- Space, the arrow keys, and Escape have no such case
+        variant.
 
         Each handler checks _shortcut_should_fire() first -- see that
         method's docstring for why. The underlying Canvas methods
-        (toggle_pause/restart/skip_backward/skip_forward) are themselves
-        already safe to call with nothing loaded, or while the paste/edit
-        view is showing instead of the reader: ReaderDisplay.
+        (toggle_pause/restart/skip_backward/skip_forward/stop) are
+        themselves already safe to call with nothing loaded, or while
+        the paste/edit view is showing instead of the reader: stop()
+        keeps its own `if not self.current_transcript: return` guard
+        (unchanged by its rename from _handle_stop), and ReaderDisplay.
         toggle_pause()/restart()/skip() all early-return whenever
-        self.session is None, so no separate "is a transcript actually
-        playing" guard is needed here on top of that. _toggle_focus_mode()
-        doesn't touch the reader at all, so it has no such concern either
-        way.
+        self.session is None -- so no separate "is a transcript actually
+        playing" guard is needed here on top of that.
+        _toggle_focus_mode() doesn't touch the reader at all, so it has
+        no such concern either way.
+
+        Esc mirrors clicking the Stop button exactly -- including that
+        the Stop button is already visible (and already does this) while
+        the paste/edit view is showing, so Esc there will overwrite
+        whatever's currently typed with the transcript's last-saved
+        text. That's pre-existing button behavior, not new; Esc just
+        makes it reachable by keyboard too, guarded by
+        _shortcut_should_fire() same as everything else (so it won't
+        fire while you're actually typing inside the box).
 
         NOT yet verified: whether a CTkButton that still has keyboard
         focus right after being clicked (e.g. just clicked Restart) will
@@ -225,6 +237,7 @@ class RSVPApp(ctk.CTk):
         self.bind("<R>", self._handle_shortcut_restart)
         self.bind("<f>", self._handle_shortcut_focus_mode)
         self.bind("<F>", self._handle_shortcut_focus_mode)
+        self.bind("<Escape>", self._handle_shortcut_stop)
 
     def _shortcut_should_fire(self) -> bool:
         """False while an Entry- or Text-family widget holds keyboard
@@ -268,6 +281,10 @@ class RSVPApp(ctk.CTk):
     def _handle_shortcut_focus_mode(self, event=None) -> None:
         if self._shortcut_should_fire():
             self._toggle_focus_mode()
+
+    def _handle_shortcut_stop(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.canvas.stop()
 
     def _handle_sidebar_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.sidebar_width

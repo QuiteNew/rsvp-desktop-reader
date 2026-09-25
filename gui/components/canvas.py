@@ -52,16 +52,9 @@ class Canvas(ctk.CTkFrame):
         self.button_row.grid_columnconfigure(0, weight=1)
         self.button_row.grid_columnconfigure(1, weight=0)
 
-        self.stop_button = StopButton(self.button_row, on_stop=self._handle_stop)
+        self.stop_button = StopButton(self.button_row, on_stop=self.stop)
         self.stop_button.grid(row=0, column=0, sticky="w")
 
-        # on_pause_toggle/on_restart point at the PUBLIC toggle_pause()/
-        # restart() below (not a private _handle_* pair) -- gui/app.py's
-        # keyboard-shortcut bindings need to call these from outside
-        # Canvas entirely, the same way it already reaches
-        # skip_backward()/skip_forward() directly. Behavior is unchanged;
-        # this is a rename only, so this toolbar wiring keeps working
-        # exactly as it did before.
         self.toolbar = CanvasToolbar(
             self.button_row,
             on_pause_toggle=self.toggle_pause,
@@ -283,8 +276,36 @@ class Canvas(ctk.CTkFrame):
         self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
 
-    def _handle_stop(self) -> None:
+    def stop(self) -> None:
+        """Ends the current reading session and drops back to the
+        paste/edit view, showing whatever text that session was reading.
+
+        Guarded to only actually do anything when the reader is what's
+        genuinely on screen right now for this transcript -- i.e. NOT
+        while the paste/edit view is already showing (self.
+        _input_currently_shown, the same flag _capture_current_draft()
+        already uses for exactly this "is the input box what's live
+        right now" question), and NOT while this transcript is off
+        being read in the detached window instead (self.current_transcript.
+        id == self._detached_transcript_id, when the detached placeholder
+        is what Canvas itself is showing).
+
+        This isn't just an Esc-specific guard -- the Stop button itself
+        is visible (and, before this guard, was already just as capable
+        of triggering this) in every one of those states too, since
+        button_row is shown for both _show_input() and _show_reader().
+        Without it, stopping while nothing is actually being read
+        unconditionally overwrites the input box with self.
+        current_transcript.raw_text -- which, for a transcript that's
+        never been submitted yet (still sitting as an unsubmitted
+        draft), is an EMPTY string, silently wiping out whatever was
+        typed. That's exactly what happened when Esc was bound to this:
+        pressing it while sitting in a blank draft wiped the draft
+        outright. Confirmed by testing, not a guess -- this guard
+        directly targets that reproduced mechanism."""
         if not self.current_transcript:
+            return
+        if self._input_currently_shown or self.current_transcript.id == self._detached_transcript_id:
             return
         self.reader_display.stop()
         self.toolbar.set_paused(False)

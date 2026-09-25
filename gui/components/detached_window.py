@@ -175,28 +175,75 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
 
+    def _handle_stop(self) -> None:
+        """Ends the reading session and drops back to the paste/edit
+        view, right here in this window -- mirrors Canvas.stop() (see
+        gui/components/canvas.py) but built for the first time here,
+        since this window had no stop capability at all before this
+        method (no button, no handler -- see keyboard-shortcuts.md).
+
+        Guarded the same way Canvas.stop() is guarded, for the same
+        reason: only act when the reader is genuinely what's on screen
+        right now (self.transcript.is_stopped is False AND self.
+        transcript.raw_text.strip() is truthy -- the exact condition
+        _render_current_state()'s own elif branch below already uses to
+        decide whether to show the reader). Without this, stopping
+        while the transcript is a blank, never-submitted draft
+        unconditionally re-renders with self.transcript.raw_text --
+        which is an EMPTY string for a draft that's never been
+        submitted -- silently wiping out whatever was typed. Confirmed
+        by testing (detaching a blank draft, then pressing Esc there,
+        wiped it), not a guess.
+
+        Doesn't need Canvas.stop()'s separate detached-placeholder
+        check -- this window has no further "detach" of its own
+        (show_detach=False on its toolbar), so there's no equivalent
+        third state to guard against here.
+
+        Also doesn't need Canvas.stop()'s explicit
+        `self.input_view.set_text(...)` call before showing the input
+        view -- _render_current_state() below already does that itself
+        as part of its `is_stopped` branch, since this window drives its
+        content purely off self.transcript's current fields rather than
+        Canvas's separate _show_X() methods.
+        _handle_stopped_changed(True) reaches self.transcript.is_stopped
+        via the same store-mutates-the-object-in-place path
+        _handle_text_submitted() above already relies on for the
+        opposite (False) transition, so by the time
+        _render_current_state() runs, self.transcript already reflects
+        the stop."""
+        if self.transcript.is_stopped or not self.transcript.raw_text.strip():
+            return
+        self.reader_display.stop()
+        self.toolbar.set_paused(False)
+        self._handle_position_changed(0)
+        self._handle_pause_changed(False)
+        self._handle_stopped_changed(True)
+        self._render_current_state()
+
     def _bind_shortcuts(self) -> None:
         """Same reading-control shortcuts as the main window (see
         gui/app.py's _bind_shortcuts() for the full reasoning) -- Space,
-        Left/Right, R -- bound separately here since this is its own
-        CTkToplevel and Tk's window-level binding only reaches the
-        window it's actually bound on. Calls straight into this
-        window's own existing handlers (_handle_pause_toggle,
+        Left/Right, R, Esc -- bound separately here since this is its
+        own CTkToplevel and Tk's window-level binding only reaches the
+        window it's actually bound on. Space/Left/Right/R call straight
+        into this window's own existing handlers (_handle_pause_toggle,
         _handle_skip_back, _handle_skip_forward, _handle_restart)
-        rather than needing a public/private rename the way Canvas
-        did -- those methods only ever needed to be called from THIS
-        class to begin with (by the toolbar's own callback wiring),
-        and this binding lives inside this same class too, so nothing
-        about their visibility needs to change.
-
-        Not yet handled here: Esc/Stop -- that needs Stop built into
-        this window for the first time first (step 4), so it isn't
-        wired yet."""
+        rather than needing a public/private rename the way Canvas's
+        did for step 1 -- those methods only ever needed to be called
+        from THIS class to begin with (by the toolbar's own callback
+        wiring), and this binding lives inside this same class too, so
+        nothing about their visibility needs to change. Esc/_handle_stop
+        is new to this window as of this same step (see that method's
+        own docstring for what it does and why) -- there was no existing
+        private handler to call into for it the way there was for the
+        other three."""
         self.bind("<space>", self._handle_shortcut_pause_toggle)
         self.bind("<Left>", self._handle_shortcut_skip_backward)
         self.bind("<Right>", self._handle_shortcut_skip_forward)
         self.bind("<r>", self._handle_shortcut_restart)
         self.bind("<R>", self._handle_shortcut_restart)
+        self.bind("<Escape>", self._handle_shortcut_stop)
 
     def _shortcut_should_fire(self) -> bool:
         """Identical guard to gui/app.py's -- see that docstring for the
@@ -224,10 +271,35 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self._shortcut_should_fire():
             self._handle_restart()
 
+    def _handle_shortcut_stop(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._handle_stop()
+
     def close(self) -> None:
+        """Closing this window while it's mid-read commits nothing new --
+        Canvas._handle_detached_closed()'s own condition (is_stopped OR
+        raw_text empty) will be False there, so nothing gets reported;
+        whatever was already read is already persisted via the normal
+        position/pause callbacks that fire throughout reading.
+
+        Otherwise -- stopped (self.transcript.is_stopped, shown as
+        editable text that may have been changed further since
+        stopping) or never-submitted (raw_text still empty) -- capture
+        whatever's actually in the box right now and pass it along.
+
+        This condition MUST match _handle_detached_closed()'s own
+        condition for when it'll actually use draft_text, or the two
+        fall out of sync: previously this only checked `not raw_text.
+        strip()`, so a stopped-but-not-empty transcript (exactly the
+        state Esc/_handle_stop() leaves one in) fell through here with
+        draft_text left at "" -- but _handle_detached_closed() still
+        treated is_stopped as reason enough to report and PERSIST that
+        empty string, wiping out the very text Esc had just preserved.
+        Confirmed by testing: type a draft, detach, Start reading, Esc
+        to stop, close the window -- the text was gone."""
         self.reader_display.stop()
         draft_text = ""
-        if not self.transcript.raw_text.strip():
+        if self.transcript.is_stopped or not self.transcript.raw_text.strip():
             draft_text = self.get_draft_text().strip()
         self.on_closed(draft_text)
         self.destroy()
