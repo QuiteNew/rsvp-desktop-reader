@@ -79,6 +79,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_color(guide_mark_color)
 
         self._render_current_state()
+        self._bind_shortcuts()
 
         # Reveal now that everything above is built, colored, and
         # comfortably past CustomTkinter's own internal titlebar dance
@@ -173,6 +174,55 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.restart()
         self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
+
+    def _bind_shortcuts(self) -> None:
+        """Same reading-control shortcuts as the main window (see
+        gui/app.py's _bind_shortcuts() for the full reasoning) -- Space,
+        Left/Right, R -- bound separately here since this is its own
+        CTkToplevel and Tk's window-level binding only reaches the
+        window it's actually bound on. Calls straight into this
+        window's own existing handlers (_handle_pause_toggle,
+        _handle_skip_back, _handle_skip_forward, _handle_restart)
+        rather than needing a public/private rename the way Canvas
+        did -- those methods only ever needed to be called from THIS
+        class to begin with (by the toolbar's own callback wiring),
+        and this binding lives inside this same class too, so nothing
+        about their visibility needs to change.
+
+        Not yet handled here: Esc/Stop -- that needs Stop built into
+        this window for the first time first (step 4), so it isn't
+        wired yet."""
+        self.bind("<space>", self._handle_shortcut_pause_toggle)
+        self.bind("<Left>", self._handle_shortcut_skip_backward)
+        self.bind("<Right>", self._handle_shortcut_skip_forward)
+        self.bind("<r>", self._handle_shortcut_restart)
+        self.bind("<R>", self._handle_shortcut_restart)
+
+    def _shortcut_should_fire(self) -> bool:
+        """Identical guard to gui/app.py's -- see that docstring for the
+        full reasoning. focus_get() here is scoped to THIS window (Tk
+        tracks focus per-toplevel), so this only looks at what has
+        focus inside the detached window, not the main window."""
+        focused = self.focus_get()
+        if focused is None:
+            return True
+        return focused.winfo_class() not in ("Entry", "Text")
+
+    def _handle_shortcut_pause_toggle(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._handle_pause_toggle()
+
+    def _handle_shortcut_skip_backward(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._handle_skip_back()
+
+    def _handle_shortcut_skip_forward(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._handle_skip_forward()
+
+    def _handle_shortcut_restart(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._handle_restart()
 
     def close(self) -> None:
         self.reader_display.stop()
