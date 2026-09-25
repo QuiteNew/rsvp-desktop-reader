@@ -16,11 +16,11 @@ SKIP_WORD_COUNT_RANGE = (1, 50)
 FONT_SIZE_RANGE = (16, 96)
 FONT_SIZE_STEP_RANGE = (1, 10)
 HIGHLIGHT_OFFSET_RANGE = (-3, 3)
-GUIDE_MARK_THICKNESS_RANGE = (2, 6)  # 1px is deliberately excluded -- confirmed that a 1px-thick
-                                      # CTkFrame doesn't render a visible fill in this app (the
-                                      # same rendering quirk that was hiding the horizontal guide
-                                      # lines), so allowing 1 here would let a user silently make
-                                      # the vertical marks disappear too.
+GUIDE_MARK_THICKNESS_RANGE = (2, 6)  # 1px is deliberately excluded: a 1px-thick CTkFrame
+                                      # doesn't render a visible fill in this app, the same
+                                      # rendering quirk that hid the horizontal guide lines,
+                                      # so allowing 1 here would let a user silently make the
+                                      # vertical marks disappear too.
 GUIDE_MARK_LENGTH_PERCENT_RANGE = (15, 60)
 
 @dataclass
@@ -35,22 +35,22 @@ class AppSettings:
     default_background_color: str = "#F6EFE3"
     default_font_size: int = 32
     font_size_step: int = 1
-    highlight_offset_px: int = 0  # global, not per-transcript — positive = up, negative = down
+    highlight_offset_px: int = 0  # global, not per-transcript: positive is up, negative is down
     data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
     freeform_resize_enabled: bool = False
     skip_word_count: int = 10
     pause_on_skip: bool = False
-    length_pacing_enabled: bool = False  # global, not per-transcript -- see core/reader.py's
-                                          # ReaderSession.length_pacing_enabled; slows down long
-                                          # words by length band, independent of punctuation pacing
+    length_pacing_enabled: bool = False  # global, not per-transcript. See core/reader.py's
+                                          # ReaderSession.length_pacing_enabled: slows down long
+                                          # words by length band, independent of punctuation pacing.
     appearance_mode: str = "light"
-    guide_mark_horizontal_enabled: bool = False  # global, not per-transcript — fixed-style crosshair ticks, on/off only
-    guide_mark_thickness_px: int = 2  # global, not per-transcript — width of the vertical guide marks
-    guide_mark_length_percent: int = 35  # global, not per-transcript — length as % of current word size
-    guide_mark_color: str = "#3B2E27"  # global, not per-transcript — no longer follows the transcript's font colour
+    guide_mark_horizontal_enabled: bool = False  # global, not per-transcript: fixed-style crosshair ticks, on/off only
+    guide_mark_thickness_px: int = 2  # global, not per-transcript: width of the vertical guide marks
+    guide_mark_length_percent: int = 35  # global, not per-transcript: length as % of current word size
+    guide_mark_color: str = "#3B2E27"  # global, not per-transcript: no longer follows the transcript's font colour
     guide_mark_color_is_default: bool = True  # whether guide_mark_color is still tracking the app-wide Light/Dark
-                                               # default rather than something picked by hand in Settings -- see
-                                               # SettingsStore.set_guide_mark_color() / resync_guide_mark_color_default()
+                                               # default, or something picked by hand in Settings. See
+                                               # SettingsStore.set_guide_mark_color() and resync_guide_mark_color_default().
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -60,7 +60,7 @@ class SettingsStore:
         self._settings_dir = Path(settings_directory) if settings_directory else SETTINGS_DIR
         self._settings_file = self._settings_dir / "settings.json"
         self._settings = self._load()
-        # 0.0 rather than time.monotonic() at startup -- see the matching
+        # 0.0 rather than time.monotonic() at startup. See the matching
         # comment on TranscriptStore._last_live_save.
         self._last_live_save = 0.0
 
@@ -73,9 +73,9 @@ class SettingsStore:
             # guide_mark_color predates guide_mark_color_is_default. For an
             # old settings.json missing the flag, infer it from whether the
             # stored color still equals the one-and-only historical default
-            # ("#3B2E27") -- if so, treat it as still-default (will be fixed
-            # by the resync below); if the user had already changed it to
-            # something else, treat it as already-customized (frozen).
+            # ("#3B2E27"). If so, treat it as still-default, which the
+            # resync below will fix; if the user had already changed it to
+            # something else, treat it as already customized and frozen.
             if "guide_mark_color_is_default" not in data:
                 data["guide_mark_color_is_default"] = (
                     data.get("guide_mark_color", AppSettings.guide_mark_color) == AppSettings.guide_mark_color
@@ -95,34 +95,32 @@ class SettingsStore:
             self._save()
 
     def flush(self) -> None:
-        """Force an immediate save, bypassing the live-update throttle --
-        see TranscriptStore.flush() for the full reasoning. Called from
+        """Force an immediate save, bypassing the live-update throttle. See
+        TranscriptStore.flush() for the full reasoning. Called from
         gui/app.py on app close, to catch a throttled-but-not-yet-written
         skip_word_count change from set_skip_word_count_live()."""
         self._last_live_save = time.monotonic()
         self._save()
 
     def export_settings(self) -> dict:
-        """Return every setting except data_directory as a plain dict --
-        used to build an export bundle (see core/data_bundle.py).
-        Excluded deliberately: data_directory is a raw OS-specific
-        filesystem path, meaningless (or actively wrong) on a different
-        machine, so it must never travel inside a bundle -- see
-        replace_from_bundle()."""
+        """Return every setting except data_directory as a plain dict, used
+        to build an export bundle (see core/data_bundle.py). data_directory
+        is excluded deliberately, since it's a raw OS-specific filesystem
+        path that's meaningless, or actively wrong, on a different machine,
+        so it must never travel inside a bundle. See replace_from_bundle()."""
         data = asdict(self._settings)
         data.pop("data_directory")
         return data
 
     def replace_from_bundle(self, settings: dict) -> None:
-        """Replace every setting with the given dict (the "settings"
-        section of an import bundle, as export_settings() produces it --
-        see core/data_bundle.py), except data_directory, which always
-        stays whatever this machine already has configured. Used for the
-        "Replace" import mode; there's no "Expand"/merge equivalent for
-        settings -- they're scalar preferences (a single WPM default, a
-        single window size), not a collection, so there's nothing
-        sensible to merge. "Expand" imports leave settings untouched
-        entirely."""
+        """Replace every setting with the given dict, the "settings" section
+        of an import bundle as export_settings() produces it (see
+        core/data_bundle.py), except data_directory, which always stays
+        whatever this machine already has configured. Used for the "Replace"
+        import mode. There's no "Expand"/merge equivalent for settings,
+        since they're scalar preferences like a single WPM default or window
+        size, not a collection, so there's nothing sensible to merge.
+        "Expand" imports leave settings untouched entirely."""
         merged = {**settings, "data_directory": self._settings.data_directory}
         self._settings = AppSettings(**merged)
         self._save()
@@ -246,9 +244,9 @@ class SettingsStore:
         self._save()
 
     def set_skip_behavior(self, word_count: int, pause_on_skip: bool) -> None:
-        """Used by Settings' Apply button and the pause_on_skip switch --
-        both discrete, one-shot actions, so this always saves immediately.
-        The skip-amount slider's own live drag callback goes through
+        """Used by Settings' Apply button and the pause_on_skip switch, both
+        discrete, one-shot actions, so this always saves immediately. The
+        skip-amount slider's own live drag callback goes through
         set_skip_word_count_live() instead, which is throttled; see there
         for why the two need to be kept separate."""
         self._settings.skip_word_count = word_count
@@ -257,15 +255,15 @@ class SettingsStore:
 
     def set_skip_word_count_live(self, word_count: int) -> None:
         """Same field as set_skip_behavior(), but for the Settings skip-
-        amount slider's live drag callback specifically, which can fire
-        many times across a single drag -- throttled the same way
-        TranscriptStore throttles position/WPM writes (see
-        LIVE_SAVE_INTERVAL_SECONDS in core/storage.py). Deliberately a
-        separate method rather than throttling set_skip_behavior() itself,
-        since that one is also called from the Apply button and the
-        pause_on_skip switch, both discrete actions that must always save
-        immediately -- throttling it there could delay a switch toggle
-        behind an unrelated slider drag that happened moments earlier."""
+        amount slider's live drag callback specifically, which can fire many
+        times across a single drag. Throttled the same way TranscriptStore
+        throttles position and WPM writes (see LIVE_SAVE_INTERVAL_SECONDS in
+        core/storage.py). Kept as a separate method rather than throttling
+        set_skip_behavior() itself, since that one is also called from the
+        Apply button and the pause_on_skip switch, both discrete actions
+        that must always save immediately, and throttling it there could
+        delay a switch toggle behind an unrelated slider drag from moments
+        earlier."""
         self._settings.skip_word_count = word_count
         self._save_throttled()
 
@@ -290,11 +288,11 @@ class SettingsStore:
         self._save()
 
     def set_guide_mark_color(self, color: str) -> None:
-        # Called only from Settings' own color picker -- a genuine manual
-        # change, so it retires guide_mark_color from theme-tracking. Only
-        # clears the flag if the color actually changed, so re-applying the
-        # same color twice doesn't accidentally freeze it (see
-        # resync_guide_mark_color_default()).
+        # Called only from Settings' own color picker, a genuine manual
+        # change, so it retires guide_mark_color from theme-tracking.
+        # Only clears the flag if the color actually changed, so
+        # re-applying the same color twice doesn't accidentally freeze
+        # it (see resync_guide_mark_color_default()).
         if color != self._settings.guide_mark_color:
             self._settings.guide_mark_color_is_default = False
         self._settings.guide_mark_color = color
@@ -302,9 +300,9 @@ class SettingsStore:
 
     def resync_guide_mark_color_default(self, color: str) -> None:
         """Update guide_mark_color to the given value only if it's still
-        tracking the app-wide theme default (guide_mark_color_is_default --
-        see AppSettings). Called once at app startup with whichever color
-        matches the CURRENT theme -- the same "takes effect on next launch"
+        tracking the app-wide theme default (guide_mark_color_is_default, see
+        AppSettings). Called once at app startup with whichever color
+        matches the current theme, the same "takes effect on next launch"
         timing as TranscriptStore.resync_default_reading_colors()."""
         if self._settings.guide_mark_color_is_default and self._settings.guide_mark_color != color:
             self._settings.guide_mark_color = color

@@ -12,11 +12,11 @@ class TranscriptStore:
     in a configurable directory."""
 
     # Floor below which a finished reading session doesn't count toward
-    # times_read -- filters out things like opening a transcript and
-    # immediately clicking away, without discarding the words/time it did
-    # accumulate (see add_session_stats()). A starting guess, like
-    # gui/app.py's LARGE_IMPORT_WORD_WARNING_THRESHOLD -- not measured
-    # against real usage yet, just long enough to rule out an accidental
+    # times_read. Filters out things like opening a transcript and
+    # immediately clicking away, without discarding the words or time it
+    # did accumulate (see add_session_stats()). A starting guess, like
+    # gui/app.py's LARGE_IMPORT_WORD_WARNING_THRESHOLD, not measured
+    # against real usage yet: just long enough to rule out an accidental
     # open-and-leave, short enough not to exclude a genuine brief skim.
     MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ = 3
 
@@ -35,10 +35,10 @@ class TranscriptStore:
             self._transcripts: list[Transcript] = []
             self._next_id = 1
 
-        # 0.0 rather than time.monotonic() at startup -- guarantees the very
-        # first throttled write after launch always goes straight through
-        # instead of waiting out a throttle window against a startup time
-        # it has no real relationship to.
+        # 0.0 rather than time.monotonic() at startup, so the very first
+        # throttled write after launch always goes straight through
+        # instead of waiting out a throttle window against a startup
+        # time it has no real relationship to.
         self._last_live_save = 0.0
 
     def _save(self) -> None:
@@ -50,7 +50,7 @@ class TranscriptStore:
 
     def export_state(self) -> dict:
         """Return this store's full state as a plain dict, in the same
-        shape save_state() writes to data.json -- used to build an export
+        shape save_state() writes to data.json, used to build an export
         bundle (see core/data_bundle.py)."""
         return {
             "next_id": self._next_id,
@@ -61,11 +61,10 @@ class TranscriptStore:
 
     def replace_all(self, state: dict) -> None:
         """Wholesale-replace every space and transcript with the given
-        state (the "data" section of an import bundle -- see
+        state, the "data" section of an import bundle (see
         core/data_bundle.py). state must already be normalized by
-        core.storage.parse_data() -- i.e. "transcripts" holds real
-        Transcript objects, not dicts. Used for the "Replace" import
-        mode."""
+        core.storage.parse_data(), meaning "transcripts" holds real
+        Transcript objects, not dicts. Used for the "Replace" import mode."""
         self._spaces = list(state["spaces"]) or [DEFAULT_SPACE]
         self._current_space_index = min(state["current_space_index"], len(self._spaces) - 1)
         self._transcripts = list(state["transcripts"])
@@ -73,22 +72,21 @@ class TranscriptStore:
         self._save()
 
     def merge_all(self, state: dict) -> None:
-        """Add every space and transcript from the given state (already
-        normalized by core.storage.parse_data()) to what's already here,
-        instead of replacing it -- used for the "Expand" import mode.
+        """Add every space and transcript from the given state, already
+        normalized by core.storage.parse_data(), to what's already here
+        instead of replacing it. Used for the "Expand" import mode.
 
         Spaces are merged by name: any space in the incoming state that
-        doesn't already exist locally is appended, in the order it
-        appears in state["spaces"]. The current space selection is left
-        untouched -- importing shouldn't change what's currently open.
+        doesn't already exist locally is appended, in the order it appears
+        in state["spaces"]. The current space selection is left untouched,
+        since importing shouldn't change what's currently open.
 
-        Incoming transcripts keep every field except id, which is
-        reassigned starting from this store's own next_id -- the two
-        stores being merged each numbered their transcripts
-        independently from 1, so incoming ids can (and typically will)
-        collide with ids already in use here. Their "space" field is
-        left as-is; it's guaranteed to exist locally as a space name
-        after the merge above runs first."""
+        Incoming transcripts keep every field except id, which is reassigned
+        starting from this store's own next_id, because the two stores being
+        merged each numbered their transcripts independently from 1, so
+        incoming ids can collide with ids already in use here. Their "space"
+        field is left as-is, since it's guaranteed to exist locally as a
+        space name once the merge above has already run."""
         for space in state["spaces"]:
             if space not in self._spaces:
                 self._spaces.append(space)
@@ -139,27 +137,24 @@ class TranscriptStore:
 
     def rename_space(self, old_name: str, new_name: str) -> bool:
         """Rename a space, reassigning every transcript currently in it to
-        the new name in the same call -- spaces are identified purely by
-        their string name (see self._spaces), not a separate stable id,
-        so a transcript whose .space field wasn't also updated here would
-        silently fall out of the renamed space (transcripts_in_space()
-        filters by exact string match).
+        the new name in the same call. Spaces are identified purely by their
+        string name (see self._spaces), not a separate stable id, so a
+        transcript whose .space field wasn't also updated here would
+        silently fall out of the renamed space, since transcripts_in_space()
+        filters by exact string match.
 
-        Silently rejects (same permissive-on-invalid-input convention as
-        add_space()) and returns False if old_name doesn't exist, new_name
-        is blank or unchanged, or new_name is already used by a DIFFERENT
-        space -- space names must stay unique, same as add_space() already
-        enforces for a brand-new space. Returns True only for a rename
-        that actually happened, so a caller (see gui/app.py's
-        _handle_space_rename_requested() and
-        gui/components/space_selection_dialog.py's commit_rename()) can
-        tell a genuine rename apart from a rejected one and only update
-        its own displayed text for the former -- otherwise the dialog
-        could end up showing a name that was never actually applied.
+        Silently rejects and returns False if old_name doesn't exist,
+        new_name is blank or unchanged, or new_name is already used by a
+        different space, the same permissive convention add_space() already
+        uses. Returns True only for a rename that actually happened, so a
+        caller (gui/app.py's _handle_space_rename_requested() and
+        space_selection_dialog.py's commit_rename()) can tell a genuine
+        rename apart from a rejected one, and only update its own displayed
+        text for the former.
 
-        Renaming the CURRENT space is fine without any extra handling:
-        it's renamed in place at the same index, so current_space just
-        reads back the new name automatically afterward."""
+        Renaming the current space needs no extra handling: it's renamed in
+        place at the same index, so current_space reads back the new name
+        automatically afterward."""
         new_name = new_name.strip()
         if old_name not in self._spaces:
             return False
@@ -176,23 +171,20 @@ class TranscriptStore:
         return True
 
     def delete_space(self, name: str) -> bool:
-        """Delete a space by name -- but only if it's empty (no
-        transcripts currently assigned to it) and it isn't the only space
-        left (there always has to be at least one). Returns whether the
-        delete actually happened, so a caller (see gui/app.py's
-        _handle_space_delete_requested(), which does its own upfront
-        checks and only ever calls this once it already expects True) can
-        tell an accepted delete apart from a silently-refused one.
+        """Delete a space by name, but only if it's empty (no transcripts
+        currently assigned to it) and it isn't the only space left, since
+        there always has to be at least one. Returns whether the delete
+        actually happened, so a caller (gui/app.py's
+        _handle_space_delete_requested(), which does its own upfront checks)
+        can tell an accepted delete apart from a silently-refused one.
 
         If the deleted space was the current one, falls back to whichever
-        space is now first -- there's nothing special about index 0
-        beyond that (default_space is unused outside the tests, per a
-        repo-wide check), so "the first remaining space" is just a
-        simple, predictable choice, not a protected default. Re-derives
-        the new current_space_index from the PREVIOUS current space's
-        name (found again after the removal) rather than adjusting the
-        old index by hand, so this is correct regardless of whether the
-        deleted space came before or after the current one in the list."""
+        space is now first. That's just a simple, predictable choice, not a
+        protected default, since default_space is unused outside the tests.
+        The new current_space_index is re-derived from the previous current
+        space's name, found again after the removal, rather than adjusting
+        the old index by hand, so this stays correct regardless of whether
+        the deleted space came before or after the current one in the list."""
         if name not in self._spaces or len(self._spaces) <= 1:
             return False
         if self.transcripts_in_space(name):
@@ -240,15 +232,13 @@ class TranscriptStore:
             self._save()
 
     def set_transcript_space(self, transcript_id: int, space: str) -> None:
-        """Reassign a transcript to a different space -- e.g. via the
-        sidebar's per-row move icon (see gui/components/
-        move_transcript_dialog.py and gui/app.py's
-        _handle_move_confirmed()). Silently no-ops if space isn't a real
-        space name -- a defensive backstop only: the UI always offers a
-        destination drawn straight from self.spaces (MoveTranscriptDialog
-        is built from that same list, never free text), so unlike
-        rename_space()'s bool return, there's no realistic rejection case
-        a caller needs to react to here."""
+        """Reassign a transcript to a different space, e.g. via the
+        sidebar's per-row move icon (see move_transcript_dialog.py and
+        gui/app.py's _handle_move_confirmed()). Silently no-ops if space
+        isn't a real space name, which is only a defensive backstop: the UI
+        always offers a destination drawn straight from self.spaces, so
+        unlike rename_space()'s bool return, there's no realistic rejection
+        case a caller needs to react to here."""
         t = self._find_transcript(transcript_id)
         if t and space in self._spaces:
             t.space = space
@@ -261,7 +251,7 @@ class TranscriptStore:
             self._save()
 
     def set_transcript_position(self, transcript_id: int, position: int) -> None:
-        """Update the transcript's position and persist it -- but the disk
+        """Update the transcript's position and persist it, though the disk
         write itself is throttled (see LIVE_SAVE_INTERVAL_SECONDS in
         core/storage.py), since this is called on every word during
         playback. The in-memory value is always current regardless; call
@@ -279,13 +269,13 @@ class TranscriptStore:
 
     def flush(self) -> None:
         """Force an immediate save, bypassing the live-update throttle.
-        Every OTHER setter in this class already calls _save() directly
-        and unconditionally (pause, stop, skip's pause-toggle, colors,
-        etc.), so those already double as safe checkpoints for whatever
-        position/WPM was last recorded in memory -- this is only needed to
-        guarantee a throttled-but-not-yet-written update actually reaches
-        disk when nothing else is going to save afterward. Called from
-        gui/app.py on app close."""
+        Every other setter in this class already calls _save() directly and
+        unconditionally (pause, stop, skip's pause-toggle, colors, etc.), so
+        those already double as safe checkpoints for whatever position or
+        WPM was last recorded in memory. This is only needed to guarantee a
+        throttled-but-not-yet-written update actually reaches disk when
+        nothing else is going to save afterward. Called from gui/app.py on
+        app close."""
         self._last_live_save = time.monotonic()
         self._save()
 
@@ -296,7 +286,7 @@ class TranscriptStore:
             self._save()
 
     def set_transcript_wpm(self, transcript_id: int, wpm: int) -> None:
-        """Update the transcript's WPM and persist it -- throttled the same
+        """Update the transcript's WPM and persist it, throttled the same
         way set_transcript_position() is, since this is the footer WPM
         slider's live drag callback and can fire dozens of times across a
         single drag. This is currently WPM's only caller, so no separate
@@ -308,11 +298,11 @@ class TranscriptStore:
             self._save_throttled()
 
     def set_transcript_font_color(self, transcript_id: int, color: str) -> None:
-        # Called only from the footer's own color picker -- a genuine
+        # Called only from the footer's own color picker, a genuine
         # manual change, so it retires this transcript's font color from
         # theme-tracking. Only clears the flag if the color actually
-        # changed, so re-picking the same color twice doesn't accidentally
-        # freeze it (see resync_default_reading_colors()).
+        # changed, so re-picking the same color twice doesn't
+        # accidentally freeze it (see resync_default_reading_colors()).
         t = self._find_transcript(transcript_id)
         if t:
             if color != t.font_color:
@@ -338,12 +328,12 @@ class TranscriptStore:
 
     def resync_default_reading_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         """Update every transcript whose reading colors are still tracking
-        the app-wide default (font_color_is_default etc. -- see
-        core/models.py) to the given values, leaving any transcript with
-        its own deliberately-picked color untouched. Called once at app
-        startup (see gui/app.py) with whichever color set matches the
-        CURRENT theme -- the same "takes effect on next launch" timing the
-        rest of the theme system already uses, not a live update."""
+        the app-wide default (font_color_is_default etc., see
+        core/models.py) to the given values, leaving any transcript with its
+        own deliberately-picked color untouched. Called once at app startup
+        (see gui/app.py) with whichever color set matches the current theme,
+        the same "takes effect on next launch" timing the rest of the theme
+        system already uses, not a live update."""
         changed = False
         for t in self._transcripts:
             if t.font_color_is_default and t.font_color != font_color:
@@ -378,22 +368,20 @@ class TranscriptStore:
 
     def add_session_stats(self, transcript_id: int, words_read: int, active_seconds: float) -> None:
         """Roll one finished reading session's numbers into this
-        transcript's running totals -- called once a session actually
-        ends (stopped, finished, switched away from, or the app closing
-        mid-read; see gui/components/reader_display.py's
-        finalize_session()), never for a session still in progress.
+        transcript's running totals. Called once a session actually ends
+        (stopped, finished, switched away from, or the app closing mid-read;
+        see reader_display.py's finalize_session()), never for a session
+        still in progress.
 
         times_read only increments if active_seconds clears
-        MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ -- otherwise opening a
-        transcript and immediately clicking away would count as a read.
-        words_read and active_seconds are still added to the running
-        totals regardless of that floor: a few seconds of real reading
-        still happened even if it's short of counting as a whole "time
-        read," so the totals themselves never silently drop numbers the
-        floor was never meant to touch.
+        MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ, otherwise opening a transcript
+        and immediately clicking away would count as a read. words_read and
+        active_seconds are still added to the running totals regardless of
+        that floor, since a few seconds of real reading still happened even
+        if it's short of counting as a whole "time read."
 
-        words_read of 0 is a normal, expected call (e.g. a session ended
-        without ever advancing past the first word) -- nothing special
+        words_read of 0 is a normal, expected call, such as a session that
+        ended without ever advancing past the first word. Nothing special
         happens for it beyond times_read's own floor check above."""
         t = self._find_transcript(transcript_id)
         if t is None:
