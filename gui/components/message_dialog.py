@@ -3,7 +3,7 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FON
 
 
 class MessageDialog(ctk.CTkToplevel):
-    """A single-button popup for telling the user something -- an error
+    """A single-button popup for telling the user something: an error
     ("that file isn't a valid export"), a confirmation ("export saved
     to..."), or a notice that has to be acknowledged before something
     else happens (see on_close below). None of the app's other popups
@@ -14,14 +14,14 @@ class MessageDialog(ctk.CTkToplevel):
     one-off dialog for each message would just be this same shape
     copy-pasted repeatedly.
 
-    on_close, if given, fires after the dialog is dismissed -- by the
-    button OR by the window's own OS close control, deliberately treated
+    on_close, if given, fires after the dialog is dismissed, by the
+    button or by the window's own OS close control, deliberately treated
     the same way here (see the WM_DELETE_WINDOW binding below). That
     matters for the one caller that actually needs it: after a data
     import, the change has already happened by the time this dialog
     appears, and the app needs to close right afterward regardless of
-    which way the user dismisses the message -- there's no "cancel" to
-    go back to at that point, unlike every other dialog in this app."""
+    which way the user dismisses the message. There's no "cancel" to go
+    back to at that point, unlike every other dialog in this app."""
 
     def __init__(self, master, title, message, on_close=None, button_text="OK"):
         super().__init__(master)
@@ -39,7 +39,7 @@ class MessageDialog(ctk.CTkToplevel):
         self.on_close = on_close
 
         # Deliberately routes the window manager's own close control
-        # through the same handler as the button -- see the class
+        # through the same handler as the button. See the class
         # docstring above.
         self.protocol("WM_DELETE_WINDOW", self._handle_dismiss)
 
@@ -62,7 +62,7 @@ class MessageDialog(ctk.CTkToplevel):
         self.after(10, self.grab_set)
         self.focus_force()
 
-        # See delete_transcript_dialog.py's matching comment -- same
+        # See delete_transcript_dialog.py's matching comment: same
         # reasoning, same delay.
         self.after(80, self._reveal_now)
 

@@ -4,7 +4,7 @@ from gui.theme import WARM_TAUPE, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_
 
 class TranscriptListHeader(ctk.CTkFrame):
     """Top of the sidebar: 'List of Transcripts' title and a '+' button.
-    "+" just fires on_add -- gui/app.py decides what that means (it opens
+    "+" just fires on_add: gui/app.py decides what that means (it opens
     AddTranscriptChooserDialog, which offers blank vs. from-file), same
     pattern as every other "open a dialog" callback in this app."""
 

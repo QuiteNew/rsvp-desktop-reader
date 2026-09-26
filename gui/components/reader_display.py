@@ -9,27 +9,27 @@ class ReaderDisplay(ctk.CTkFrame):
     distinct color from the rest of the word.
 
     The ORP letter's horizontal center is pinned to one fixed x
-    position (the row's own center) for every word, regardless of
-    word length -- this is the actual point of RSVP: the eye rests at
-    one spot and never has to relocate itself between words. Words are
-    positioned with .place() rather than .pack(), since pack only
-    knows how to center the word as a whole block, not anchor one
-    specific letter inside it at a fixed point.
+    position (the row's own center) for every word, regardless of word
+    length. This is the actual point of RSVP: the eye rests at one spot
+    and never has to relocate itself between words. Words are positioned
+    with .place() rather than .pack(), since pack only knows how to
+    center the word as a whole block, not anchor one specific letter
+    inside it at a fixed point.
 
     Two short guide marks (fixed at that same x) are shown above and
-    below the letter, but only while a session is actively flashing --
-    paused, stopped, or finished states hide them, since there's
-    nothing to anchor the eye to when nothing is advancing.
+    below the letter, but only while a session is actively flashing:
+    paused, stopped, or finished states hide them, since there's nothing
+    to anchor the eye to when nothing is advancing.
 
     An optional pair of horizontal ticks can also be shown, one at the
     outer tip of each vertical mark, forming a crosshair. They stay
-    centered on the same fixed anchor x as everything else. Their
-    LENGTH is constant regardless of the current word -- it's derived
-    from the reading row's own width, shrunk by a fixed margin on each
-    side so the ticks sit close to the row's left/right edges without
-    touching them (see _guide_mark_horizontal_length()). Thickness and
-    color are fixed constants (GUIDE_MARK_HORIZONTAL_*), not
-    user-configurable; only whether they're shown at all is, via
+    centered on the same fixed anchor x as everything else. Their length
+    is constant regardless of the current word: it's derived from the
+    reading row's own width, shrunk by a fixed margin on each side so
+    the ticks sit close to the row's left/right edges without touching
+    them (see _guide_mark_horizontal_length()). Thickness and color are
+    fixed constants (GUIDE_MARK_HORIZONTAL_*), not user-configurable;
+    only whether they're shown at all is, via
     set_guide_mark_horizontal_enabled().
     """
 
@@ -37,45 +37,34 @@ class ReaderDisplay(ctk.CTkFrame):
     DEFAULT_HIGHLIGHT_COLOR = EMBER_GLOW
     DEFAULT_FONT_SIZE = 32
 
-    GUIDE_MARK_THICKNESS = 2        # px -- construction-time default only; the live value comes
+    GUIDE_MARK_THICKNESS = 2        # px, construction-time default only; the live value comes
                                      # from Settings via set_guide_mark_thickness(). This is a
                                      # plain logical-pixel constant (like a font size), not
                                      # derived from winfo_width(), so CTk's normal DPI
-                                     # auto-scaling applies to it correctly -- it must NOT be
+                                     # auto-scaling applies to it correctly. It must not be
                                      # routed through _configure_physical_width().
-    GUIDE_MARK_MIN_GAP_PX = 6       # px -- safely above HIGHLIGHT_OFFSET_RANGE's max
+    GUIDE_MARK_MIN_GAP_PX = 6       # px, safely above HIGHLIGHT_OFFSET_RANGE's max
                                      # magnitude (3), so marks never touch the letter
                                      # even at the largest vertical offset setting
-    GUIDE_MARK_LENGTH_RATIO = 0.35  # construction-time default only, as a fraction (not %) --
-                                     # the live value comes from Settings via
+    GUIDE_MARK_LENGTH_RATIO = 0.35  # construction-time default only, as a fraction (not %).
+                                     # The live value comes from Settings via
                                      # set_guide_mark_length_percent(). Deliberately kept as a
                                      # ratio of the current font size (not a fixed px value like
                                      # GUIDE_MARK_THICKNESS), so the marks keep scaling with word
-                                     # size -- see set_guide_mark_length_percent() docstring.
+                                     # size; see set_guide_mark_length_percent() docstring.
 
-    GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 2     # px -- fixed; TEMPORARY test value, was 1.
-                                                # Debug output confirmed the 1px-tall guide_line
-                                                # widgets were being correctly created, mapped,
-                                                # sized and positioned by Tkinter (winfo_ismapped=1,
-                                                # correct width/x/y, correct fg_color) even though
-                                                # nothing was visible on screen -- the leading
-                                                # hypothesis is that CTkFrame's canvas-based
-                                                # rounded-rect draw routine doesn't paint a visible
-                                                # fill at 1 physical pixel of thickness. This bumps
-                                                # it to 2px (matching the vertical marks' known-
-                                                # working GUIDE_MARK_THICKNESS) as a test -- not yet
-                                                # confirmed as the fix.
+    GUIDE_MARK_HORIZONTAL_THICKNESS_PX = 2     # px, fixed. Kept at 2 rather than 1: CTkFrame's
+                                                # canvas-based rounded-rect draw routine doesn't
+                                                # reliably paint a visible fill at 1 physical
+                                                # pixel of thickness.
     GUIDE_MARK_HORIZONTAL_EDGE_MARGIN_PX = 34  # px kept clear between each tick's end and the
-                                                # reading row's left/right edge -- the "close
-                                                # to the wall but not touching it" gap. This is
-                                                # the one number worth tuning by eye -- re-tune
-                                                # this after confirming the width-scaling fix
-                                                # below, since the previously-visible size was
-                                                # an artifact of that bug, not this margin.
+                                                # reading row's left/right edge: the "close to
+                                                # the wall but not touching it" gap. The one
+                                                # number worth tuning by eye.
     GUIDE_MARK_HORIZONTAL_MIN_LENGTH_PX = 20   # px floor, in case the row is ever narrower
                                                 # than the margins (e.g. a very small detached
                                                 # window)
-    GUIDE_MARK_HORIZONTAL_COLOR = "#9A9A9A"    # fixed neutral grey -- deliberately outside
+    GUIDE_MARK_HORIZONTAL_COLOR = "#9A9A9A"    # fixed neutral grey, deliberately outside
                                                 # gui/theme.py's warm palette (which has no
                                                 # neutral grey token). Not user-configurable:
                                                 # these ticks are meant to stay visually
@@ -94,7 +83,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self.on_position_changed = on_position_changed
         self.on_session_stats = on_session_stats
 
-        # Per-session stats tracking -- see load_session(),
+        # Per-session stats tracking: see load_session(),
         # finalize_session(), _start_active_span()/_end_active_span(),
         # and _advance(). words/active-seconds accumulate for whatever
         # session is currently loaded and are reset at the start of the
@@ -107,7 +96,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._session_active_seconds = 0.0
         self._active_span_start: float | None = None
 
-        # Anchor geometry from the most recent _position_word() call --
+        # Anchor geometry from the most recent _position_word() call.
         # None until the row has been sized at least once. Guide marks
         # read these rather than recomputing, so they always match
         # exactly where the letter actually was last placed.
@@ -122,13 +111,13 @@ class ReaderDisplay(ctk.CTkFrame):
 
         self.word_font = ctk.CTkFont(family=FONT_HEADING, size=self.DEFAULT_FONT_SIZE)
 
-        # Positioned with .place() in _position_word(), not .pack() --
+        # Positioned with .place() in _position_word(), not .pack();
         # see the class docstring for why.
         self.before_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_FONT_COLOR)
         self.focus_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_HIGHLIGHT_COLOR)
         self.after_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_FONT_COLOR)
 
-        # Not placed yet -- _update_guide_marks() shows/positions them
+        # Not placed yet: _update_guide_marks() shows/positions them
         # only while a session is actively running.
         self.guide_mark_above = ctk.CTkFrame(
             self.word_row, width=self.GUIDE_MARK_THICKNESS, height=8,
@@ -139,12 +128,12 @@ class ReaderDisplay(ctk.CTkFrame):
             fg_color=self.DEFAULT_FONT_COLOR, corner_radius=0,
         )
 
-        # Fixed-style horizontal ticks -- a crosshair at the outer tip
-        # of each vertical mark. Thickness and color are hardcoded
-        # constants (see GUIDE_MARK_HORIZONTAL_* above); width is
-        # recomputed on every resize/frame in _update_guide_marks() to
-        # track the reading row's own width. The width given here is
-        # just a placeholder until the first _update_guide_marks() call
+        # Fixed-style horizontal ticks: a crosshair at the outer tip of
+        # each vertical mark. Thickness and color are hardcoded constants
+        # (see GUIDE_MARK_HORIZONTAL_* above); width is recomputed on
+        # every resize/frame in _update_guide_marks() to track the
+        # reading row's own width. The width given here is just a
+        # placeholder until the first _update_guide_marks() call
         # reconfigures it.
         self.guide_line_above = ctk.CTkFrame(
             self.word_row, width=self.GUIDE_MARK_HORIZONTAL_MIN_LENGTH_PX, height=self.GUIDE_MARK_HORIZONTAL_THICKNESS_PX,
@@ -180,23 +169,23 @@ class ReaderDisplay(ctk.CTkFrame):
         on_session_stats (ultimately reaching
         core/transcript_store.py's add_session_stats(), through
         gui/app.py), then reset the per-session counters so a later
-        call -- whether from stop() below or from an external caller --
+        call, whether from stop() below or from an external caller,
         never double-reports what's already been sent.
 
         Safe to call when nothing is loaded (self.session is None): a
         no-op, since Canvas.load_transcript() unconditionally calls
         stop() even before anything has ever been loaded. Also safe to
-        call while a session is STILL actively playing -- closes out
+        call while a session is still actively playing: closes out
         whatever active span is currently open first (see
         _end_active_span()).
 
         This is split out from stop() specifically because gui/app.py's
         WM_DELETE_WINDOW close handler is the one real exit path that
-        does NOT go through stop() -- quitting mid-read never explicitly
-        stops playback first, since the app is about to close anyway --
-        so without a way to call just this part, closing the app while a
-        transcript is actively running would silently lose that tail
-        end of the session's stats."""
+        does not go through stop(), since quitting mid-read never
+        explicitly stops playback first, the app is about to close
+        anyway, so without a way to call just this part, closing the app
+        while a transcript is actively running would silently lose that
+        tail end of the session's stats."""
         if self.session is None:
             return
         self._end_active_span()
@@ -225,7 +214,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self.session.reset()
         self._is_paused = False
         # restart() always leaves playback unpaused, whatever state it
-        # was in before (playing, paused, or finished) -- so it always
+        # was in before (playing, paused, or finished), so it always
         # needs an open active span afterward. _end_active_span() is a
         # no-op if one wasn't already open (the paused/finished cases);
         # for the already-playing case this is a same-instant close and
@@ -246,7 +235,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._report_position()
         if force_pause and not self._is_paused:
             # Only an actual not-paused -> paused transition needs the
-            # active span closed -- if it was already paused, skip()
+            # active span closed: if it was already paused, skip()
             # forcing "paused" again isn't a new transition, and the
             # span (if any) is already closed. This bypasses
             # toggle_pause() entirely (force_pause sets _is_paused
@@ -272,7 +261,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self.before_label.configure(text_color=font_color)
         self.after_label.configure(text_color=font_color)
         self.focus_label.configure(text_color=highlight_color)
-        # Vertical guide marks are NOT touched here -- their color is a
+        # Vertical guide marks are not touched here: their color is a
         # flat global value from Settings (see set_guide_mark_color()),
         # independent of the current transcript's font color, same as
         # the horizontal ticks are independent via a fixed constant.
@@ -287,17 +276,17 @@ class ReaderDisplay(ctk.CTkFrame):
         to before/after which stay at the row's normal vertical center.
         Positive = up, negative = down, 0 = default.
 
-        Guide marks track this too -- their gap is measured from the
-        letter's actual current top/bottom edge, so they keep a
-        constant clearance from wherever the letter ends up rather
-        than staying fixed at the un-offset center."""
+        Guide marks track this too: their gap is measured from the
+        letter's actual current top/bottom edge, so they keep a constant
+        clearance from wherever the letter ends up rather than staying
+        fixed at the un-offset center."""
         self._highlight_offset_px = offset_px
         self._position_word()
         self._update_guide_marks()
 
     def set_guide_mark_horizontal_enabled(self, enabled: bool) -> None:
         """Show/hide the horizontal crosshair ticks. This is the only
-        configurable property they have -- thickness and color are
+        configurable property they have. Thickness and color are
         fixed constants, and length is a constant derived from the
         reading row's own width (see GUIDE_MARK_HORIZONTAL_* and
         _guide_mark_horizontal_length())."""
@@ -306,7 +295,7 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def set_guide_mark_thickness(self, thickness_px: int) -> None:
         """Width of the two vertical guide marks (above/below the
-        highlighted letter). A plain logical-pixel value -- see the
+        highlighted letter) which is a plain logical-pixel value, see the
         GUIDE_MARK_THICKNESS comment above for why this is configured
         directly rather than through _configure_physical_width()."""
         self.guide_mark_above.configure(width=thickness_px)
@@ -316,7 +305,7 @@ class ReaderDisplay(ctk.CTkFrame):
     def set_guide_mark_length_percent(self, percent: int) -> None:
         """Length of the two vertical guide marks, as a percentage of
         the current word-size font (e.g. 35 means 0.35 * font size).
-        Kept as a ratio rather than a fixed px value -- unlike the
+        Kept as a ratio rather than a fixed px value unlike the
         horizontal ticks, which are deliberately fixed-style and
         window-relative, the vertical marks anchor the eye to the
         letter itself, so they're meant to keep growing and shrinking
@@ -326,9 +315,9 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def set_guide_mark_color(self, color: str) -> None:
         """Color of the two vertical guide marks (above/below the
-        highlighted letter). A flat global value from Settings --
-        unlike before/after text and the highlight letter, these marks
-        no longer follow the current transcript's font color (see
+        highlighted letter). A flat global value from Settings: unlike
+        before/after text and the highlight letter, these marks no
+        longer follow the current transcript's font color (see
         set_colors())."""
         self.guide_mark_above.configure(fg_color=color)
         self.guide_mark_below.configure(fg_color=color)
@@ -349,7 +338,7 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def _place_physical(self, widget, *, x, y, anchor) -> None:
         """place() a child of word_row at a position expressed in real
-        on-screen pixels -- the same space winfo_width()/winfo_height()
+        on-screen pixels: the same space winfo_width()/winfo_height()
         report, which is what all our anchor math is computed in.
 
         CustomTkinter's CTkBaseClass.place() silently multiplies x/y by
@@ -359,17 +348,17 @@ class ReaderDisplay(ctk.CTkFrame):
         x/y here are already real physical pixels (derived from
         winfo_width()/winfo_reqwidth(), which report post-scaling
         sizes), passing them to .place() directly gets them scaled a
-        SECOND time -- on a 200%-scaled display that pushes every word
+        second time, which on a 200%-scaled display pushes every word
         roughly twice as far right/down as intended, off the visible
-        edge. This is the confirmed cause of the corner-squeeze bug.
+        edge.
 
         Dividing by that same factor here via CTk's own
-        _reverse_widget_scaling() (the exact inverse it uses
-        internally) cancels the doubling out, so the widget lands at
-        the physical position we actually computed. Every place() call
-        in this file must go through this method -- calling
-        .place(x=, y=) directly on a child of word_row will reintroduce
-        this bug on any non-100%-scaled display.
+        _reverse_widget_scaling() (the exact inverse it uses internally)
+        cancels the doubling out, so the widget lands at the physical
+        position we actually computed. Every place() call in this file
+        must go through this method: calling .place(x=, y=) directly on
+        a child of word_row will reintroduce this bug on any
+        non-100%-scaled display.
         """
         widget.place(
             x=self._reverse_widget_scaling(x),
@@ -380,13 +369,12 @@ class ReaderDisplay(ctk.CTkFrame):
     def _configure_physical_width(self, widget, width) -> None:
         """configure(width=...) on a CTk widget applies the exact same
         DPI auto-scaling that _place_physical() above has to cancel for
-        x/y -- confirmed via debug output on the horizontal guide ticks:
-        setting width=1412 (a physical-pixel value, computed from
-        winfo_width()) rendered an actual on-screen width of 2824,
-        exactly double, on this 200%-scaled display. Dividing by the
-        same factor here cancels that out, the same way _place_physical
-        does for position. Use this instead of widget.configure(width=)
-        directly whenever the width being set was computed from
+        x/y: setting width=1412 (a physical-pixel value, computed from
+        winfo_width()) renders an actual on-screen width of 2824, exactly
+        double, on a 200%-scaled display. Dividing by the same factor
+        here cancels that out, the same way _place_physical does for
+        position. Use this instead of widget.configure(width=) directly
+        whenever the width being set was computed from
         winfo_width()/winfo_reqwidth() (i.e. is already physical) rather
         than being a plain logical constant like GUIDE_MARK_THICKNESS.
         """
@@ -395,13 +383,13 @@ class ReaderDisplay(ctk.CTkFrame):
     def _position_word(self) -> None:
         """Places before/focus/after so the focus letter's horizontal
         center always lands at the row's fixed center x. Recomputed on
-        every frame -- both the word's text and the font size can
-        change the letter's rendered width -- and on resize."""
+        every frame, since both the word's text and the font size can
+        change the letter's rendered width, and on resize."""
         self.word_row.update_idletasks()
         row_width = self.word_row.winfo_width()
         row_height = self.word_row.winfo_height()
         if row_width <= 1 or row_height <= 1:
-            return  # not yet mapped/sized -- nothing sensible to compute
+            return  # not yet mapped/sized, nothing sensible to compute
 
         anchor_x = row_width / 2
         center_y = row_height / 2
@@ -409,7 +397,7 @@ class ReaderDisplay(ctk.CTkFrame):
         focus_y = center_y - self._highlight_offset_px
 
         if self.session is not None and self.session.is_finished:
-            # No ORP letter to anchor around here -- before_label holds
+            # No ORP letter to anchor around here: before_label holds
             # the whole "(finished)" message with focus/after emptied.
             # The normal anchor="e" placement below assumes an actual
             # focus_width to butt up against; with that width near 0 it
@@ -450,7 +438,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self.guide_mark_below.configure(height=length)
 
         # Inner edge = nearest the letter, where each vertical mark
-        # starts. Outer edge = its far tip -- that's where the matching
+        # starts. Outer edge = its far tip, where the matching
         # horizontal tick sits, forming a crosshair.
         inner_top_y = self._focus_y - self._focus_half_height - gap
         inner_bottom_y = self._focus_y + self._focus_half_height + gap
@@ -505,7 +493,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._session_words_read += 1
         if self.session.is_finished:
             # Reading has genuinely stopped here, even though nothing
-            # set _is_paused -- close the active span now rather than
+            # set _is_paused. Close the active span now rather than
             # leaving it open and silently counting whatever idle time
             # passes before the user eventually navigates away or
             # closes the app.

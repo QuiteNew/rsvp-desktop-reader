@@ -17,8 +17,8 @@ class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
     free-form drag-resize), where transcript data is stored, colour
     theme, and per-transcript reading stats. Header height is a fixed
-    constant, not user-configurable -- see gui/app.py. Theme changes take
-    effect on next launch, not live -- every widget's color is set
+    constant, not user-configurable; see gui/app.py. Theme changes take
+    effect on next launch, not live: every widget's color is set
     explicitly at creation, so a live switch would mean reconfiguring the
     entire widget tree at once."""
 
@@ -47,37 +47,22 @@ class SettingsWindow(ctk.CTkToplevel):
         super().__init__(master)
 
         # Hidden until fully built (see the matching alpha restore at the
-        # very end of __init__). CustomTkinter's own CTkToplevel.__init__
-        # -- which super().__init__() above just ran -- withdraws this
-        # window itself for a moment to apply Windows' native dark/light
-        # title bar (DWM's DWMWA_USE_IMMERSIVE_DARK_MODE), then schedules
-        # its own deiconify() ~5ms later. That's independent of anything
-        # in this file, and unrelated to packaging as an .exe -- it's
-        # CustomTkinter's normal behavior on every window, every launch.
-        #
-        # An earlier version of this fix called withdraw() again here to
-        # cooperate with a hook CTkToplevel.withdraw() provides for
-        # exactly that ~5ms cycle. That covered only the ONE call CTk
-        # makes from __init__. It turns out CTkToplevel.resizable() --
-        # which this file calls a few lines down -- independently
-        # triggers the *same* hide/DWM-set/reveal dance a second time,
-        # via its own self.after(10, ...) callback (see
-        # customtkinter/windows/ctk_toplevel.py), completely bypassing
-        # that cooperation flag. That's what turned "flash of blank
-        # background while building" into "the window visibly closes and
-        # reopens": our own deiconify() had already shown the fully-built
-        # window by the time resizable()'s delayed callback fired and
-        # force-hid it a second time, then auto-revealed it again ~5ms
-        # after that.
-        #
-        # Rather than chase every current (and possibly future --
-        # changing the appearance mode later triggers this same dance
-        # too) internal trigger with more withdraw()-flag timing tricks,
-        # this sidesteps the whole mechanism: making the window fully
-        # transparent doesn't touch Tk's own map/withdraw state machine
+        # very end of __init__). CustomTkinter's own CTkToplevel.__init__,
+        # which super().__init__() above just ran, withdraws this window
+        # itself for a moment to apply Windows' native dark/light title
+        # bar (DWM's DWMWA_USE_IMMERSIVE_DARK_MODE), then schedules its
+        # own deiconify() ~5ms later. CTkToplevel.resizable(), called a
+        # few lines down, independently triggers that same hide/DWM-set/
+        # reveal dance a second time via its own delayed callback (see
+        # customtkinter/windows/ctk_toplevel.py), so a plain withdraw()-
+        # flag cooperation only covers the first cycle and the window
+        # would still visibly flash a second time when resizable() fires.
+        # Making the window fully transparent instead sidesteps the whole
+        # mechanism: it doesn't touch Tk's own map/withdraw state machine
         # at all, so CustomTkinter's internal hide-and-reshow cycles can
-        # run their course invisibly, however many times they fire,
-        # without us needing to know about or race their timing.
+        # run their course invisibly however many times they fire (this
+        # also happens again if the appearance mode changes later),
+        # without us needing to track their timing.
         self.attributes("-alpha", 0)
 
         self.title("Settings")
@@ -151,14 +136,14 @@ class SettingsWindow(ctk.CTkToplevel):
         self.focus_force()
 
         # Reveal only now, once everything above is built and colored
-        # *and* comfortably after CustomTkinter's own internal Windows
+        # and comfortably after CustomTkinter's own internal Windows
         # titlebar dance has had time to finish (its slowest leg,
         # triggered by resizable() above, can take up to ~15ms to
-        # settle -- see the alpha note near the top of __init__). 80ms
+        # settle; see the alpha note near the top of __init__). 80ms
         # leaves a wide margin while staying well under what's
         # perceptible as a delay. update_idletasks() right before flipping
         # alpha forces any still-queued layout/redraw work (including CTk
-        # widgets -- there are a lot of them on this window's tabs -- that
+        # widgets, and there are a lot of them on this window's tabs, that
         # defer their own first paint via their own internal after() calls)
         # to actually finish first, rather than letting the reveal catch
         # some of that mid-flight and show pieces of the window popping in
@@ -169,22 +154,22 @@ class SettingsWindow(ctk.CTkToplevel):
     def _reveal_now(self) -> None:
         # Every CTk widget redraws itself on a real <Configure> event once
         # its size actually changes (core_widget_classes/ctk_base_class.py,
-        # _update_dimensions_event) -- update_idletasks() doesn't dispatch
+        # _update_dimensions_event); update_idletasks() doesn't dispatch
         # those, only update() does (same root cause as the
         # CTkScrollableFrame fix on Space Selection).
         #
         # _parent_canvas.bbox("all") is CustomTkinter's own computed
         # bounding box of everything inside the Defaults tab's scrollable
-        # area (see ctk_scrollable_frame.py) -- the deepest, most
+        # area (see ctk_scrollable_frame.py), the deepest, most
         # widget-dense part of this window, and the same private attribute
         # _redirect_scroll_to_defaults_frame() above already reaches into.
         # Looping until it's identical two passes in a row is a genuine
-        # "is it finished" signal rather than a guessed pass count --
+        # "is it finished" signal rather than a guessed pass count,
         # capped so this can never hang if that attribute name ever
-        # changes across a CustomTkinter version. Measured: this loop
-        # itself typically finishes in 2 passes, under 1ms -- the visible
-        # delay before this window appears is construction time in
-        # __init__ above, not this loop.
+        # changes across a CustomTkinter version. This loop itself
+        # typically finishes in under 1ms; the visible delay before this
+        # window appears is construction time in __init__ above, not this
+        # loop.
         last_bbox = None
         for _ in range(30):
             self.update()
@@ -210,16 +195,14 @@ class SettingsWindow(ctk.CTkToplevel):
         # after the native file dialog closes (the success/failure
         # MessageDialog on export, ImportConfirmDialog on a valid
         # import): that new dialog sets its own grab ~10ms after it's
-        # constructed, but THIS callback was already scheduled 50ms
-        # earlier -- at the moment the native dialog closed, before the
-        # new dialog even existed. Both fire; this one fires second and
-        # silently steals the grab back. The new dialog stays visually
-        # on top (nothing here affects stacking, which is a separate
-        # concern -- see gui/app.py's _settings_window handling) but
-        # stops receiving clicks, since Tk only delivers input to
-        # whichever window currently holds the grab. Confirmed as the
-        # actual cause via a real test: Replace/Expand looked front-most
-        # but didn't respond.
+        # constructed, but this callback was already scheduled 50ms
+        # earlier, at the moment the native dialog closed, before the new
+        # dialog even existed. Both fire; this one fires second and
+        # silently steals the grab back. The new dialog stays visually on
+        # top (nothing here affects stacking, a separate concern; see
+        # gui/app.py's _settings_window handling) but stops receiving
+        # clicks, since Tk only delivers input to whichever window
+        # currently holds the grab.
         if self.winfo_exists() and self.grab_current() is None:
             self.grab_set()
 
@@ -235,37 +218,28 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _redirect_scroll_to_defaults_frame(self, event) -> str:
         """Prevents this slider from changing its own value when the
-        mouse wheel scrolls over it — CTkSlider is drawn on a Tkinter
+        mouse wheel scrolls over it. CTkSlider is drawn on a Tkinter
         Canvas internally, and Canvas widgets have a built-in default
         where the wheel adjusts the canvas's own content, unrelated to
         CustomTkinter. This stops that and manually forwards the same
         scroll to the enclosing CTkScrollableFrame instead, so hovering a
         slider scrolls the page, same as hovering anywhere else in this tab.
 
-        Handles BOTH of CustomTkinter's own two wheel-event conventions,
-        not just one -- confirmed directly from the installed package's
-        ctk_slider.py: CTkSlider binds its own value-changing scroll
+        Handles both of CustomTkinter's own two wheel-event conventions,
+        not just one: CTkSlider binds its own value-changing scroll
         handler to <MouseWheel> on Windows/macOS, but to <Button-4> and
         <Button-5> on Linux instead, since X11 reports the wheel as
-        button presses rather than a MouseWheel event at all. An earlier
-        version of this method (and the binding in _styled_slider()
-        below) only ever touched <MouseWheel> -- a harmless no-op on
-        Linux, since nothing was bound there to unbind, which meant
-        CustomTkinter's own Linux scroll-wheel binding kept changing the
-        slider's value underneath us the whole time (confirmed via a real
-        test: scrolling over a slider moved it, instead of scrolling the
-        page). event.num is used for the Linux buttons; event.delta
-        (Windows/macOS) is used otherwise -- same discrimination
-        CustomTkinter's own _mouse_scroll_event() uses internally, so
-        this mirrors an already-proven-safe pattern rather than inventing
-        a new one.
+        button presses rather than a MouseWheel event at all. event.num
+        is used for the Linux buttons; event.delta (Windows/macOS) is
+        used otherwise, the same discrimination CustomTkinter's own
+        _mouse_scroll_event() uses internally, so this mirrors an
+        already-proven-safe pattern rather than inventing a new one.
 
-        Reaches into CTkScrollableFrame's `_parent_canvas` — there's no
-        public API for this in the installed CustomTkinter version. Wrapped
-        defensively: if that attribute name differs on your exact version,
-        scrolling over a slider will simply do nothing (rather than crash
-        or keep changing the value) — worth telling me if that happens, so
-        we can find the correct attribute name for your version."""
+        Reaches into CTkScrollableFrame's `_parent_canvas`; there's no
+        public API for this in the installed CustomTkinter version.
+        Wrapped defensively: if that attribute name differs on your exact
+        version, scrolling over a slider will simply do nothing rather
+        than crash or keep changing the value."""
         try:
             canvas = self._defaults_scroll._parent_canvas
             if event.num == 4:      # Linux scroll up
@@ -357,7 +331,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_font_size_slider.pack(fill="x", pady=(0, 8))
 
         ctk.CTkLabel(
-            scroll, text="Changes for the WPM affect the current trancript aswell",
+            scroll, text="Changes for the WPM slider take effect after clicking Apply.",
             text_color=COCOA_INK, font=self.small_font,
         ).pack(anchor="w", pady=(0, 20))
 
@@ -421,7 +395,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.guide_mark_length_slider.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(
             scroll,
-            text="Length of the vertical guide marks, as a percentage of the current word size -- so they keep scaling with the Word Size setting above. Applies globally.",
+            text="Length of the vertical guide marks, as a percentage of the current word so they keep scaling with the Word Size setting above. Applies globally.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -429,7 +403,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.guide_mark_color_swatch = self._color_row(scroll, "Mark colour", guide_mark_color, self._pick_guide_mark_color)
         ctk.CTkLabel(
             scroll,
-            text="Colour of the vertical guide marks above and below the highlighted letter. Applies globally, to every transcript -- no longer follows the transcript's font colour.",
+            text="Colour of the vertical guide marks above and below the highlighted letter. Applies globally, to every transcript.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -447,7 +421,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.length_pacing_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
             scroll,
-            text="Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies -- they don't stack. Applies globally, takes effect after clicking Apply.",
+            text="Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies they don't stack. Applies globally, takes effect after clicking Apply.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -637,11 +611,11 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _handle_export_data(self) -> None:
         """Collects a destination path via a native save dialog and hands
-        it straight to on_export_requested. Unlike "Choose folder…" above
-        -- which only stages a value the Apply button submits later --
-        Export and Import are immediate, one-shot actions with real side
-        effects of their own (writing a file; overwriting stored data), so
-        they bubble straight up to gui/app.py instead of going through
+        it straight to on_export_requested. Unlike "Choose folder…" above,
+        which only stages a value the Apply button submits later, Export
+        and Import are immediate, one-shot actions with real side effects
+        of their own (writing a file; overwriting stored data), so they
+        bubble straight up to gui/app.py instead of going through
         _handle_apply()'s values dict."""
         path = self._open_native_dialog(
             filedialog.asksaveasfilename,
@@ -709,31 +683,30 @@ class SettingsWindow(ctk.CTkToplevel):
         core/models.py's times_read / total_words_read /
         total_time_spent_seconds, and TranscriptStore.add_session_stats()).
         Deliberately shows every transcript across every space, not just
-        the currently selected one -- this window has no notion of "the
+        the currently selected one: this window has no notion of "the
         current space" anywhere else, so silently filtering here would
         look like missing data rather than a deliberate scope. Sorted by
         time spent, descending, so what's actually been read surfaces
         first and untouched transcripts (all zeros) settle to the bottom.
 
         The explanatory label at the top exists because these numbers are
-        NOT live: they're only reported to the store when a reading
+        not live: they're only reported to the store when a reading
         session actually ends (gui/components/canvas.py calls
         reader_display.stop(), which reports them, from the Stop button,
-        switching transcripts, detaching, or deleting -- plus a direct
+        switching transcripts, detaching, or deleting, plus a direct
         finalize_session() call on app close). Pausing only stops the
-        active-time clock; it does not report anything. So pausing mid-
-        read and opening Settings shows stale numbers, confirmed by a
-        real test -- hence spelling that out here instead of leaving it
-        to look like a bug."""
+        active-time clock; it does not report anything, so pausing
+        mid-read and opening Settings shows stale numbers, hence spelling
+        that out here instead of leaving it to look like a bug."""
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
         ctk.CTkLabel(
             scroll,
             text=(
-                "These totals update once a reading session ends -- by "
+                "These totals update once a reading session ends, by "
                 "clicking Stop, switching to another transcript, detaching "
-                "the window, or closing the app -- not while it's simply "
+                "the window, or closing the app not while it's simply "
                 "paused. If you've been reading and want the latest "
                 "numbers, stop or switch away from the transcript first, "
                 "then reopen Settings."
@@ -775,7 +748,7 @@ class SettingsWindow(ctk.CTkToplevel):
     @staticmethod
     def _format_duration(total_seconds: int) -> str:
         """Formats a whole number of seconds as a short, human-readable
-        duration -- "0s", "45s", "12m 34s", or "1h 05m" -- switching units
+        duration ("0s", "45s", "12m 34s", or "1h 05m"), switching units
         only once each threshold is crossed, so a short read doesn't show
         a misleading "0h 00m" and a long one doesn't show a wall of
         seconds."""
@@ -841,11 +814,3 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.error_label.configure(text="")
         self.on_apply(values)
-        # Every validation failure above returns before this point, so
-        # reaching here means every field passed and on_apply() already
-        # ran -- safe to close. on_apply (gui/app.py's
-        # _handle_settings_applied()) takes the values dict by value and
-        # never reaches back into this window or opens a dialog of its
-        # own, unlike _handle_export_data()/_handle_import_data() above,
-        # so there's nothing still in flight that closing here could cut off.
-        self.destroy()

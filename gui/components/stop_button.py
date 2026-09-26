@@ -4,7 +4,7 @@ from gui.icons import power_icon
 
 class StopButton(ctk.CTkFrame):
     """Single floating-style button that ends the current reading session
-    early and returns to the transcript's paste-in screen — without
+    early and returns to the transcript's paste-in screen, without
     touching saved position, pause state, or the transcript's stored text.
     """
 

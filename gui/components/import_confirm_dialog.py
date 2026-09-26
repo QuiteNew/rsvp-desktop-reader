@@ -5,20 +5,20 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, DUS
 class ImportConfirmDialog(ctk.CTkToplevel):
     """Offers a choice of how to bring in an already-parsed import bundle
     (see core/data_bundle.py): Replace, Expand, or Cancel. Shown after
-    gui/app.py has successfully parsed the chosen file -- this dialog
+    gui/app.py has successfully parsed the chosen file; this dialog
     doesn't touch the file or the bundle itself, only the user's choice
     of what to do with it.
 
     Replace and Expand get visually distinct colors on purpose, on top
     of Cancel's usual ember accent: Replace reuses the same red
     DeleteTranscriptDialog uses for its own destructive action, since
-    Replace is exactly that -- it wipes what's here first. Expand uses
+    Replace is exactly that: it wipes what's here first. Expand uses
     DUSK_BLUE, a color defined in gui/theme.py's palette but not used
-    anywhere else in the app yet -- picked deliberately so the two
-    choices don't read as "two shades of the same button" when they're
-    two genuinely different, non-reversible actions.
+    anywhere else in the app yet, picked deliberately so the two choices
+    don't read as "two shades of the same button" when they're two
+    genuinely different, non-reversible actions.
 
-    There's no separate on_cancel callback -- Cancel is a plain
+    There's no separate on_cancel callback: Cancel is a plain
     self.destroy(), the same as every other dialog's Cancel button (see
     delete_transcript_dialog.py)."""
 

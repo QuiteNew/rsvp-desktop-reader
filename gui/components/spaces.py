@@ -6,17 +6,17 @@ class Spaces(ctk.CTkFrame):
     """Space switcher: 'v' button (left) opens a dialog to pick, rename, or
     delete a space, current name (center, large), '+' (right).
 
-    Doesn't build SpaceSelectionDialog itself -- exactly like Header
+    Doesn't build SpaceSelectionDialog itself: exactly like Header
     forwards its settings-gear click to gui/app.py's
     _open_settings_window() rather than owning SettingsWindow, the 'v'
     button here just forwards to on_open_spaces, and app.py owns creating
     (and holding a live reference to) the dialog. That reference is what
     lets app.py correctly parent any DeleteSpaceDialog/MessageDialog it
-    opens FROM INSIDE that dialog to the dialog itself rather than to this
-    (possibly hidden-behind-it) main window -- same reasoning as
+    opens from inside that dialog to the dialog itself rather than to this
+    (possibly hidden-behind-it) main window, same reasoning as
     _handle_export_requested()'s docstring in app.py. Since this widget no
     longer builds the dialog, it also no longer needs to track the full
-    list of space names -- just the current one, for the label."""
+    list of space names, just the current one, for the label."""
 
     def __init__(self, master, current_space: str, on_add=None, on_open_spaces=None):
         super().__init__(master, fg_color=WARM_MOCHA, corner_radius=0)

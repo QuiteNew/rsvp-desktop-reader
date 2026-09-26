@@ -3,7 +3,7 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_HEADI
 
 
 class MoveTranscriptDialog(ctk.CTkToplevel):
-    """Popup listing every space EXCEPT the transcript's current one --
+    """Popup listing every space except the transcript's current one:
     picking one moves the transcript there and closes. Only ever opened
     when at least one other space exists to offer (see gui/app.py's
     _handle_move_requested(), which checks that first and shows a
@@ -38,8 +38,8 @@ class MoveTranscriptDialog(ctk.CTkToplevel):
 
         row_font = ctk.CTkFont(family=FONT_BODY, size=13)
         # A bare loop, not a per-row method like SpaceSelectionDialog's
-        # _add_space_row() -- there's nothing here for a row to close
-        # over BESIDES the space name itself (no rename/delete state, no
+        # _add_space_row(): there's nothing here for a row to close over
+        # besides the space name itself (no rename/delete state, no
         # mutable per-row tracking), so the classic late-binding closure
         # bug is avoided just as well with the `s=space_name` default-arg
         # capture below, without the extra indirection of a separate

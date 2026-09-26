@@ -5,7 +5,7 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FON
 class AddTranscriptChooserDialog(ctk.CTkToplevel):
     """Small popup offering the two ways to add a transcript: a blank one,
     or one imported from a file. Replaces the sidebar "+" button's old
-    plain tkinter.Menu -- that rendered with the OS's own native menu
+    plain tkinter.Menu that rendered with the OS's own native menu
     styling, which never picks up HEARTH_PAPER/COCOA_INK/etc, so it
     looked visually disconnected from every other dialog in the app
     (starkly so in Dark mode). This is a CTkToplevel built from the same
@@ -60,7 +60,7 @@ class AddTranscriptChooserDialog(ctk.CTkToplevel):
         # (see the alpha note near the top of __init__). update_idletasks()
         # right before flipping alpha forces any still-queued layout/redraw
         # work (including CTk widgets that defer their own first paint via
-        # their own internal after() calls) to actually finish first --
+        # their own internal after() calls) to actually finish first
         # otherwise the reveal can catch some of that mid-flight, showing
         # pieces of the window popping in over a white background instead
         # of one clean paint.
@@ -75,7 +75,7 @@ class AddTranscriptChooserDialog(ctk.CTkToplevel):
         # reverse of AddTranscriptDialog/AddSpaceDialog's callback-then-
         # destroy order: this dialog holds its own grab_set() like every
         # other dialog here, and _handle_choose_file's callback opens a
-        # native file dialog followed by another CTkToplevel -- if this
+        # native file dialog followed by another CTkToplevel, if this
         # dialog were still alive (and still holding its grab) when
         # those open, that's the same grab-race class of bug
         # settings_window.py's _open_native_dialog()/

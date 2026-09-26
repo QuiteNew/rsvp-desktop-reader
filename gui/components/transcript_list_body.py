@@ -7,30 +7,30 @@ from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, EMBER_GLOW
 
 
 class TranscriptListBody(ctk.CTkFrame):
-    """Scrollable list of saved transcripts, with a clearable search box
-    and sort menu pinned above it. Each row has a delete ("X") button
-    that only becomes clearly visible when hovering that row, a
-    double-click-to-rename title, and a right-click menu to move the
-    transcript to another space."""
+    """Scrollable list of saved transcripts, with a search box and sort
+    menu pinned above it. Each row has a delete ("X") button that only
+    becomes clearly visible when hovering that row, a double-click-to-
+    rename title, and a right-click menu to move the transcript to
+    another space."""
 
     # Every available sort mode: label -> (key function, reverse). A
-    # plain dict rather than a list of tuples -- Python dicts keep
+    # plain dict rather than a list of tuples, since Python dicts keep
     # insertion order, so this doubles as the menu's display order in
     # _show_sort_menu() below, while also giving _rerender() a direct
     # O(1) lookup instead of a linear scan.
     #
     # "Date added" has no dedicated timestamp field to sort by (see
-    # core/models.py -- Transcript has no created_at/last_opened_at of
+    # core/models.py: Transcript has no created_at/last_opened_at of
     # any kind). id stands in for it instead: TranscriptStore._next_id
     # only ever increases and ids are never reused or reassigned, and
-    # add_transcript() always appends, never inserts -- so id order IS
+    # add_transcript() always appends, never inserts, so id order is
     # creation order, exactly.
     #
     # "Most read" and "Most time spent reading" repurpose two of the
-    # Stats tab's own running totals (times_read, total_time_spent_seconds
-    # -- see core/models.py and TranscriptStore.add_session_stats()) as
+    # Stats tab's own running totals (times_read, total_time_spent_seconds;
+    # see core/models.py and TranscriptStore.add_session_stats()) as
     # sort keys. Both are single-direction (most-first) only, not offered
-    # in a "least first" variant -- unlike title/date, there's no obvious
+    # in a "least first" variant: unlike title/date, there's no obvious
     # everyday reason to want to see your LEAST-read transcripts surfaced
     # first, so that direction was left out rather than doubling the menu
     # for a combination nothing asked for.
@@ -45,7 +45,7 @@ class TranscriptListBody(ctk.CTkFrame):
 
     # Matches the list's own pre-existing, sort-feature-free order
     # (self._transcripts in TranscriptStore is only ever appended to,
-    # never reordered -- see add_transcript()), so a freshly launched
+    # never reordered; see add_transcript()), so a freshly launched
     # app looks exactly as it always has until the user deliberately
     # picks a different sort.
     DEFAULT_SORT_LABEL = "Date added (oldest first)"
@@ -60,27 +60,26 @@ class TranscriptListBody(ctk.CTkFrame):
         # The full, unfiltered/unsorted list handed in by the most recent
         # render_transcripts() call. Search and sort both re-derive what
         # they display from this each time (see _rerender()) rather than
-        # needing app.py to re-supply it on every keystroke or menu pick
-        # -- neither the search text nor the chosen sort mode is
+        # needing app.py to re-supply it on every keystroke or menu pick,
+        # since neither the search text nor the chosen sort mode is
         # something app.py or TranscriptStore has any need to know about;
         # it's purely a display-layer concern local to this widget, and
         # both are deliberately left un-persisted (in-memory only, same
-        # as e.g. AddTranscriptDialog's own transient state) -- they
-        # reset to "no search, default sort" on every launch, same as
-        # the list itself always has, rather than adding a settings-store
-        # field for something this low-stakes to get wrong or stale.
+        # as e.g. AddTranscriptDialog's own transient state): they reset
+        # to "no search, default sort" on every launch, same as the list
+        # itself always has, rather than adding a settings-store field
+        # for something this low-stakes to get wrong or stale.
         self._all_transcripts: list = []
         self._sort_label = self.DEFAULT_SORT_LABEL
 
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.pack(fill="x", padx=8, pady=(8, 6))
 
-        # sort_button is packed BEFORE clear_button, which is packed
-        # BEFORE search_entry -- same reasoning as delete_button before
-        # title_label in add_entry() below: reserve every fixed-size
-        # icon's cavity first so search_entry -- which fills whatever's
-        # left -- can never push either of them out of the toolbar, even
-        # at the sidebar's minimum width (SIDEBAR_WIDTH_RANGE in
+        # sort_button is packed before search_entry, same reasoning as
+        # delete_button before title_label in add_entry() below: reserve
+        # the fixed-size icon's cavity first so search_entry, which fills
+        # whatever's left, can never push it out of the toolbar, even at
+        # the sidebar's minimum width (SIDEBAR_WIDTH_RANGE in
         # core/settings_store.py allows down to 120px, far too narrow for
         # a text-labeled sort dropdown to reliably fit).
         sort_font = ctk.CTkFont(family=FONT_BODY, size=13)
@@ -92,38 +91,15 @@ class TranscriptListBody(ctk.CTkFrame):
         sort_button.pack(side="right")
         self._sort_button = sort_button
 
-        # The search box's "x" -- reserved here and never packed/
-        # unpacked again, so its cavity in the toolbar is fixed for
-        # good. Visibility is instead toggled purely by color in
-        # _update_clear_button(): WARM_TAUPE text on a transparent
-        # background, with hover_color also set to WARM_TAUPE, matches
-        # this toolbar's own backdrop exactly (self is WARM_TAUPE,
-        # toolbar itself is transparent) -- so with no search text yet,
-        # the button is genuinely invisible, glyph and hover box both,
-        # rather than just hidden behind pack_forget(). That sidesteps
-        # repeating the exact class of bug documented on delete_button/
-        # title_label below (a widget packed/unpacked after a
-        # fill+expand sibling can end up squeezed out entirely) for a
-        # button that would otherwise need to appear and disappear on
-        # every keystroke.
-        clear_button = ctk.CTkButton(
-            toolbar, text="X", width=24, height=28, corner_radius=8,
-            fg_color="transparent", hover_color=WARM_TAUPE, text_color=WARM_TAUPE,
-            font=sort_font, command=self._handle_clear_search,
-        )
-        clear_button.pack(side="right", padx=(0, 4))
-        self._clear_button = clear_button
-
-        # trace_add fires on every change to the entry's text -- typing,
-        # pasting, cutting, or a programmatic .set() (including the one
-        # _handle_clear_search() below makes) -- unlike binding a key
-        # event, which would miss paste/cut/clear. render_transcripts()
+        # trace_add fires on every change to the entry's text: typing,
+        # pasting, cutting, or a programmatic .set(), unlike binding a
+        # key event, which would miss paste/cut/clear. render_transcripts()
         # (called by app.py on every add/delete/rename/move/space-switch)
         # already triggers its own _rerender(); this covers the other
         # two triggers, a changed search text or a changed sort mode,
         # neither of which needs new data from app.py at all.
         self._search_var = tk.StringVar()
-        self._search_var.trace_add("write", self._handle_search_changed)
+        self._search_var.trace_add("write", lambda *_args: self._rerender())
 
         entry_font = ctk.CTkFont(family=FONT_BODY, size=13)
         search_entry = ctk.CTkEntry(
@@ -132,23 +108,17 @@ class TranscriptListBody(ctk.CTkFrame):
             text_color=COCOA_INK, font=entry_font,
         )
         search_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        # Escape-to-clear, the same "back out of what you're doing"
-        # convention add_entry()'s title_entry already uses for
-        # cancel_rename() below -- clearing through the StringVar means
-        # this needs no logic of its own beyond calling the same handler
-        # the "x" button uses.
-        search_entry.bind("<Escape>", lambda event: self._handle_clear_search())
-        self._search_entry = search_entry
 
-        # Purely decorative -- separates the search/sort toolbar above
-        # from the scrollable list below so the two don't visually run
+        # Purely decorative: separates the search/sort toolbar above from
+        # the scrollable list below so the two don't visually run
         # together. Reuses the same Divider used for the app's actual
         # resize handles (the sidebar/bottom-band splits in gui/app.py),
         # but never calls set_resizable(True) on it, so it stays in its
         # default disabled state: _enabled is False from construction,
         # and every one of Divider's press/motion handlers early-returns
-        # whenever _enabled is False (see divider.py) -- no hover cursor,
-        # no drag, nothing to grab. Just the thin WARM_LINE line itself.
+        # whenever _enabled is False (see divider.py), so there's no
+        # hover cursor, no drag, nothing to grab. Just the thin
+        # WARM_LINE line itself.
         divider = Divider(self, orientation="horizontal")
         divider.pack(fill="x", padx=8)
 
@@ -156,20 +126,20 @@ class TranscriptListBody(ctk.CTkFrame):
         self.entries_frame.pack(fill="both", expand=True, padx=(8, 3), pady=(6, 8))
 
     def _show_sort_menu(self) -> None:
-        """Popup menu of every sort mode, opened from sort_button -- the
+        """Popup menu of every sort mode, opened from sort_button: the
         same fresh-tk.Menu-per-click pattern as add_entry()'s right-click
         move menu below, for the same reason (CustomTkinter has no themed
         popup-menu widget of its own, and building a new plain tk.Menu on
         each click is cheap and avoids keeping a persistent one around).
 
         Uses add_radiobutton bound to a fresh StringVar seeded with the
-        CURRENTLY active sort label, rather than add_command, purely for
-        the free radio-dot next to whichever mode is already selected --
-        a small, genuinely useful "what am I sorted by right now" cue
-        that a plain command menu wouldn't give without extra work. The
+        currently active sort label, rather than add_command, purely for
+        the free radio-dot next to whichever mode is already selected: a
+        small, genuinely useful "what am I sorted by right now" cue that
+        a plain command menu wouldn't give without extra work. The
         StringVar only needs to last for as long as the menu is open, so
         unlike self._search_var it doesn't need to be a persistent
-        attribute -- it's referenced by the menu's own radiobutton items,
+        attribute; it's referenced by the menu's own radiobutton items,
         which keeps it alive until the menu (and this function's local
         scope, which is what actually holds it) is done."""
         menu = tk.Menu(self, tearoff=0)
@@ -190,49 +160,13 @@ class TranscriptListBody(ctk.CTkFrame):
         self._sort_label = label
         self._rerender()
 
-    def _handle_search_changed(self, *_args) -> None:
-        """The trace_add callback for self._search_var -- fires on every
-        change to the search box's text, typed, pasted, cut, or set
-        programmatically by _handle_clear_search() below. Keeps the
-        clear button's visibility and the rendered list in sync with
-        the search text on every single change, rather than splitting
-        that into two separate traces on the same variable."""
-        self._update_clear_button()
-        self._rerender()
-
-    def _update_clear_button(self) -> None:
-        """Shows or hides the search box's "x" purely by color -- see
-        the constructor's comment on clear_button for why it's never
-        packed or unpacked. Empty search box: nothing to clear, so the
-        "x" is colored to exactly match the toolbar's own WARM_TAUPE
-        backdrop (invisible) and its hover highlight is switched off
-        too, rather than leaving a blank-but-still-hoverable square
-        behind. Non-empty: a legible COCOA_INK "x" with the same
-        WARM_LINE hover feedback the app's other small icon buttons
-        use."""
-        if self._search_var.get():
-            self._clear_button.configure(text_color=COCOA_INK, hover_color=WARM_LINE)
-        else:
-            self._clear_button.configure(text_color=WARM_TAUPE, hover_color=WARM_TAUPE)
-
-    def _handle_clear_search(self) -> None:
-        """Wired to both the "x" button's command and the search box's
-        <Escape> binding. Clearing through the StringVar (rather than
-        deleting the entry's contents directly) sends this through the
-        exact same trace_add path a manual delete would take, so there's
-        no separate call to _rerender()/_update_clear_button() needed
-        here. Refocusing the entry afterward leaves the box ready to
-        type into again, whichever of the two ways it was triggered."""
-        self._search_var.set("")
-        self._search_entry.focus_set()
-
     def _rerender(self) -> None:
         """Re-derive the displayed rows from self._all_transcripts,
         applying the current search text and sort mode. Called after
         render_transcripts() stores a fresh list from app.py, and also
-        directly whenever the search box or sort menu changes -- neither
-        of those needs new data, just a different view of what's already
-        here."""
+        directly whenever the search box or sort menu changes, since
+        neither of those needs new data, just a different view of what's
+        already here."""
         search_text = self._search_var.get().strip().lower()
         filtered = [t for t in self._all_transcripts if search_text in t.title.lower()]
 
@@ -242,14 +176,13 @@ class TranscriptListBody(ctk.CTkFrame):
         self.clear()
 
         if search_text and not ordered:
-            # Only for a search that matched nothing -- a space with
-            # zero transcripts and no active search still renders as a
-            # plain empty list, exactly as it always has (that's
-            # pre-existing behavior this feature was never asked to
-            # change). This message exists specifically to distinguish
-            # "nothing here" from "nothing matches what you typed,"
-            # a distinction that only becomes possible to confuse once
-            # search exists at all.
+            # Only for a search that matched nothing: a space with zero
+            # transcripts and no active search still renders as a plain
+            # empty list, exactly as it always has (that's pre-existing
+            # behavior this feature was never asked to change). This
+            # message exists specifically to distinguish "nothing here"
+            # from "nothing matches what you typed," a distinction that
+            # only becomes possible to confuse once search exists at all.
             ctk.CTkLabel(
                 self.entries_frame, text="No transcripts match your search.",
                 text_color=WARM_LINE, font=ctk.CTkFont(family=FONT_BODY, size=13),
@@ -263,25 +196,21 @@ class TranscriptListBody(ctk.CTkFrame):
         row = ctk.CTkFrame(self.entries_frame, fg_color=HEARTH_PAPER, corner_radius=10)
         row.pack(fill="x", pady=3, padx=2)
 
-        # delete_button is packed BEFORE title_label, even though it sits
-        # on the right visually -- Tk's pack carves cavity in PACKING
+        # delete_button is packed before title_label, even though it sits
+        # on the right visually: Tk's pack carves cavity in packing
         # order, not visual order. title_label uses fill="x" + expand=True
         # with no wraplength, so its natural width grows to fit however
         # long transcript.title is; a file import seeds the title from
         # the file's own name (see gui/app.py's
         # _handle_add_from_file_requested()), which runs much longer than
-        # a typical short typed-by-hand title. Packing title_label FIRST
-        # (the original order) let it claim the row's entire cavity
-        # before delete_button got a chance to reserve its own space on
-        # the right, which pushed delete_button fully out of the row for
-        # any long-enough title -- confirmed by rendering both a short
-        # and a long title side by side and watching the "X" disappear
-        # only on the long one, exactly matching what was reported for
-        # file-imported transcripts (whose titles are the ones usually
-        # long enough to trigger it). Reserving delete_button's fixed-
-        # size cavity first guarantees it's always visible; title_label
-        # then just fills -- and gets visually clipped inside -- whatever
-        # width remains, rather than the button vanishing.
+        # a typical short typed-by-hand title. Packing title_label first
+        # would let it claim the row's entire cavity before delete_button
+        # got a chance to reserve its own space on the right, pushing
+        # delete_button fully out of the row for any long-enough title.
+        # Reserving delete_button's fixed-size cavity first guarantees
+        # it's always visible; title_label then just fills, and gets
+        # visually clipped inside, whatever width remains, rather than
+        # the button vanishing.
         delete_button = ctk.CTkButton(
             row, text="X", width=20, height=20, corner_radius=8,
             fg_color="transparent", hover_color=WARM_LINE,
@@ -298,7 +227,7 @@ class TranscriptListBody(ctk.CTkFrame):
         title_label.pack(side="left", fill="x", expand=True, padx=(12, 4), pady=8)
         self._bind_truncating_label(title_label, transcript.title)
 
-        # Rename entry -- built up front but never packed until a
+        # Rename entry, built up front but never packed until a
         # double-click on title_label starts an edit (see start_rename()
         # below). It swaps into title_label's exact pack slot for the
         # duration of the edit, then swaps back out on commit or cancel,
@@ -307,13 +236,14 @@ class TranscriptListBody(ctk.CTkFrame):
 
         # A plain closure flag rather than title_entry.winfo_ismapped():
         # committing or cancelling both end with pack_forget(), which can
-        # itself raise a synchronous <FocusOut> on the entry -- relying on
-        # "is it currently mapped" to tell a real edit-in-progress apart
-        # from that self-triggered follow-up event depends on exactly
-        # when Tkinter updates the mapped state relative to firing the
-        # event, which isn't something to depend on. This flag is set
-        # False before pack_forget() runs, so both commit_rename() and
-        # cancel_rename() are safe to call a second time and simply no-op.
+        # itself raise a synchronous <FocusOut> on the entry, and relying
+        # on "is it currently mapped" to tell a real edit-in-progress
+        # apart from that self-triggered follow-up event depends on
+        # exactly when Tkinter updates the mapped state relative to
+        # firing the event, which isn't something to depend on. This flag
+        # is set False before pack_forget() runs, so both commit_rename()
+        # and cancel_rename() are safe to call a second time and simply
+        # no-op.
         rename_state = {"editing": False}
 
         def start_rename(event=None):
@@ -364,16 +294,16 @@ class TranscriptListBody(ctk.CTkFrame):
         title_label.bind("<Double-Button-1>", start_rename)
 
         # Right-click ("<Button-3>", the standard Windows/Linux secondary-
-        # click event -- macOS's Ctrl-click also maps to it under Tk) on
+        # click event; macOS's Ctrl-click also maps to it under Tk) on
         # either the row's own background or the title opens a plain
         # context menu with the transcript's only currently-menu-only
         # action. A fresh tk.Menu is built per click rather than one
-        # reused instance -- cheap, and sidesteps having to keep a
+        # reused instance, which is cheap and sidesteps having to keep a
         # per-row menu object around just to close over `transcript`.
-        # This is a native/undecorated tk.Menu, not a themed CTk widget
-        # -- CustomTkinter doesn't provide a themed popup menu, but a
-        # plain OS-native context menu here is normal and expected, the
-        # same way even most fully-themed desktop apps still show the
+        # This is a native/undecorated tk.Menu, not a themed CTk widget:
+        # CustomTkinter doesn't provide a themed popup menu, but a plain
+        # OS-native context menu here is normal and expected, the same
+        # way even most fully-themed desktop apps still show the
         # system's native right-click menu.
         def show_context_menu(event):
             menu = tk.Menu(self, tearoff=0)
@@ -389,24 +319,24 @@ class TranscriptListBody(ctk.CTkFrame):
     @staticmethod
     def _bind_truncating_label(label: ctk.CTkLabel, full_text: str) -> None:
         """CTkLabel, like a plain Tk label, never truncates long text on
-        its own -- with no wraplength set it just requests whatever
-        width the full string needs. That's what let delete_button get
+        its own: with no wraplength set it just requests whatever width
+        the full string needs. That's what let delete_button get
         squeezed out of the row entirely for long (e.g. filename-
         derived) titles, fixed above by reserving delete_button's own
         space first; once that's fixed, a too-long title instead just
         renders with its raw end cut off wherever space runs out, which
-        still isn't great -- this replaces that raw cutoff with a
+        still isn't great, so this replaces that raw cutoff with a
         "…"-truncated version sized to actually fit.
 
         Tkinter has no built-in ellipsis truncation (unlike native OS
         controls), so this measures the real pixel width of the label's
-        font against the label's own CURRENT on-screen width and
-        rebuilds the text to fit -- bound to <Configure> rather than
-        computed once, because the sidebar is user-resizable (see
+        font against the label's own current on-screen width and
+        rebuilds the text to fit. It's bound to <Configure> rather than
+        computed once because the sidebar is user-resizable (see
         gui/app.py's sidebar drag handlers): a character-count cutoff
-        chosen for today's width would be wrong -- still overflowing, or
-        needlessly aggressive -- the moment the sidebar is dragged to a
-        different width.
+        chosen for today's width would be wrong, either still
+        overflowing or needlessly aggressive, the moment the sidebar is
+        dragged to a different width.
 
         Reads the font straight off the label's own internal
         tkinter.Label (label._label) rather than rebuilding it from the
@@ -415,20 +345,20 @@ class TranscriptListBody(ctk.CTkFrame):
         drawn (see _apply_font_scaling in customtkinter's ctk_label.py),
         and this guarantees the pixel measurements below match what's
         really on screen instead of drifting at a non-default scaling
-        setting -- this app already has to fight DPI-scaling quirks
+        setting. This app already has to fight DPI-scaling quirks
         elsewhere (see gui/theme.py's set_dpi_awareness()/
         apply_linux_dpi_scaling()), so this doesn't add a second,
         independent place that can disagree with Windows about scale.
         _label is private/undocumented, same caveat as
         AddTranscriptDialog._use_chevron_dropdown_arrow()'s reliance on
-        CTkOptionMenu's internals -- verified against
+        CTkOptionMenu's internals; verified against
         customtkinter==6.0.0 (pinned in requirements.txt)."""
         ellipsis = "…"
 
         def apply_truncation(event=None) -> None:
             available_px = label.winfo_width()
             if available_px <= 1:
-                return  # not laid out yet -- a later <Configure> will fire once it is
+                return  # not laid out yet; a later <Configure> will fire once it is
             tk_font = tkfont.Font(font=label._label.cget("font"))
             if tk_font.measure(full_text) <= available_px:
                 truncated = full_text
