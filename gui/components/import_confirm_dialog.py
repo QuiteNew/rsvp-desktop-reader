@@ -41,13 +41,13 @@ class ImportConfirmDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             self,
             text=(
-                "Replace wipes everything currently on this machine — "
-                "transcripts, spaces, and settings — and replaces it with "
+                "Replace wipes everything currently on this machine "
+                "(transcripts, spaces, and settings) and replaces it with "
                 "the imported file.\n\n"
                 "Expand adds the imported transcripts and spaces to what's "
                 "already here, without touching your current settings.\n\n"
                 "Either way, RSVP Reader will close afterward so the change "
-                "can take effect — reopen it when you're ready."
+                "can take effect. Reopen it when you're ready."
             ),
             text_color=COCOA_INK, font=message_font,
             wraplength=370, justify="left",

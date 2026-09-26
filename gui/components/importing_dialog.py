@@ -53,7 +53,7 @@ class ImportingDialog(ctk.CTkToplevel):
             self,
             text=(
                 f"Importing \u201c{filename}\u201d\u2026\n\n"
-                "This can take a moment for large files -- the app "
+                "This can take a moment for large files, and the app "
                 "won't respond until it's done."
             ),
             text_color=COCOA_INK, font=message_font,

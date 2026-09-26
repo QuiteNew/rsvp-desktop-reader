@@ -287,7 +287,7 @@ Settings are organized into four tabs:
 - ~~Session stats~~
 - ~~Quality of life polish~~
 - ~~Keyboard shortcuts~~
-- Comment clean up
+- ~~Comment and ctk.label clean up~~
 - Transcript draft normalization
 
 

@@ -58,8 +58,8 @@ class AddSpaceDialog(ctk.CTkToplevel):
         # (see the alpha note near the top of __init__). update_idletasks()
         # right before flipping alpha forces any still-queued layout/redraw
         # work (including CTk widgets that defer their own first paint via
-        # their own internal after() calls) to actually finish first --
-        # otherwise the reveal can catch some of that mid-flight, showing
+        # their own internal after() calls) to actually finish first.
+        # Otherwise the reveal can catch some of that mid-flight, showing
         # pieces of the window popping in over a white background instead
         # of one clean paint.
         self.after(80, self._reveal_now)

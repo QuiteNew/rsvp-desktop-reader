@@ -421,7 +421,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.length_pacing_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
             scroll,
-            text="Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies they don't stack. Applies globally, takes effect after clicking Apply.",
+            text="Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies, since they don't stack. Applies globally, takes effect after clicking Apply.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -668,7 +668,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=(
                 "Note: a new transcript's reading colours (font, highlight, "
                 "background) come from the Defaults tab, not from this theme "
-                "setting — they won't automatically match Light or Dark. "
+                "setting, so they won't automatically match Light or Dark. "
                 "Adjust them under Defaults, or per-transcript from the "
                 "control band at the bottom of the main window, if you'd "
                 "like the reading canvas itself to match."
@@ -706,7 +706,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=(
                 "These totals update once a reading session ends, by "
                 "clicking Stop, switching to another transcript, detaching "
-                "the window, or closing the app not while it's simply "
+                "the window, or closing the app, not while it's simply "
                 "paused. If you've been reading and want the latest "
                 "numbers, stop or switch away from the transcript first, "
                 "then reopen Settings."

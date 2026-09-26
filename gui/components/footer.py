@@ -7,7 +7,7 @@ from core.settings_store import FONT_SIZE_RANGE
 class Footer(ctk.CTkFrame):
     """Control band: font colour + background colour (left, stacked),
     WPM + skip controls (middle), word size + highlight colour (right,
-    stacked — mirrors the left column)."""
+    stacked to mirror the left column)."""
 
     def __init__(
         self,
@@ -96,7 +96,7 @@ class Footer(ctk.CTkFrame):
         )
         self.skip_forward_button.pack(side="left", padx=(8, 0))
 
-        # ---- Right: Word size (top), Highlight (bottom) — mirrors left ----
+        # ---- Right: Word size (top), Highlight (bottom), mirroring the left ----
         right = ctk.CTkFrame(self, fg_color="transparent")
         right.grid(row=0, column=2, sticky="nsew")
 
@@ -151,7 +151,7 @@ class Footer(ctk.CTkFrame):
         self.size_increase_button.configure(state=state)
 
     def set_font_size(self, size: int) -> None:
-        """Update just the displayed size — used when the change comes
+        """Update just the displayed size, for when the change comes
         from an external source (Settings Apply), as opposed to the
         user directly clicking +/- here."""
         self._font_size = size
