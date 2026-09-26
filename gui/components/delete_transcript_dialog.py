@@ -4,9 +4,9 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FON
 
 class DeleteTranscriptDialog(ctk.CTkToplevel):
     """Confirmation popup before permanently deleting a transcript. Names
-    the transcript in its message -- same reasoning as DeleteSpaceDialog's
+    the transcript in its message, same reasoning as DeleteSpaceDialog's
     class docstring: with several transcripts open across spaces, "are you
-    sure you want to delete the transcript?" doesn't say WHICH one, which
+    sure you want to delete the transcript?" doesn't say which one, which
     matters most right when the user is about to confirm something
     irreversible."""
 
@@ -58,9 +58,9 @@ class DeleteTranscriptDialog(ctk.CTkToplevel):
         # comfortably past CustomTkinter's own internal titlebar dance
         # (see the alpha note near the top of __init__). update_idletasks()
         # right before flipping alpha forces any still-queued layout/redraw
-        # work (including CTk widgets that defer their own first paint via
-        # their own internal after() calls) to actually finish first --
-        # otherwise the reveal can catch some of that mid-flight, showing
+        # work, including CTk widgets that defer their own first paint via
+        # their own internal after() calls, to actually finish first.
+        # Otherwise the reveal can catch some of that mid-flight, showing
         # pieces of the window popping in over a white background instead
         # of one clean paint.
         self.after(80, self._reveal_now)

@@ -218,18 +218,17 @@ class Canvas(ctk.CTkFrame):
 
     def flush_active_session_stats(self) -> None:
         """Report whatever's been accumulated in any reading session
-        currently in flight -- this canvas's own reader_display, and, if
-        a transcript is detached, that window's reader_display too --
-        without otherwise disturbing playback state. Called from
-        gui/app.py's close handler (_handle_close()), the one exit path
-        that never goes through stop() or DetachedTranscriptWindow.
-        close() first: quitting the whole app tears down every Toplevel
-        via Tk's own destroy() cascade, which does NOT invoke a
-        Toplevel's own WM_DELETE_WINDOW handler -- so without this,
-        closing the app mid-read (in either window) would silently lose
-        that session's tail end. Safe to call unconditionally: both
-        finalize_session() calls below are no-ops if nothing is loaded
-        there."""
+        currently in flight: this canvas's own reader_display, and, if a
+        transcript is detached, that window's reader_display too, without
+        otherwise disturbing playback state. Called from gui/app.py's
+        close handler (_handle_close()), the one exit path that never
+        goes through stop() or DetachedTranscriptWindow.close() first:
+        quitting the whole app tears down every Toplevel via Tk's own
+        destroy() cascade, which does not invoke a Toplevel's own
+        WM_DELETE_WINDOW handler, so without this, closing the app
+        mid-read (in either window) would silently lose that session's
+        tail end. Safe to call unconditionally: both finalize_session()
+        calls below are no-ops if nothing is loaded there."""
         self.reader_display.finalize_session()
         if self._detached_window:
             self._detached_window.reader_display.finalize_session()
@@ -281,28 +280,22 @@ class Canvas(ctk.CTkFrame):
         paste/edit view, showing whatever text that session was reading.
 
         Guarded to only actually do anything when the reader is what's
-        genuinely on screen right now for this transcript -- i.e. NOT
-        while the paste/edit view is already showing (self.
-        _input_currently_shown, the same flag _capture_current_draft()
-        already uses for exactly this "is the input box what's live
-        right now" question), and NOT while this transcript is off
-        being read in the detached window instead (self.current_transcript.
-        id == self._detached_transcript_id, when the detached placeholder
-        is what Canvas itself is showing).
+        genuinely on screen right now for this transcript: not while the
+        paste/edit view is already showing (self._input_currently_shown,
+        the same flag _capture_current_draft() uses for exactly this "is
+        the input box what's live right now" question), and not while
+        this transcript is off being read in the detached window instead
+        (self.current_transcript.id == self._detached_transcript_id, when
+        the detached placeholder is what Canvas itself is showing).
 
-        This isn't just an Esc-specific guard -- the Stop button itself
-        is visible (and, before this guard, was already just as capable
-        of triggering this) in every one of those states too, since
-        button_row is shown for both _show_input() and _show_reader().
-        Without it, stopping while nothing is actually being read
-        unconditionally overwrites the input box with self.
-        current_transcript.raw_text -- which, for a transcript that's
-        never been submitted yet (still sitting as an unsubmitted
-        draft), is an EMPTY string, silently wiping out whatever was
-        typed. That's exactly what happened when Esc was bound to this:
-        pressing it while sitting in a blank draft wiped the draft
-        outright. Confirmed by testing, not a guess -- this guard
-        directly targets that reproduced mechanism."""
+        This isn't just an Esc-specific guard: the Stop button itself is
+        visible, and just as able to trigger this, in every one of those
+        states too, since button_row is shown for both _show_input() and
+        _show_reader(). Without it, stopping while nothing is actually
+        being read unconditionally overwrites the input box with
+        self.current_transcript.raw_text, which for a transcript that's
+        never been submitted yet is an empty string, silently wiping out
+        whatever was typed."""
         if not self.current_transcript:
             return
         if self._input_currently_shown or self.current_transcript.id == self._detached_transcript_id:

@@ -1,10 +1,10 @@
 """Small icon-drawing helpers.
 
-Icons here are drawn as vector images via Pillow, rather than relying on
-Unicode symbol glyphs (⏻, ⏸, etc.) — glyph coverage for those characters
-varies unpredictably across fonts and operating systems, which is exactly
-why the power icon showed up as an empty box. Drawing them ourselves
-guarantees the same appearance on any machine.
+Icons here are drawn as vector images via Pillow, rather than relying
+on Unicode symbol glyphs (⏻, ⏸, etc.). Glyph coverage for those
+characters varies unpredictably across fonts and operating systems,
+which is exactly why the power icon showed up as an empty box. Drawing
+them ourselves guarantees the same appearance on any machine.
 """
 
 from PIL import Image, ImageDraw
@@ -16,9 +16,9 @@ DARK_MODE_COLOR = (230, 230, 230, 255)   # light icon, legible on a dark button
 
 def _draw_power_glyph(size: int, color) -> Image.Image:
     """The classic power symbol: a circle broken at the top, with a
-    vertical tick through the gap — the same icon used on PC power buttons.
+    vertical tick through the gap, the same icon used on PC power buttons.
     """
-    supersample = 4  # draw large, then downscale — gives smooth, anti-aliased edges
+    supersample = 4  # draw large, then downscale: gives smooth, anti-aliased edges
     canvas_size = size * supersample
     padding = canvas_size * 0.18
     line_width = max(2, canvas_size // 14)

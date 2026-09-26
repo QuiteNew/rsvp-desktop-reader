@@ -38,17 +38,17 @@ class RSVPApp(ctk.CTk):
     """Main application window: sidebar | vertical divider | main content,
     across 5 rows (headers / divider / content / divider / bottom band)."""
 
-    HEADER_HEIGHT = 80  # fixed — not user-configurable
+    HEADER_HEIGHT = 80  # fixed, not user-configurable
 
     # Word count above which _handle_add_from_file_requested() warns that a
-    # very large import might crash the app. This is a starting guess, NOT
-    # a measured crash boundary -- a user reported the app crashing after
-    # importing "a whole book" as a PDF, but the actual crash was never
-    # reproduced or root-caused, so there's no confirmed threshold to tune
-    # this against yet. Counted with core.tokenizer.tokenize(), the same
+    # very large import might crash the app. This is a starting guess, not
+    # a measured crash boundary: a user reported the app crashing after
+    # importing "a whole book" as a PDF, but the crash was never reproduced
+    # or root-caused, so there's no confirmed threshold to tune this
+    # against yet. Counted with core.tokenizer.tokenize(), the same
     # splitter core/reader.py itself uses, so this reflects the real word
     # count the reading engine will process, not a rough len(text.split())
-    # guess that could quietly disagree with it.
+    # guess that could disagree with it.
     LARGE_IMPORT_WORD_WARNING_THRESHOLD = 30_000
 
     def __init__(self):
@@ -64,8 +64,8 @@ class RSVPApp(ctk.CTk):
         self._current_transcript = None
         self._drag_start_value = None
         self._pending_value = None
-        self._settings_window = None  # set whenever Settings is open -- see _open_settings_window()
-        self._space_selection_dialog = None  # set whenever it's open -- see _open_space_selection_dialog()
+        self._settings_window = None  # set whenever Settings is open, see _open_settings_window()
+        self._space_selection_dialog = None  # set whenever it's open, see _open_space_selection_dialog()
 
         self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
@@ -179,57 +179,35 @@ class RSVPApp(ctk.CTk):
         self.bottom_divider_right.set_resizable(enabled)
 
     def _bind_shortcuts(self) -> None:
-        """Reading-control keyboard shortcuts for the MAIN window only --
-        the detached transcript window has its own identical Space/Left/
-        Right/R/Esc bindings (added separately, in DetachedTranscriptWindow
-        itself), since Tk's "a child with no more specific binding falls
-        through to its own toplevel" behavior only reaches as far as the
-        window that owns the binding. F (Focus mode) is deliberately NOT
-        mirrored there -- the detached window has no sidebar/header to
-        hide, so there's nothing for it to toggle.
+        """Reading-control keyboard shortcuts for the main window only.
+        The detached transcript window has its own identical Space/Left/
+        Right/R/Esc bindings (added separately in DetachedTranscriptWindow
+        itself), since Tk's "falls through to its own toplevel" behavior
+        only reaches as far as the window that owns the binding. F (Focus
+        mode) is deliberately not mirrored there: the detached window has
+        no sidebar/header to hide, so there's nothing for it to toggle.
 
-        Bound directly on self (the CTk root), not on any one child
-        widget or via bind_all(): Tk automatically includes a window's
-        own bindings in the lookup chain for every one of its descendant
-        widgets, so this fires no matter which child currently has
-        keyboard focus, without reaching into every other open Tk window
-        in the process the way bind_all() would.
+        Bound directly on self (the CTk root), not via bind_all(): Tk
+        automatically includes a window's own bindings in the lookup
+        chain for every descendant widget, so this fires no matter which
+        child currently has keyboard focus, without reaching into every
+        other open Tk window in the process the way bind_all() would.
 
-        Both case variants of R and F are bound (Caps Lock, or an
-        accidental Shift, would otherwise land on a keysym this doesn't
-        catch) -- Space, the arrow keys, and Escape have no such case
-        variant.
+        Both case variants of R and F are bound, since Caps Lock or an
+        accidental Shift would otherwise land on a keysym this doesn't
+        catch; Space, the arrow keys, and Escape have no such variant.
 
-        Each handler checks _shortcut_should_fire() first -- see that
+        Each handler checks _shortcut_should_fire() first, see that
         method's docstring for why. The underlying Canvas methods
         (toggle_pause/restart/skip_backward/skip_forward/stop) are
-        themselves already safe to call with nothing loaded, or while
-        the paste/edit view is showing instead of the reader: stop()
-        keeps its own `if not self.current_transcript: return` guard
-        (unchanged by its rename from _handle_stop), and ReaderDisplay.
-        toggle_pause()/restart()/skip() all early-return whenever
-        self.session is None -- so no separate "is a transcript actually
-        playing" guard is needed here on top of that.
-        _toggle_focus_mode() doesn't touch the reader at all, so it has
-        no such concern either way.
+        already safe to call with nothing loaded or while the paste/edit
+        view is showing, so no separate "is something actually playing"
+        guard is needed here.
 
-        Esc mirrors clicking the Stop button exactly -- including that
-        the Stop button is already visible (and already does this) while
-        the paste/edit view is showing, so Esc there will overwrite
-        whatever's currently typed with the transcript's last-saved
-        text. That's pre-existing button behavior, not new; Esc just
-        makes it reachable by keyboard too, guarded by
-        _shortcut_should_fire() same as everything else (so it won't
-        fire while you're actually typing inside the box).
-
-        NOT yet verified: whether a CTkButton that still has keyboard
-        focus right after being clicked (e.g. just clicked Restart) will
-        intercept Space for its own "activate me" behavior before this
-        binding ever sees it -- a button's own class-level binding runs
-        earlier in Tk's lookup chain than a window-level one. Worth
-        testing deliberately: click a toolbar button, then immediately
-        press Space, and see whether that button's own action fires a
-        second time instead of (or alongside) pause/resume."""
+        Esc mirrors clicking the Stop button exactly, including that the
+        button already overwrites whatever's typed in the paste/edit box
+        with the transcript's last-saved text. That's pre-existing button
+        behavior; Esc just makes it reachable by keyboard too."""
         self.bind("<space>", self._handle_shortcut_pause_toggle)
         self.bind("<Left>", self._handle_shortcut_skip_backward)
         self.bind("<Right>", self._handle_shortcut_skip_forward)
@@ -241,22 +219,18 @@ class RSVPApp(ctk.CTk):
 
     def _shortcut_should_fire(self) -> bool:
         """False while an Entry- or Text-family widget holds keyboard
-        focus -- the search box, a rename field, the transcript
-        paste/edit box, a Settings field, and so on -- so typing a
-        space, an "r", or moving the cursor with the arrow keys behaves
-        normally there instead of also triggering a reading shortcut.
+        focus: the search box, a rename field, the transcript paste/edit
+        box, a Settings field, and so on, so typing a space, an "r", or
+        moving the cursor with the arrow keys behaves normally there
+        instead of also triggering a reading shortcut.
 
         CustomTkinter's CTkEntry/CTkTextbox each wrap a real, plain
-        tkinter.Entry/tkinter.Text internally for actual keyboard input
-        -- the same wrapping pattern already relied on elsewhere in this
+        tkinter.Entry/tkinter.Text internally for actual keyboard input,
+        the same wrapping pattern already relied on elsewhere in this
         codebase (see transcript_list_body.py's _bind_truncating_label()
         reading label._label). focus_get() returns that inner widget
         while typing, not the CTk wrapper frame around it, so checking
-        its winfo_class() here is expected to correctly catch both.
-        Still worth confirming directly once this is running: type a
-        space into the search box and into a transcript title, and press
-        the arrow keys with text selected in a field, to make sure
-        nothing here misfires."""
+        its winfo_class() here catches both."""
         focused = self.focus_get()
         if focused is None:
             return True
@@ -312,8 +286,8 @@ class RSVPApp(ctk.CTk):
 
     def _open_add_transcript_chooser(self) -> None:
         """Triggered by the sidebar's "+" button. Offers the two ways to
-        add a transcript -- see AddTranscriptChooserDialog's docstring
-        for why this is a themed CTkToplevel rather than the plain
+        add a transcript. See AddTranscriptChooserDialog's docstring for
+        why this is a themed CTkToplevel rather than the plain
         tkinter.Menu it replaces."""
         AddTranscriptChooserDialog(
             self,
@@ -330,15 +304,15 @@ class RSVPApp(ctk.CTk):
         )
 
     def _current_theme_reading_colors(self) -> tuple[str, str, str]:
-        """The (font, highlight, background) reading colors that match the
-        CURRENT appearance mode -- the dedicated dark-reading colors in
+        """The (font, highlight, background) reading colors that match
+        the current appearance mode: the dedicated dark-reading colors in
         Dark mode, the plain Settings -> Defaults values otherwise. Shared
         by both the new-transcript seed and the startup resync (see
-        _handle_new_transcript() and _resync_theme_default_colors()) so the
-        two can never drift apart. CTK_APPEARANCE_MODE is resolved once at
-        app startup (see gui/theme.py), matching how Settings -> Appearance
-        already documents itself as "takes effect on next launch, not
-        live"."""
+        _handle_new_transcript() and _resync_theme_default_colors()) so
+        the two can never drift apart. CTK_APPEARANCE_MODE is resolved
+        once at app startup (see gui/theme.py), matching how Settings ->
+        Appearance already documents itself as "takes effect on next
+        launch, not live"."""
         if CTK_APPEARANCE_MODE == "Dark":
             return DARK_READING_FONT_COLOR, DARK_READING_HIGHLIGHT_COLOR, DARK_READING_BACKGROUND_COLOR
         return (
@@ -350,9 +324,9 @@ class RSVPApp(ctk.CTk):
     def _resync_theme_default_colors(self) -> None:
         """Run once at startup, right after the stores are constructed and
         before any widget reads a color from them: bring every reading
-        color that's still tracking the app-wide theme default -- each
-        transcript's font/highlight/background, and the global guide-mark
-        color -- in line with the CURRENT appearance mode. Anything that
+        color that's still tracking the app-wide theme default, each
+        transcript's font/highlight/background and the global guide-mark
+        color, in line with the current appearance mode. Anything that
         was manually picked by hand is left untouched; see
         TranscriptStore.resync_default_reading_colors() and
         SettingsStore.resync_guide_mark_color_default() for exactly how
@@ -367,11 +341,11 @@ class RSVPApp(ctk.CTk):
         """Shared by _handle_new_transcript() (the blank "+" flow) and
         _handle_file_transcript_submitted() (the file-import flow): seeds
         a brand-new transcript with whichever reading colors match the
-        current theme -- see _current_theme_reading_colors() -- and
-        refreshes the sidebar list. Returns the new Transcript so a
-        caller that already has text in hand (a file import) can set it
-        immediately afterward; the blank-transcript flow just ignores
-        the return value, same as before this was split out."""
+        current theme (see _current_theme_reading_colors()) and refreshes
+        the sidebar list. Returns the new Transcript so a caller that
+        already has text in hand (a file import) can set it immediately
+        afterward; the blank-transcript flow just ignores the return
+        value."""
         font_color, highlight_color, background_color = self._current_theme_reading_colors()
 
         transcript = self.store.add_transcript(
@@ -390,30 +364,27 @@ class RSVPApp(ctk.CTk):
 
     def _handle_add_from_file_requested(self) -> None:
         """Triggered by AddTranscriptChooserDialog's "Add from file…"
-        button (see _open_add_transcript_chooser() above). Picks a file,
-        parses it immediately -- so a corrupt or unreadable file fails
-        right here, before bothering the user with a title/space dialog
-        -- then reuses AddTranscriptDialog exactly as the blank-transcript
+        button (see _open_add_transcript_chooser() above). Picks a file
+        and parses it immediately, so a corrupt or unreadable file fails
+        right here before bothering the user with a title/space dialog,
+        then reuses AddTranscriptDialog exactly as the blank-transcript
         flow does, just pre-filled with a title guessed from the
         filename. Parented to self, not self._settings_window, since
         this is triggered from the main window itself, not from inside
-        Settings -- see _handle_export_requested()'s docstring for why
-        that distinction matters when a dialog holds a persistent grab;
-        the main window never does, so there's no native-dialog grab
-        dance to do here.
+        Settings; see _handle_export_requested()'s docstring for why
+        that distinction matters when a dialog holds a persistent grab.
 
-        importers.import_file() is a single blocking call -- see
-        ImportingDialog's own docstring for why that means the app is
-        fully unresponsive for however long it takes, and why the best
-        this can do about that is show a message beforehand rather than
-        an animated one. The dialog is torn down (finish()) on BOTH the
-        success and failure path, before anything else opens.
+        importers.import_file() is a single blocking call, so the app is
+        fully unresponsive for however long it takes; see ImportingDialog's
+        own docstring for why the best this can do about that is show a
+        message beforehand rather than an animated one. The dialog is
+        torn down (finish()) on both the success and failure path, before
+        anything else opens.
 
-        A very large file (a whole book imported as PDF crashed the app,
-        per a user report that was never reproduced or root-caused) gets
-        AddTranscriptDialog's optional `warning` set instead of being
-        blocked outright -- see LARGE_IMPORT_WORD_WARNING_THRESHOLD above
-        for why this is a heads-up, not a hard limit."""
+        A very large file gets AddTranscriptDialog's optional `warning`
+        set instead of being blocked outright; see
+        LARGE_IMPORT_WORD_WARNING_THRESHOLD above for why this is a
+        heads-up, not a hard limit."""
         filetypes = [
             ("Supported documents", " ".join(f"*{ext}" for ext in sorted(importers.SUPPORTED_EXTENSIONS))),
             ("Text files", "*.txt"),
@@ -440,7 +411,7 @@ class RSVPApp(ctk.CTk):
             warning = (
                 f"Heads up: this file is about {word_count:,} words long. "
                 "Very large transcripts have been known to crash RSVP "
-                "Reader -- if that happens, try splitting the file into "
+                "Reader. If that happens, try splitting the file into "
                 "smaller parts and importing those instead."
             )
 
@@ -455,16 +426,14 @@ class RSVPApp(ctk.CTk):
         )
 
     def _handle_file_transcript_submitted(self, title: str, space: str, text: str) -> None:
-        # draft_text, deliberately NOT set_transcript_text(): Canvas.
-        # load_transcript() treats a non-empty raw_text as "already
-        # started -- reopen straight into the reader, unpaused" (the
-        # branch for resuming an in-progress transcript), which is
-        # exactly wrong for text that's never been read yet. draft_text
-        # is what TranscriptInput shows in its paste box -- the same
-        # state a manual paste sits in before "Start reading" is
-        # clicked -- so this gives an imported file the identical
-        # "review, then decide" moment a pasted transcript already gets,
-        # instead of jumping straight into playback.
+        # draft_text, deliberately not set_transcript_text(): Canvas.
+        # load_transcript() treats a non-empty raw_text as already
+        # started and reopens straight into the reader unpaused, which
+        # is wrong for text that's never been read yet. draft_text is
+        # what TranscriptInput shows in its paste box, the same state a
+        # manual paste sits in before "Start reading" is clicked, so this
+        # gives an imported file the same "review, then decide" moment a
+        # pasted transcript already gets.
         transcript = self._create_transcript(title, space)
         self.store.set_transcript_draft_text(transcript.id, text)
 
@@ -478,11 +447,11 @@ class RSVPApp(ctk.CTk):
 
     def _open_space_selection_dialog(self) -> None:
         # Stored on self, not just constructed inline, for the same
-        # reason self._settings_window is -- see _open_settings_window()'s
-        # docstring. Any dialog THIS dialog itself goes on to open (the
-        # delete confirmation, or a "can't delete that" message -- see
+        # reason self._settings_window is: see _open_settings_window()'s
+        # docstring. Any dialog this dialog itself goes on to open (the
+        # delete confirmation, or a "can't delete that" message, see
         # _handle_space_delete_requested() below) needs to be parented to
-        # THIS window, not the main app window, or there's no guaranteed
+        # this window, not the main app window, or there's no guaranteed
         # stacking order between them.
         self._space_selection_dialog = SpaceSelectionDialog(
             self,
@@ -500,10 +469,10 @@ class RSVPApp(ctk.CTk):
 
     def _handle_space_rename_requested(self, old_name: str, new_name: str) -> bool:
         """Returns whether the rename actually happened, straight through
-        from TranscriptStore.rename_space() -- SpaceSelectionDialog's own
+        from TranscriptStore.rename_space(). SpaceSelectionDialog's own
         commit_rename() needs that to know whether to update its row's
         displayed text (see its docstring for why a rejected rename, e.g.
-        a duplicate name, must NOT be reflected in the dialog)."""
+        a duplicate name, must not be reflected in the dialog)."""
         renamed = self.store.rename_space(old_name, new_name)
         if renamed:
             self.spaces.set_current_space(self.store.current_space)
@@ -511,17 +480,17 @@ class RSVPApp(ctk.CTk):
 
     def _handle_space_delete_requested(self, name: str) -> None:
         """Triggered by the delete "X" on a row in SpaceSelectionDialog.
-        Does its own upfront checks -- rather than just calling
-        store.delete_space() and reacting to a bool -- because a refused
-        delete needs to tell the user WHY, not just silently do nothing
+        Does its own upfront checks, rather than just calling
+        store.delete_space() and reacting to a bool, because a refused
+        delete needs to tell the user why, not just silently do nothing
         (this is a deliberate, once-off action the user clicked a button
-        for, unlike e.g. AddSpaceDialog silently no-op'ing on a blank
-        name). Only opens the actual confirmation dialog once a delete is
+        for, unlike AddSpaceDialog silently no-op'ing on a blank name).
+        Only opens the actual confirmation dialog once a delete is
         already known to be possible."""
         if len(self.store.spaces) <= 1:
             MessageDialog(
                 self._space_selection_dialog, "Can't delete this space",
-                "This is your only space -- there always has to be at least one.",
+                "This is your only space, there always has to be at least one.",
             )
             return
 
@@ -544,10 +513,9 @@ class RSVPApp(ctk.CTk):
         self.store.delete_space(name)
         self.spaces.set_current_space(self.store.current_space)
         self._refresh_transcript_list()
-        # Closes the space-picker itself too -- see
-        # SpaceSelectionDialog's class docstring for why a delete, unlike
-        # a rename, takes the whole dialog down with it rather than just
-        # updating in place.
+        # Closes the space-picker itself too. See SpaceSelectionDialog's
+        # class docstring for why a delete, unlike a rename, takes the
+        # whole dialog down with it rather than just updating in place.
         if self._space_selection_dialog is not None:
             self._space_selection_dialog.destroy()
 
@@ -619,10 +587,10 @@ class RSVPApp(ctk.CTk):
     def _open_settings_window(self) -> None:
         # Stored on self, not just constructed inline, because the
         # Export/Import handlers below need a live reference to it: any
-        # dialog THEY open (an error, the Replace/Expand/Cancel choice)
-        # has to be parented to THIS window, not to the main app window,
+        # dialog they open (an error, the Replace/Expand/Cancel choice)
+        # has to be parented to this window, not to the main app window,
         # or Windows has no ordering guarantee between the new dialog and
-        # Settings, and the new one can end up drawn behind it -- see the
+        # Settings, and the new one can end up drawn behind it. See the
         # docstrings on _handle_export_requested() and
         # _handle_import_requested() below.
         self._settings_window = SettingsWindow(
@@ -713,14 +681,14 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 
     def _handle_export_requested(self, path: str) -> None:
-        """Builds a bundle from the two stores' CURRENT in-memory state
+        """Builds a bundle from the two stores' current in-memory state
         (see core/data_bundle.py) and writes it to the path the user
         picked in the Storage tab's save dialog. File I/O deliberately
-        lives here, not in core/data_bundle.py -- build_bundle() itself
-        stays pure/path-free so it's testable on its own.
+        lives here, not in core/data_bundle.py, so build_bundle() itself
+        stays pure/path-free and testable on its own.
 
         Any dialog shown here is parented to self._settings_window, not
-        self -- this was triggered from inside Settings, which is the
+        self: this was triggered from inside Settings, which is the
         window actually on screen, so a dialog parented to the (possibly
         hidden-behind-Settings) main window instead has no guaranteed
         stacking order above it."""
@@ -733,8 +701,8 @@ class RSVPApp(ctk.CTk):
         MessageDialog(self._settings_window, "Export complete", f"Your data was exported to:\n\n{path}")
 
     def _handle_import_requested(self, path: str) -> None:
-        """Reads and validates the chosen file, then -- only if it's a
-        genuinely valid bundle -- hands the user a Replace/Expand/Cancel
+        """Reads and validates the chosen file, then, only if it's a
+        genuinely valid bundle, hands the user a Replace/Expand/Cancel
         choice. Nothing is applied yet at this point; see
         _apply_import(). See _handle_export_requested()'s docstring for
         why every dialog here is parented to self._settings_window."""
@@ -758,7 +726,7 @@ class RSVPApp(ctk.CTk):
 
     def _apply_import(self, bundle: dict, expand: bool) -> None:
         """Actually applies an already-confirmed import, then closes the
-        app -- see core/data_bundle.py's module docstring and
+        app. See core/data_bundle.py's module docstring and
         gui/components/message_dialog.py's class docstring for why a
         restart isn't optional here: this app has no live-reload path
         for a wholesale change to transcripts/spaces/settings, so
@@ -772,7 +740,7 @@ class RSVPApp(ctk.CTk):
 
         MessageDialog(
             self._settings_window, "Import complete",
-            "Your data was imported. RSVP Reader will now close -- reopen it to see the change.",
+            "Your data was imported. RSVP Reader will now close! Reopen it to see the change.",
             on_close=self._handle_close,
         )
 
@@ -798,7 +766,7 @@ class RSVPApp(ctk.CTk):
         self.store.set_transcript_title(transcript.id, new_title)
         self._refresh_transcript_list()
         # The header's title is a separate cached copy, set once when a
-        # transcript is opened (see _handle_open_transcript()) -- if the
+        # transcript is opened (see _handle_open_transcript()). If the
         # transcript being renamed is also the one currently open, it
         # needs updating here too, or it'd keep showing the old title
         # until the user reopens it.
@@ -807,16 +775,16 @@ class RSVPApp(ctk.CTk):
 
     def _handle_move_requested(self, transcript) -> None:
         """Triggered by the sidebar row's move ("→") icon. Parented to
-        self, not any other dialog -- like _handle_delete_requested()
-        below it, this is triggered straight from the main window, not
-        from inside another modal, so there's no stacking-order concern
-        to parent around (contrast _handle_export_requested()'s
-        docstring, where that distinction matters)."""
+        self, not any other dialog: like _handle_delete_requested() below
+        it, this is triggered straight from the main window, not from
+        inside another modal, so there's no stacking-order concern to
+        parent around (contrast _handle_export_requested()'s docstring,
+        where that distinction matters)."""
         other_spaces = [s for s in self.store.spaces if s != transcript.space]
         if not other_spaces:
             MessageDialog(
                 self, "No other spaces",
-                "This is your only space -- create another one first, then you'll be able to move transcripts into it.",
+                "This is your only space. Create another one first, then you'll be able to move transcripts into it.",
             )
             return
 
@@ -828,12 +796,12 @@ class RSVPApp(ctk.CTk):
     def _handle_move_confirmed(self, transcript, space: str) -> None:
         self.store.set_transcript_space(transcript.id, space)
         # The transcript no longer belongs to the currently-viewed space,
-        # so it drops out of the sidebar list here -- but if it was
-        # already open in the reader, it stays open: self._current_transcript
-        # is the very same Transcript object set_transcript_space() just
-        # mutated in place (transcripts_in_current_space() -> add_entry()
-        # never copies), not a separate copy, so filing it into another
-        # space doesn't interrupt a session already in progress.
+        # so it drops out of the sidebar list here, but if it was already
+        # open in the reader, it stays open: self._current_transcript is
+        # the very same Transcript object set_transcript_space() just
+        # mutated in place (transcripts_in_current_space() never copies),
+        # not a separate copy, so filing it into another space doesn't
+        # interrupt a session already in progress.
         self._refresh_transcript_list()
 
     def _handle_skip_word_count_live(self, count: int) -> None:
@@ -847,17 +815,17 @@ class RSVPApp(ctk.CTk):
     def _handle_close(self) -> None:
         self.canvas.save_pending_draft()
         # Flushes any reading session still in flight (main canvas or a
-        # detached window) BEFORE the store flush below -- WM_DELETE_WINDOW
+        # detached window) before the store flush below. WM_DELETE_WINDOW
         # is the one exit path that never goes through reader_display.
         # stop() or DetachedTranscriptWindow.close(), so without this,
         # quitting mid-read would silently lose that session's words/time.
         # See Canvas.flush_active_session_stats()'s docstring.
         self.canvas.flush_active_session_stats()
         # Position/WPM and skip-amount writes are throttled while their
-        # sliders are actively being used (see core/transcript_store.py and
-        # core/settings_store.py) -- this guarantees whatever was last
-        # reached in memory is actually on disk before we quit, even if it
-        # hasn't hit the throttle interval yet.
+        # sliders are actively being used (see core/transcript_store.py
+        # and core/settings_store.py). This guarantees whatever was last
+        # reached in memory is actually on disk before we quit, even if
+        # it hasn't hit the throttle interval yet.
         self.store.flush()
         self.settings_store.flush()
         unregister_fonts()

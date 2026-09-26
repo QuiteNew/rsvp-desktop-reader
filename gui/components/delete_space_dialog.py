@@ -5,9 +5,9 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FON
 class DeleteSpaceDialog(ctk.CTkToplevel):
     """Confirmation popup before permanently deleting a space. Only ever
     opened for a space gui/app.py has already confirmed is safe to delete
-    (empty of transcripts, and not the only space left -- see
+    (empty of transcripts, and not the only space left; see
     _handle_space_delete_requested()), so this dialog itself has no
-    validation to do -- it's purely an "are you sure" step, same as
+    validation to do. It's purely an "are you sure" step, same as
     DeleteTranscriptDialog, just naming the space in its message."""
 
     def __init__(self, master, space_name: str, on_confirm):
@@ -58,9 +58,9 @@ class DeleteSpaceDialog(ctk.CTkToplevel):
         # comfortably past CustomTkinter's own internal titlebar dance
         # (see the alpha note near the top of __init__). update_idletasks()
         # right before flipping alpha forces any still-queued layout/redraw
-        # work (including CTk widgets that defer their own first paint via
-        # their own internal after() calls) to actually finish first --
-        # otherwise the reveal can catch some of that mid-flight, showing
+        # work, including CTk widgets that defer their own first paint via
+        # their own internal after() calls, to actually finish first.
+        # Otherwise the reveal can catch some of that mid-flight, showing
         # pieces of the window popping in over a white background instead
         # of one clean paint.
         self.after(80, self._reveal_now)
