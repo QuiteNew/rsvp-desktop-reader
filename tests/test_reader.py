@@ -2,13 +2,12 @@ import pytest
 from core.reader import ReaderSession
 
 
-# ---- Construction and the full pipeline ----
+# Construction and the full pipeline
 
 def test_composes_parser_tokenizer_and_orp_correctly():
-    # An end-to-end check that all three earlier modules are correctly
-    # wired together — this is exactly what scratch_check.py used to
-    # verify by hand. A timestamp should be stripped, the text tokenized
-    # into words, and each word ORP-split.
+    # An end to end check that the parser, tokenizer and ORP modules are
+    # wired together correctly. The timestamp should be stripped, the text
+    # split into words, and each word split at its ORP.
     raw = "[00:00:01] Welcome to the show."
     session = ReaderSession(raw)
     assert session.total_words == 4
@@ -35,26 +34,23 @@ def test_start_index_is_respected():
 
 
 def test_start_index_beyond_word_count_clamps_to_finished():
-    # Should land safely at "finished", not crash or go out of range.
+    # Should land safely on finished instead of crashing or going out of range.
     session = ReaderSession("one two three", start_index=99)
     assert session.index == session.total_words
     assert session.is_finished is True
 
 
 def test_negative_start_index_clamps_to_zero():
-    """A real gap this test suite found: start_index only had an upper
-    clamp (min(start_index, total_words)), never a lower one. A negative
-    start_index — which shouldn't occur through normal app use, but
-    could from a hand-edited or corrupted data file — left self.index
-    negative. Since Python allows negative list indexing, current_frame()
-    wouldn't have crashed; it would have silently returned the wrong
-    word, counted from the end of the list, with no error at all. Now
-    fixed with max(0, ...) alongside the existing upper clamp."""
+    """A negative start_index shouldn't happen in normal use, but it could
+    come from a hand edited or corrupted data file. Python allows negative
+    list indexing, so without the max(0, ...) clamp current_frame() wouldn't
+    crash. It would quietly return the wrong word, counted from the end of
+    the list."""
     session = ReaderSession("one two three", start_index=-5)
     assert session.index == 0
 
 
-# ---- total_words ----
+# total_words
 
 def test_total_words_matches_word_count():
     session = ReaderSession("one two three four")
@@ -66,7 +62,7 @@ def test_total_words_zero_for_empty_transcript():
     assert session.total_words == 0
 
 
-# ---- is_finished ----
+# is_finished
 
 def test_is_finished_false_at_start():
     session = ReaderSession("one two three")
@@ -85,7 +81,7 @@ def test_empty_transcript_is_immediately_finished():
     assert session.is_finished is True
 
 
-# ---- current_frame ----
+# current_frame
 
 def test_current_frame_returns_none_when_finished():
     session = ReaderSession("one")
@@ -108,7 +104,7 @@ def test_current_frame_advances_through_every_word_in_order():
     assert seen == ["one", "two", "three"]
 
 
-# ---- current_delay_ms ----
+# current_delay_ms
 
 def test_current_delay_ms_matches_wpm():
     session = ReaderSession("hello", wpm=300)
@@ -119,26 +115,26 @@ def test_current_delay_ms_updates_live_after_set_wpm():
     session = ReaderSession("hello", wpm=300)
     assert session.current_delay_ms() == 200
     session.set_wpm(600)
-    assert session.current_delay_ms() == 100  # reflects the new speed immediately, not cached
+    assert session.current_delay_ms() == 100  # uses the new speed right away, nothing is cached
 
 
-# ---- current_delay_ms: punctuation-aware pacing ----
+# current_delay_ms: pauses after punctuation
 
 def test_current_delay_ms_applies_clause_pause_after_comma():
     session = ReaderSession("wait, go", wpm=300)
-    # base delay is 200ms; "wait," ends in a clause mark -> 200 * 1.5
+    # The base delay is 200ms and "wait," ends in a clause mark, so 200 * 1.5
     assert session.current_delay_ms() == 300
 
 def test_current_delay_ms_applies_sentence_pause_after_period():
     session = ReaderSession("Stop. Go", wpm=300)
-    # base delay is 200ms; "Stop." ends in a sentence mark -> 200 * 2.5
+    # The base delay is 200ms and "Stop." ends in a sentence mark, so 200 * 2.5
     assert session.current_delay_ms() == 500
 
 def test_current_delay_ms_pace_tracks_position_as_session_advances():
-    # self._paces is built once, alongside self.frames, and indexed by
-    # self.index the same way -- this walks all three words to confirm
-    # the pause actually follows the right word as playback advances,
-    # not just at a single fixed index.
+    # self._paces is built once next to self.frames and indexed by
+    # self.index the same way. This walks all three words to make sure the
+    # pause follows the right word as playback moves on, not just at one
+    # fixed index.
     session = ReaderSession("Wait, go now.", wpm=300)
     delays = []
     while not session.is_finished:
@@ -147,29 +143,27 @@ def test_current_delay_ms_pace_tracks_position_as_session_advances():
     assert delays == [300, 200, 500]  # clause, none, sentence
 
 def test_current_delay_ms_for_finished_session_returns_unmultiplied_base():
-    # is_finished short-circuits to the flat base delay -- even though
-    # the last word read ("Hi.") ends a sentence, a finished session
-    # isn't pausing on any word anymore.
+    # A finished session returns the plain base delay. The last word ("Hi.")
+    # ends a sentence, but once finished there's no word left to pause on.
     session = ReaderSession("Hi.", wpm=300)
     session.advance()
     assert session.is_finished is True
     assert session.current_delay_ms() == 200
 
 def test_current_delay_ms_for_all_punctuation_token_still_paces_correctly():
-    # "..." tokenizes as its own word with no alnum core (see
-    # core/punctuation.py and the "core is empty" branch in
-    # ReaderSession.__init__) -- this confirms that branch still
-    # classifies and paces the token correctly rather than silently
-    # treating it as PACE_NONE.
+    # "..." becomes its own word with no letters or digits in it. See
+    # core/punctuation.py and the empty core branch in
+    # ReaderSession.__init__. This makes sure that branch still gives the
+    # token a sentence pause instead of quietly treating it as PACE_NONE.
     session = ReaderSession("Wait ... go", wpm=300, start_index=1)
     assert session.current_delay_ms() == 500
 
 
-# ---- current_delay_ms: length-aware pacing (long words) ----
+# current_delay_ms: slowing down for long words
 
 def test_length_pacing_disabled_by_default():
     session = ReaderSession("responsibility here", wpm=300)
-    assert session.current_delay_ms() == 200  # no slowdown even for a 14-letter word
+    assert session.current_delay_ms() == 200  # no slowdown, even for a 14 letter word
 
 def test_length_pacing_enabled_slows_a_long_word():
     session = ReaderSession("responsibility here", wpm=300, length_pacing_enabled=True)
@@ -181,42 +175,38 @@ def test_length_pacing_enabled_leaves_a_short_word_unaffected():
 
 def test_length_pacing_enabled_applies_medium_band():
     session = ReaderSession("reading now", wpm=300, length_pacing_enabled=True)
-    assert session.current_delay_ms() == 240  # base 200 * 1.2 (length band 2, "reading" is 7 letters)
+    assert session.current_delay_ms() == 240  # base 200 * 1.2 (length band 2, "reading" has 7 letters)
 
 def test_length_pacing_takes_the_larger_multiplier_not_both():
-    """Design decision: when a word is both long and ends a sentence or
-    clause, only the larger of the two pauses applies -- they don't
-    stack. "friendship," is length band 3 (1.45x = 290ms) and ends in a
-    clause mark (1.5x = 300ms); the clause pause wins since it's bigger,
-    not their product."""
+    """When a word is long and also ends a sentence or clause, only the
+    larger of the two pauses applies. They don't stack. "friendship," is
+    length band 3 (1.45x, 290ms) and ends in a clause mark (1.5x, 300ms),
+    so the clause pause wins because it's bigger."""
     session = ReaderSession("friendship, right", wpm=300, length_pacing_enabled=True)
     assert session.current_delay_ms() == 300
 
 def test_length_pacing_sentence_pause_still_wins_over_a_very_long_word():
-    # "responsibility." is length band 4 (1.7x = 340ms) and ends a
-    # sentence (2.5x = 500ms) -- the sentence pause wins.
+    # "responsibility." is length band 4 (1.7x, 340ms) and ends a sentence
+    # (2.5x, 500ms), so the sentence pause wins.
     session = ReaderSession("responsibility. Right", wpm=300, length_pacing_enabled=True)
     assert session.current_delay_ms() == 500
 
 def test_length_pacing_can_now_beat_a_clause_pause_for_a_very_long_word():
-    # Before the general multiplier raise, VERY_LONG_WORD_MULTIPLIER and
-    # CLAUSE_PAUSE_MULTIPLIER both happened to be 1.5x, so this exact
-    # word used to be a tie. Now that VERY_LONG_WORD_MULTIPLIER is 1.7x,
-    # "responsibility" (length band 4, 1.7x = 340ms) genuinely outpaces
-    # its own trailing clause mark (1.5x = 300ms) -- confirms max() picks
-    # the length pause here rather than staying locked to punctuation.
+    # VERY_LONG_WORD_MULTIPLIER (1.7x) is bigger than
+    # CLAUSE_PAUSE_MULTIPLIER (1.5x). "responsibility" is length band 4
+    # (340ms), which beats its own trailing comma (300ms). This checks that
+    # max() picks the length pause here and isn't stuck on punctuation.
     session = ReaderSession("responsibility, right", wpm=300, length_pacing_enabled=True)
     assert session.current_delay_ms() == 340
 
 def test_hyphen_bonus_can_tip_length_pacing_past_a_clause_pause():
-    # "well-known," on its own length (10 letters) would land in band 3
-    # (1.45x = 290ms) -- LESS than its own trailing comma's clause pause
-    # (1.5x = 300ms), so punctuation would normally win. The hyphen bonus
-    # pushes its effective length to 14, into band 4 (1.7x = 340ms),
-    # which flips the outcome: the word's own length now wins instead.
-    # This is the concrete case the length-pacing tuning was requested
-    # for -- a hyphenated compound getting more pause than its raw
-    # character count alone would have earned it.
+    # By its raw length of 10, "well-known," would be band 3 (1.45x,
+    # 290ms), which is less than its comma's clause pause (1.5x, 300ms),
+    # so punctuation would normally win. The hyphen bonus raises its
+    # effective length to 14, which is band 4 (1.7x, 340ms), so the word's
+    # length wins instead. This is the case hyphen aware pacing was added
+    # for, where a hyphenated word gets more time than its raw length alone
+    # would give it.
     session = ReaderSession("well-known, right", wpm=300, length_pacing_enabled=True)
     assert session.current_delay_ms() == 340
 
@@ -233,27 +223,25 @@ def test_length_pacing_for_finished_session_returns_unmultiplied_base():
     assert session.current_delay_ms() == 200
 
 
-# ---- current_delay_ms: hyphen-aware length pacing ----
+# current_delay_ms: extra length for hyphenated words
 
 def test_hyphenated_word_reaches_a_higher_band_than_its_raw_length_alone():
-    # "sub-terrain" is 11 characters including the hyphen -- on its own
-    # that's band 3 (1.45x = 290ms). The hyphen bonus (+4 effective
-    # characters) pushes it to an effective length of 15, into band 4
-    # (1.7x = 340ms).
+    # "sub-terrain" is 11 characters including the hyphen, which alone is
+    # band 3 (1.45x, 290ms). The hyphen bonus adds 4 characters, for an
+    # effective length of 15, which is band 4 (1.7x, 340ms).
     session = ReaderSession("sub-terrain here", wpm=300, length_pacing_enabled=True)
     assert session.current_delay_ms() == 340
 
 def test_plain_word_of_the_same_raw_length_does_not_get_the_hyphen_bonus():
-    # "comfortable" is also 11 characters, but has no hyphen -- it stays
-    # in band 3 rather than jumping to band 4, confirming the bonus is
-    # specific to hyphenated words, not a blanket change to band 3.
+    # "comfortable" is also 11 characters but has no hyphen, so it stays in
+    # band 3. That shows the bonus only applies to hyphenated words.
     session = ReaderSession("comfortable here", wpm=300, length_pacing_enabled=True)
     assert session.current_delay_ms() == 290
 
 def test_multiple_hyphens_each_add_their_own_bonus():
-    # "step-by-step" has two internal hyphens -- both count, taking its
-    # effective length (12 + 2*4 = 20) well past band 4's 14-letter
-    # floor, same top multiplier as a single hyphen would already reach.
+    # "step-by-step" has two hyphens inside it and both count, giving an
+    # effective length of 12 + 2*4 = 20. That's well past band 4's 14
+    # letter start, so it gets the same top multiplier one hyphen would.
     session = ReaderSession("step-by-step here", wpm=300, length_pacing_enabled=True)
     assert session.current_delay_ms() == 340
 
@@ -262,7 +250,7 @@ def test_hyphen_bonus_does_not_apply_when_length_pacing_is_disabled():
     assert session.current_delay_ms() == 200
 
 
-# ---- advance ----
+# advance
 
 def test_advance_moves_to_next_word():
     session = ReaderSession("one two three")
@@ -273,13 +261,13 @@ def test_advance_moves_to_next_word():
 def test_advance_does_nothing_once_finished():
     session = ReaderSession("one")
     session.advance()  # now finished
-    session.advance()  # should be a safe no-op
+    session.advance()  # should do nothing
     session.advance()
     assert session.index == 1
     assert session.is_finished is True
 
 
-# ---- seek ----
+# seek
 
 def test_seek_forward_moves_correct_number_of_words():
     session = ReaderSession("one two three four five six")
@@ -308,7 +296,7 @@ def test_seek_backward_clamps_at_zero():
 
 def test_seek_backward_from_finished_state_unfinishes_session():
     session = ReaderSession("one two three")
-    session.seek(100)  # push to finished
+    session.seek(100)  # jump to the end so the session is finished
     assert session.is_finished is True
     session.seek(-1)
     assert session.is_finished is False
@@ -321,7 +309,7 @@ def test_seek_zero_is_a_no_op():
     assert session.index == 1
 
 
-# ---- reset ----
+# reset
 
 def test_reset_returns_to_index_zero():
     session = ReaderSession("one two three", start_index=2)
@@ -338,7 +326,7 @@ def test_reset_unfinishes_a_finished_session():
     assert session.is_finished is False
 
 
-# ---- set_wpm ----
+# set_wpm
 
 def test_set_wpm_updates_wpm_attribute():
     session = ReaderSession("hello", wpm=300)

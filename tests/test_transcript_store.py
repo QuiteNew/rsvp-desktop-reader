@@ -5,16 +5,16 @@ from core.transcript_store import TranscriptStore
 
 @pytest.fixture
 def store(tmp_path):
-    """A fresh TranscriptStore backed by a unique, disposable temporary
-    directory — tmp_path is a built-in pytest fixture, so this never
-    touches your real ~/.rsvp_reader data."""
+    """A fresh TranscriptStore in a throwaway temporary folder. tmp_path is
+    a built in pytest fixture, so this never touches your real
+    ~/.rsvp_reader data."""
     return TranscriptStore(data_directory=str(tmp_path))
 
 
-# ---- Fresh store defaults ----
+# A fresh store's defaults
 
 def test_fresh_store_has_one_default_space():
-    fresh_store = TranscriptStore(data_directory="unused")  # no file exists yet, so this never actually reads/writes
+    fresh_store = TranscriptStore(data_directory="unused")  # no file exists yet, so nothing is read or written
     assert fresh_store.spaces == ["General"]
 
 def test_fresh_store_default_space_is_current(store):
@@ -26,7 +26,7 @@ def test_fresh_store_has_no_transcripts(store):
     assert store.transcripts_in_current_space == []
 
 
-# ---- add_space ----
+# add_space
 
 def test_add_space_appends_and_switches_to_it(store):
     store.add_space("Work")
@@ -46,10 +46,10 @@ def test_add_space_ignores_duplicate_name(store):
     store.switch_to_space("General")
     store.add_space("Work")  # already exists
     assert store.spaces == ["General", "Work"]  # not duplicated
-    assert store.current_space == "General"  # did not switch, since nothing was actually added
+    assert store.current_space == "General"  # didn't switch, since nothing was added
 
 
-# ---- switch_to_space ----
+# switch_to_space
 
 def test_switch_to_space_changes_current_space(store):
     store.add_space("Work")
@@ -61,7 +61,7 @@ def test_switch_to_nonexistent_space_is_a_safe_no_op(store):
     assert store.current_space == "General"  # unchanged
 
 
-# ---- add_transcript ----
+# add_transcript
 
 def test_add_transcript_returns_transcript_with_correct_fields(store):
     t = store.add_transcript("My Title", "General")
@@ -93,7 +93,7 @@ def test_add_transcript_id_not_reused_after_delete(store):
     t1 = store.add_transcript("First", "General")
     store.delete_transcript(t1.id)
     t2 = store.add_transcript("Second", "General")
-    assert t2.id == 2  # continues from next_id, does not reuse the deleted id
+    assert t2.id == 2  # continues from next_id and doesn't reuse the deleted id
 
 def test_add_transcript_defaults_session_stats_to_zero(store):
     t = store.add_transcript("Title", "General")
@@ -102,7 +102,7 @@ def test_add_transcript_defaults_session_stats_to_zero(store):
     assert t.total_time_spent_seconds == 0
 
 
-# ---- transcripts / transcripts_in_current_space ----
+# transcripts and transcripts_in_current_space
 
 def test_transcripts_in_current_space_filters_by_active_space(store):
     store.add_transcript("In General", "General")
@@ -134,7 +134,7 @@ def test_transcripts_property_returns_a_copy_not_the_live_list(store):
     assert len(store.transcripts) == 1
 
 
-# ---- Per-transcript setters ----
+# Setters for a single transcript
 
 def test_set_transcript_text_updates_raw_text(store):
     t = store.add_transcript("Title", "General")
@@ -182,15 +182,15 @@ def test_set_transcript_stopped_updates_is_stopped(store):
     assert store.transcripts[0].is_stopped is True
 
 def test_setter_on_nonexistent_id_is_a_safe_no_op(store):
-    # Every setter shares the identical _find_transcript -> `if t:` guard
-    # pattern — this confirms that pattern actually works, using one
-    # representative setter rather than repeating this check eight times.
+    # Every setter uses the same pattern, a _find_transcript call followed
+    # by an `if t:` guard. This checks that pattern with one setter instead
+    # of repeating it for all of them.
     store.add_transcript("Title", "General")
     store.set_transcript_text(999, "should not crash or change anything")
     assert store.transcripts[0].raw_text == ""
 
 
-# ---- add_session_stats ----
+# add_session_stats
 
 def test_add_session_stats_adds_words_and_time(store):
     t = store.add_transcript("Title", "General")
@@ -210,10 +210,10 @@ def test_add_session_stats_does_not_increment_times_read_below_floor(store):
     assert store.transcripts[0].times_read == 0
 
 def test_add_session_stats_still_adds_words_and_time_below_floor(store):
-    """The times_read floor only gates the read *count* -- a short
-    session's words/time still aren't thrown away, since a few seconds
-    of real reading did happen even if it's not enough to count as a
-    whole "time read" (see add_session_stats()'s docstring)."""
+    """The minimum time only decides whether times_read goes up. A short
+    session's words and time are still kept, since some real reading did
+    happen, even if it wasn't enough to count as a full read. See the
+    add_session_stats() docstring."""
     t = store.add_transcript("Title", "General")
     store.add_session_stats(t.id, words_read=4, active_seconds=1)
     updated = store.transcripts[0]
@@ -236,10 +236,9 @@ def test_add_session_stats_rounds_active_seconds_for_storage(store):
     assert store.transcripts[0].total_time_spent_seconds == 13
 
 def test_add_session_stats_zero_words_read_is_not_special_cased(store):
-    """A session that ended without ever advancing past the first word
-    is a normal, expected call -- words_read=0 just adds nothing to the
-    word total, and times_read still follows the same active-time floor
-    as any other call."""
+    """A session that ends before moving past the first word is a normal
+    call. words_read=0 just adds nothing to the word total, and times_read
+    follows the same minimum time rule as any other call."""
     t = store.add_transcript("Title", "General")
     store.add_session_stats(t.id, words_read=0, active_seconds=store.MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ)
     updated = store.transcripts[0]
@@ -255,7 +254,7 @@ def test_add_session_stats_on_nonexistent_id_is_a_safe_no_op(store):
     assert updated.total_time_spent_seconds == 0
 
 
-# ---- delete_transcript ----
+# delete_transcript
 
 def test_delete_transcript_removes_it(store):
     t = store.add_transcript("Title", "General")
@@ -275,7 +274,7 @@ def test_delete_nonexistent_transcript_is_a_safe_no_op(store):
     assert len(store.transcripts) == 1
 
 
-# ---- Persistence ----
+# Saving and loading
 
 def test_persists_and_reloads_full_state_correctly(tmp_path):
     directory = str(tmp_path)
@@ -325,11 +324,11 @@ def test_next_id_continues_incrementing_after_reload(tmp_path):
     second = TranscriptStore(data_directory=directory)
     third = second.add_transcript("Third", "General")
 
-    assert third.id == 3  # continues correctly, does not reset to 1
+    assert third.id == 3  # keeps counting and doesn't reset to 1
 
 def test_missing_data_file_falls_back_to_fresh_defaults(tmp_path):
-    # No data.json exists yet in this fresh tmp_path — same situation as
-    # a genuinely first-ever launch of the app.
+    # There's no data.json in this new tmp_path yet, just like the very
+    # first launch of the app.
     store = TranscriptStore(data_directory=str(tmp_path))
     assert store.spaces == ["General"]
     assert store.transcripts == []
@@ -343,11 +342,10 @@ def test_corrupted_data_file_falls_back_to_fresh_defaults(tmp_path):
     assert store.transcripts == []
 
 def test_out_of_range_current_space_index_clamps_on_load(tmp_path):
-    """The clamp min(loaded_index, len(spaces) - 1) in __init__ is
-    defensive code for a state that can't currently arise through normal
-    app use (spaces only ever grow) — but it exists, so it's worth
-    confirming it actually protects against a hand-edited or corrupted
-    data file claiming an index the current spaces list can't support."""
+    """The min(loaded_index, len(spaces) - 1) clamp in __init__ guards
+    against a state normal use can't produce right now. This checks that it
+    protects against a hand edited or corrupted data file pointing at a
+    space index that doesn't exist."""
     data_file = tmp_path / "data.json"
     data_file.write_text(json.dumps({
         "next_id": 1,
@@ -360,13 +358,11 @@ def test_out_of_range_current_space_index_clamps_on_load(tmp_path):
     assert store.current_space == "General"
 
 def test_old_save_file_missing_stats_fields_defaults_them_to_zero(tmp_path):
-    """A save file written before this feature existed won't have
-    times_read/total_words_read/total_time_spent_seconds on its
-    transcripts at all -- confirms core/storage.py's parse_data() falls
-    back to the dataclass's own default (0) for a missing key, the same
-    as any other field added after this project already had saved data
-    on disk, without needing an explicit backfill entry the way the
-    color-flag fields did (see core/models.py)."""
+    """An older save file has no times_read, total_words_read or
+    total_time_spent_seconds on its transcripts. This checks that
+    parse_data() in core/storage.py falls back to the dataclass default of
+    0 for a missing key. No explicit backfill is needed, unlike the color
+    flag fields (see core/models.py)."""
     data_file = tmp_path / "data.json"
     data_file.write_text(json.dumps({
         "next_id": 2,
@@ -382,7 +378,7 @@ def test_old_save_file_missing_stats_fields_defaults_them_to_zero(tmp_path):
     assert t.total_time_spent_seconds == 0
 
 
-# ---- set_data_directory ----
+# set_data_directory
 
 def test_set_data_directory_saves_to_new_location(tmp_path):
     old_dir = tmp_path / "old"

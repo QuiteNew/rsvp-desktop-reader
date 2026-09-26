@@ -3,13 +3,13 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW
 
 class AddTranscriptDialog(ctk.CTkToplevel):
     """Popup for creating a new transcript: asks for a title and a space.
-    Reused as-is for both ways of creating a transcript -- a blank one
+    Reused as-is for both ways of creating a transcript, a blank one
     from the sidebar's "+", and one seeded from an imported file (see
-    gui/app.py's _handle_add_from_file_requested()) -- the only
+    gui/app.py's _handle_add_from_file_requested()), the only
     difference being initial_title/window_title/warning, all optional so
     the blank-transcript flow is completely unaffected."""
 
-    # Base fixed size, and the size used instead when `warning` is set --
+    # Base fixed size, and the size used instead when `warning` is set:
     # the extra height gives the wrapped warning label room without
     # crowding the Title/Space fields above it. Not computed from the
     # warning text's actual length; just enough for the two-ish line
@@ -50,7 +50,7 @@ class AddTranscriptDialog(ctk.CTkToplevel):
         )
         self.title_entry.pack(fill="x", padx=20)
         if initial_title:
-            # Pre-filled from the picked file's name for a file import --
+            # Pre-filled from the picked file's name for a file import:
             # selected (not just inserted) and given keyboard focus, so
             # the user can immediately overwrite it by typing, without
             # first having to clear it themselves. Left untouched for the
@@ -106,7 +106,7 @@ class AddTranscriptDialog(ctk.CTkToplevel):
         # (see the alpha note near the top of __init__). update_idletasks()
         # right before flipping alpha forces any still-queued layout/redraw
         # work (including CTk widgets that defer their own first paint via
-        # their own internal after() calls) to actually finish first --
+        # their own internal after() calls) to actually finish first,
         # otherwise the reveal can catch some of that mid-flight, showing
         # pieces of the window popping in over a white background instead
         # of one clean paint.
@@ -119,51 +119,50 @@ class AddTranscriptDialog(ctk.CTkToplevel):
     @staticmethod
     def _use_chevron_dropdown_arrow(option_menu: ctk.CTkOptionMenu) -> None:
         """CTkOptionMenu draws its own dropdown arrow internally and has no
-        public option to change it -- which icon it draws is decided by a
-        single GLOBAL customtkinter setting (DrawEngine.
+        public option to change it: which icon it draws is decided by a
+        single global customtkinter setting (DrawEngine.
         preferred_drawing_method), which defaults to "font_shapes" on
-        Windows: the arrow is a character taken from a bundled private
-        icon font. That's what was rendering oddly (reported as looking
-        like "2 pencils" rather than a clean arrow) on Windows here.
+        Windows, where the arrow is a character taken from a bundled
+        private icon font. That's what was rendering oddly (looking like
+        "2 pencils" rather than a clean arrow) on Windows here.
 
-        FIRST ATTEMPT (superseded -- keeping this note so the mistake
-        isn't repeated): forcing preferred_drawing_method to
-        "polygon_shapes" on this widget's own DrawEngine instance did
-        make the arrow itself a real geometric chevron, but that same
-        DrawEngine instance ALSO draws the button's rounded, two-color
-        background (draw_rounded_rect_with_border_vertical_split) --
-        confirmed broken in practice (reported: the button turned into
-        one large bar instead of a small square next to the arrow),
-        because that method's "font_shapes" and "polygon_shapes"
-        implementations build different, incompatible sets of canvas
-        items, and only the arrow's own item was being cleared before
-        forcing a redraw.
+        First attempt (superseded, keeping this note so the mistake isn't
+        repeated): forcing preferred_drawing_method to "polygon_shapes"
+        on this widget's own DrawEngine instance did make the arrow
+        itself a real geometric chevron, but that same DrawEngine
+        instance also draws the button's rounded, two-color background
+        (draw_rounded_rect_with_border_vertical_split), which broke in
+        practice: the button turned into one large bar instead of a
+        small square next to the arrow, because that method's
+        "font_shapes" and "polygon_shapes" implementations build
+        different, incompatible sets of canvas items, and only the
+        arrow's own item was being cleared before forcing a redraw.
 
-        This version leaves preferred_drawing_method -- and therefore
-        the button's background rendering -- completely untouched, and
-        only overrides what character the EXISTING "dropdown_arrow" text
-        item displays and which font it uses: a plain "v" in the app's
-        own body font (FONT_BODY) instead of the bundled icon font's "Y"
+        This version leaves preferred_drawing_method, and therefore the
+        button's background rendering, completely untouched, and only
+        overrides what character the existing "dropdown_arrow" text item
+        displays and which font it uses: a plain "v" in the app's own
+        body font (FONT_BODY) instead of the bundled icon font's "Y"
         glyph. Because it stays a text item throughout (never swapped
         for a different canvas item type), every later redraw's
-        itemconfigure()/coords() calls stay valid -- no type mismatch,
-        no crash.
+        itemconfigure()/coords() calls stay valid, with no type
+        mismatch and no crash.
 
-        The one thing that DOES need handling: _draw() unconditionally
+        The one thing that does need handling: _draw() unconditionally
         resets that item's font back to the icon font on every redraw it
         performs (see ctk_optionmenu.py's _draw()), which would undo our
         override the next time anything triggers one (a resize, a
-        configure() call). Nothing in THIS app actually reconfigures
-        space_menu after it's built -- picking a value doesn't call
-        _draw(), and the dialog is fixed-size/non-resizable -- so a
-        single override right after construction would likely never get
-        undone in practice. But to not depend on that staying true,
-        option_menu's own _draw is wrapped (instance-level, so no other
-        widget in the app is affected) to re-apply the override
-        immediately after every redraw, whatever triggers it. Text color
-        is left for CTk's own _draw() to keep setting -- it already
-        colors whatever item carries the "dropdown_arrow" tag to match
-        _text_color, so this doesn't need to duplicate that.
+        configure() call). Nothing in this app actually reconfigures
+        space_menu after it's built: picking a value doesn't call
+        _draw(), and the dialog is fixed-size/non-resizable, so a single
+        override right after construction would likely never get undone
+        in practice. But to not depend on that staying true, option_menu's
+        own _draw is wrapped (instance-level, so no other widget in the
+        app is affected) to re-apply the override immediately after
+        every redraw, whatever triggers it. Text color is left for CTk's
+        own _draw() to keep setting; it already colors whatever item
+        carries the "dropdown_arrow" tag to match _text_color, so this
+        doesn't need to duplicate that.
 
         Verified against customtkinter==6.0.0 (the version pinned in
         requirements.txt): rendered to an actual image and visually
@@ -171,7 +170,7 @@ class AddTranscriptDialog(ctk.CTkToplevel):
         correct, then re-confirmed after a forced redraw, hover in/out,
         and resize. Relies on CTkOptionMenu's private _canvas/_draw
         attributes and its "dropdown_arrow" canvas tag, none of which
-        are public API -- if customtkinter is ever upgraded past 6.0.0,
+        are public API; if customtkinter is ever upgraded past 6.0.0,
         this is the first place to check if the arrow reverts to the old
         icon or looks wrong again."""
         def _apply_chevron() -> None:

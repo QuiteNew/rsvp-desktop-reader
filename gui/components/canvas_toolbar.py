@@ -5,7 +5,7 @@ class CanvasToolbar(ctk.CTkFrame):
     """Floating-style control row: optionally skip back/forward, then
     pause/play, restart, and optionally detach + maximize.
 
-    True translucency isn't possible in Tkinter — this approximates a
+    True translucency isn't possible in Tkinter, so this approximates a
     'glass' look with a light, low-contrast fill and soft rounded corners.
     """
 
@@ -33,7 +33,7 @@ class CanvasToolbar(ctk.CTkFrame):
         self.on_maximize_toggle = on_maximize_toggle
         self.on_detach = on_detach
 
-        # Order: [Rewind, Forward,] Pause, Restart, [Detach,] [Maximize] — left to right
+        # Order, left to right: [Rewind, Forward,] Pause, Restart, [Detach,] [Maximize]
         if show_skip:
             self.skip_back_button = self._make_button("<<", self._handle_skip_back)
             self.skip_back_button.pack(side="left", padx=(0, 6))

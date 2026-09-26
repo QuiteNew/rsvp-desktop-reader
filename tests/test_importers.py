@@ -14,11 +14,10 @@ from core.importers import (
 
 
 def _write_text_pdf(path, text_line):
-    """Writes a minimal, hand-built single-page PDF whose content stream
-    genuinely draws the given text -- not a mock. pypdf itself has no
-    ability to *write* text into a PDF (it only reads/manipulates), so
-    this constructs the raw PDF object structure directly -- just enough
-    for PdfReader.extract_text() to find real text, nothing more."""
+    """Writes a small single-page PDF that really contains the given text,
+    so it's not a mock. pypdf can read and modify PDFs but can't write text
+    into one, so this builds the raw PDF structure by hand, with just enough
+    for PdfReader.extract_text() to find the text."""
     content_stream = f"BT /F1 24 Tf 72 700 Td ({text_line}) Tj ET".encode("latin-1")
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -43,7 +42,7 @@ def _write_text_pdf(path, text_line):
     path.write_bytes(bytes(out))
 
 
-# ---- .txt ----
+# .txt files
 
 def test_import_txt_plain_utf8(tmp_path):
     path = tmp_path / "plain.txt"
@@ -67,7 +66,7 @@ def test_import_file_rejects_empty_txt(tmp_path):
         import_file(str(path))
 
 
-# ---- .srt ----
+# .srt files
 
 def test_import_srt_drops_index_and_timestamp_lines(tmp_path):
     path = tmp_path / "sample.srt"
@@ -89,7 +88,7 @@ def test_import_srt_strips_simple_markup_tags(tmp_path):
     assert import_srt(str(path)) == "Emphasized text."
 
 
-# ---- .docx ----
+# .docx files
 
 def test_import_docx_extracts_paragraphs_and_drops_blank_ones(tmp_path):
     path = tmp_path / "sample.docx"
@@ -113,7 +112,7 @@ def test_import_file_rejects_empty_docx(tmp_path):
         import_file(str(path))
 
 
-# ---- .pdf ----
+# .pdf files
 
 def test_import_pdf_extracts_real_text(tmp_path):
     path = tmp_path / "sample.pdf"
@@ -136,21 +135,21 @@ def test_import_file_rejects_pdf_with_no_extractable_text(tmp_path):
         import_file(str(path))
 
 def test_import_pdf_decrypts_when_user_password_is_empty(tmp_path):
-    """A PDF can be 'encrypted' with only an owner password and an empty
-    user password -- common for PDFs that just restrict printing/editing
-    rather than actually requiring a password to open. pypdf's own
-    is_encrypted stays True even after a successful decrypt(), so
-    import_pdf() has to check decrypt()'s return value instead -- this
-    confirms that path actually works, not just that it doesn't crash."""
+    """Some PDFs are encrypted with only an owner password and an empty user
+    password. This is common for files that just block printing or editing
+    but open without a password. pypdf's is_encrypted stays True even after
+    a successful decrypt(), so import_pdf() has to check what decrypt()
+    returns instead. This test makes sure that path really works, not just
+    that it doesn't crash."""
     path = tmp_path / "encrypted_emptyuserpw.pdf"
     writer = PdfWriter()
     writer.add_blank_page(width=200, height=200)
     writer.encrypt(user_password="", owner_password="ownersecret")
     with open(path, "wb") as f:
         writer.write(f)
-    # Blank page has no text at all, so this should fail on "no
-    # extractable text", NOT be mistaken for "password-protected" --
-    # proving the empty-password decrypt genuinely succeeded first.
+    # The blank page has no text, so this should fail with "no readable
+    # text" and not "password-protected". That proves the decrypt with the
+    # empty password succeeded first.
     with pytest.raises(TranscriptImportError, match="readable text"):
         import_file(str(path))
 
@@ -165,7 +164,7 @@ def test_import_pdf_reports_password_protected_when_password_is_required(tmp_pat
         import_file(str(path))
 
 
-# ---- dispatch ----
+# Picking the importer by file extension
 
 def test_import_file_dispatches_by_extension(tmp_path):
     path = tmp_path / "plain.txt"

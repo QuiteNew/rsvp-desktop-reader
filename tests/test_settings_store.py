@@ -5,15 +5,14 @@ from core.settings_store import SettingsStore, AppSettings
 
 @pytest.fixture
 def store(tmp_path):
-    """A fresh SettingsStore backed by a unique, disposable temporary
-    directory — never touches your real ~/.rsvp_reader/settings.json."""
+    """A fresh SettingsStore in a throwaway temporary folder, so it never
+    touches your real ~/.rsvp_reader/settings.json."""
     return SettingsStore(settings_directory=str(tmp_path))
 
 
-# ---- Fresh store: every property matches AppSettings' own defaults ----
-# Reading from a live AppSettings() instance, rather than hardcoding
-# numbers a second time here, means these can never silently drift out
-# of sync with the dataclass itself.
+# A fresh store matches AppSettings' own defaults
+# These read from a live AppSettings() instead of repeating the numbers
+# here, so the tests can never drift out of sync with the dataclass.
 
 def test_fresh_store_window_size_matches_defaults(store):
     defaults = AppSettings()
@@ -47,7 +46,7 @@ def test_fresh_store_data_directory_matches_defaults(store):
     assert store.data_directory == AppSettings().data_directory
 
 
-# ---- set_window_size ----
+# set_window_size
 
 def test_set_window_size_updates_both_dimensions(store):
     store.set_window_size(1200, 800)
@@ -60,7 +59,7 @@ def test_set_window_size_does_not_affect_other_settings(store):
     assert store.appearance_mode == AppSettings().appearance_mode
 
 
-# ---- set_layout_sizes ----
+# set_layout_sizes
 
 def test_set_layout_sizes_updates_both_values(store):
     store.set_layout_sizes(300, 150)
@@ -74,7 +73,7 @@ def test_set_layout_sizes_does_not_affect_window_size(store):
     assert store.window_height == 800
 
 
-# ---- set_defaults ----
+# set_defaults
 
 def test_set_defaults_updates_all_four_values(store):
     store.set_defaults(500, "#111111", "#222222", "#333333", 32)
@@ -90,14 +89,14 @@ def test_set_defaults_does_not_affect_skip_behavior(store):
     assert store.pause_on_skip is True
 
 
-# ---- set_data_directory ----
+# set_data_directory
 
 def test_set_data_directory_updates_value(store):
     store.set_data_directory("/some/new/path")
     assert store.data_directory == "/some/new/path"
 
 
-# ---- set_freeform_resize_enabled ----
+# set_freeform_resize_enabled
 
 def test_set_freeform_resize_enabled_true(store):
     store.set_freeform_resize_enabled(True)
@@ -109,7 +108,7 @@ def test_set_freeform_resize_enabled_false(store):
     assert store.freeform_resize_enabled is False
 
 
-# ---- set_skip_behavior ----
+# set_skip_behavior
 
 def test_set_skip_behavior_updates_both_values(store):
     store.set_skip_behavior(25, True)
@@ -122,7 +121,7 @@ def test_set_skip_behavior_does_not_affect_defaults(store):
     assert store.default_wpm == 500
 
 
-# ---- set_appearance_mode ----
+# set_appearance_mode
 
 def test_set_appearance_mode_light(store):
     store.set_appearance_mode("light")
@@ -137,7 +136,7 @@ def test_set_appearance_mode_system(store):
     assert store.appearance_mode == "system"
 
 
-# ---- Persistence ----
+# Saving and loading
 
 def test_persists_and_reloads_every_setting_correctly(tmp_path):
     directory = str(tmp_path)
@@ -183,11 +182,10 @@ def test_corrupted_settings_file_falls_back_to_fresh_defaults(tmp_path):
     assert store.window_width == AppSettings().window_width
 
 def test_settings_file_missing_newer_fields_fills_in_defaults(tmp_path):
-    """Simulates upgrading from an older version of the app whose
-    settings.json was written before some fields (e.g. appearance_mode)
-    existed. A dataclass happily fills in missing keys with its own
-    defaults — this confirms that promise actually holds, not just in
-    theory."""
+    """Simulates upgrading from an older version of the app, where
+    settings.json was saved before some fields, like appearance_mode,
+    existed. The dataclass should fill in any missing keys with its own
+    defaults, and this checks that it really does."""
     settings_file = tmp_path / "settings.json"
     settings_file.write_text(json.dumps({
         "window_width": 1234,
@@ -200,13 +198,11 @@ def test_settings_file_missing_newer_fields_fills_in_defaults(tmp_path):
     assert store.appearance_mode == AppSettings().appearance_mode  # filled in, not missing or crashing
 
 def test_settings_file_with_stale_header_height_field_loads_correctly(tmp_path):
-    """header_height was removed from AppSettings entirely after the
-    header-resize investigation, but real settings.json files written
-    before that point still have it saved on disk. Passing an unexpected
-    keyword straight into AppSettings(**data) would raise a TypeError —
-    this uses a value AppSettings would reject if the explicit
-    data.pop("header_height", None) migration step weren't in place,
-    confirming it actually works rather than just assuming it does."""
+    """header_height was removed from AppSettings, but older settings.json
+    files may still have it saved. Passing an unknown keyword straight into
+    AppSettings(**data) would raise a TypeError. This test would fail
+    without the data.pop("header_height", None) step, which proves that
+    step really works."""
     settings_file = tmp_path / "settings.json"
     settings_file.write_text(json.dumps({
         "window_width": 1000,
@@ -219,7 +215,7 @@ def test_settings_file_with_stale_header_height_field_loads_correctly(tmp_path):
     assert store.window_height == 650
 
 
-# ---- Isolation between separate settings directories ----
+# Separate settings folders don't affect each other
 
 def test_two_stores_in_different_directories_do_not_interfere(tmp_path):
     dir_a = tmp_path / "a"
@@ -239,21 +235,20 @@ def test_two_stores_in_different_directories_do_not_interfere(tmp_path):
     assert (dir_b / "settings.json").exists()
 
 
-# ---- No-argument constructor still works (backward compatibility) ----
+# The constructor still works with no arguments
 
 def test_no_argument_constructor_still_works():
-    """SettingsStore() with zero arguments must keep working exactly as
-    before — gui/app.py and gui/theme.py both call it this way. This
-    test intentionally reads from the REAL ~/.rsvp_reader/settings.json
-    (there's no way to verify default behavior without touching it at
-    least once) — but it only ever reads, via the constructor. It never
-    calls a single setter, so it cannot overwrite anything real."""
+    """gui/app.py and gui/theme.py both call SettingsStore() with no
+    arguments, so that has to keep working. This test reads the REAL
+    ~/.rsvp_reader/settings.json, since there's no other way to check the
+    default behavior. It only reads through the constructor and never
+    calls a setter, so it can't overwrite anything real."""
     store = SettingsStore()
     assert isinstance(store.appearance_mode, str)
     assert isinstance(store.window_width, int)
 
 
-# ---- Tests below were added when the font resize amount mechanic was added in settings
+# Font size step and highlight offset
 
 def test_fresh_store_font_size_step_matches_defaults(store):
     assert store.font_size_step == AppSettings().font_size_step
@@ -275,8 +270,7 @@ def test_set_highlight_offset_positive_value(store):
     assert store.highlight_offset_px == 2
 
 def test_set_highlight_offset_negative_value(store):
-    # The specific case that needed real (not deferred) attention — this
-    # is the first setting in the whole app allowing a negative value.
+    # This is the only setting in the app that allows a negative value.
     store.set_highlight_offset_px(-3)
     assert store.highlight_offset_px == -3
 
