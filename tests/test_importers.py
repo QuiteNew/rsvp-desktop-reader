@@ -87,6 +87,15 @@ def test_import_srt_strips_simple_markup_tags(tmp_path):
     path.write_text("1\n00:00:01,000 --> 00:00:02,000\n<i>Emphasized</i> text.\n", encoding="utf-8")
     assert import_srt(str(path)) == "Emphasized text."
 
+def test_import_srt_puts_each_subtitle_line_on_its_own_line(tmp_path):
+    path = tmp_path / "lines.srt"
+    path.write_text(
+        "1\n00:00:01,000 --> 00:00:04,000\nHello world.\n\n"
+        "2\n00:00:04,500 --> 00:00:06,000\nand then we went\nto the store.\n",
+        encoding="utf-8",
+    )
+    assert import_srt(str(path)) == "Hello world.\nand then we went\nto the store."
+
 
 # .docx files
 
@@ -170,6 +179,31 @@ def test_import_file_dispatches_by_extension(tmp_path):
     path = tmp_path / "plain.txt"
     path.write_text("Hello world.", encoding="utf-8")
     assert import_file(str(path)) == "Hello world."
+
+def test_import_file_keeps_line_breaks(tmp_path):
+    path = tmp_path / "lines.txt"
+    path.write_text("1. Buy milk\n2. Buy eggs\n", encoding="utf-8")
+    assert import_file(str(path)) == "1. Buy milk\n2. Buy eggs"
+
+def test_import_file_tidies_spaces_and_blank_lines(tmp_path):
+    path = tmp_path / "messy.txt"
+    # Written as bytes so the Windows line endings are exactly these,
+    # whichever OS the test runs on.
+    path.write_bytes(b"  First   line.  \r\n\r\n\r\n\r\nSecond\tline.\n")
+    assert import_file(str(path)) == "First line.\n\nSecond line."
+
+def test_import_file_still_strips_timestamps(tmp_path):
+    path = tmp_path / "stamped.txt"
+    path.write_text("[00:00:01] Welcome.\n(1:23) Goodbye.", encoding="utf-8")
+    assert import_file(str(path)) == "Welcome.\nGoodbye."
+
+def test_import_file_keeps_docx_paragraphs_on_separate_lines(tmp_path):
+    path = tmp_path / "paragraphs.docx"
+    d = docx.Document()
+    d.add_paragraph("First paragraph.")
+    d.add_paragraph("Second paragraph.")
+    d.save(path)
+    assert import_file(str(path)) == "First paragraph.\nSecond paragraph."
 
 def test_import_file_rejects_unsupported_extension(tmp_path):
     path = tmp_path / "sample.xyz"

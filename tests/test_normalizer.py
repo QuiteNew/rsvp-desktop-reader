@@ -96,6 +96,11 @@ def test_time_of_day_is_not_a_marker():
 def test_hyphen_inside_a_word_is_left_alone():
     assert normalize_transcript("A well-known fact.") == "A well-known fact."
 
+def test_rows_of_decimal_numbers_are_not_markers():
+    # Chart axis labels copied out of a PDF, not section numbers.
+    text = "0.50 0.25 axis\n0.75 0.10 axis."
+    assert normalize_transcript(text) == "0.50 0.25 axis 0.75 0.10 axis."
+
 def test_sentences_inside_one_line_are_never_split():
     assert normalize_transcript("One. Two. Three. Four.") == "One. Two. Three. Four."
 
@@ -178,6 +183,25 @@ def test_whitespace_only_text():
     assert normalize_transcript("  \n\n  ") == ""
 
 
+# Repairing letters damaged by PDF extraction
+
+def test_combined_letters_are_expanded():
+    assert normalize_transcript("\ufb01nd the \ufb02ow") == "find the flow"
+
+def test_lost_f_before_i_is_restored():
+    assert normalize_transcript("de\ufffdined") == "defined"
+
+def test_lost_f_before_l_is_restored():
+    assert normalize_transcript("\ufffdlexibility") == "flexibility"
+
+def test_lost_f_in_the_middle_of_ffi_is_restored():
+    assert normalize_transcript("ef\ufffdicient") == "efficient"
+
+def test_replacement_character_anywhere_else_is_left_alone():
+    # There's no telling what letter it was, so it stays as it is.
+    assert normalize_transcript("caf\ufffd au lait") == "caf\ufffd au lait"
+
+
 # Everything together
 
 def test_messy_paste_with_several_problems_at_once():
@@ -219,6 +243,10 @@ def test_messy_paste_with_several_problems_at_once():
     "infor-\nmation overload",
     "Para one.\n\n\n\nPara two.",
     "Part 1: Getting started\nBefore you begin, make sure\nyou have everything ready:\n1. A quiet room",
+    "ef\ufffdicient \ufb02ow",
+    # Stripping "12." exposes "0.50" at the start of a line; a second
+    # pass must not then treat that as a marker too.
+    "12. 0.50 0.25\n13. 0.75 0.10",
 ])
 def test_normalizing_twice_changes_nothing_more(text):
     once = normalize_transcript(text)

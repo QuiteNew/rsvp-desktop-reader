@@ -7,8 +7,12 @@ whether that's a corrupt file, bad encoding, a password-protected PDF,
 or no extractable text at all. That way gui/ only ever has to catch
 one thing and show its message as-is.
 
-Every importer's output passes through clean_transcript() before being
-returned, so an imported file is normalized exactly like a pasted one.
+Every importer's output passes through clean_transcript_keep_lines()
+before being returned: timestamps and extra spaces are removed, but
+line breaks stay, so the edit view shows the file's lines and the
+Normalize button (core/normalizer.py) has structure to work with.
+Reading isn't affected, since core/reader.py flattens all whitespace
+anyway.
 
 No GUI dependency here (see core/ vs gui/ in the project brief).
 gui/app.py picks the file, calls import_file(), and either shows the
@@ -21,7 +25,7 @@ from pathlib import Path
 import docx
 import pypdf
 
-from core.parser import clean_transcript
+from core.parser import clean_transcript_keep_lines
 
 # Also used by gui/app.py for its file-dialog filter list, so the two
 # lists can't drift apart.
@@ -68,7 +72,8 @@ def import_srt(path: str) -> str:
     else as subtitle text, stripping simple <...> markup tags. More
     tolerant of malformed files than requiring a strict block shape.
     core/parser.py's timestamp regex doesn't match .srt's format, so this
-    needs its own pass."""
+    needs its own pass. Each subtitle line stays on its own line; the
+    Normalize button can rejoin sentences that span several of them."""
     text = _read_text_with_fallback(path)
     kept_lines = []
     for line in text.splitlines():
@@ -82,7 +87,7 @@ def import_srt(path: str) -> str:
         stripped = re.sub(r"<[^>]+>", "", stripped).strip()
         if stripped:
             kept_lines.append(stripped)
-    return " ".join(kept_lines)
+    return "\n".join(kept_lines)
 
 
 def import_docx(path: str) -> str:
@@ -131,10 +136,10 @@ def import_pdf(path: str) -> str:
 
 
 def import_file(path: str) -> str:
-    """Picks the right importer by extension, normalizes the result
-    through clean_transcript(), and rejects empty output (a scanned PDF
-    with no text layer, an empty file) as an error instead of silently
-    creating a blank transcript."""
+    """Picks the right importer by extension, tidies the result through
+    clean_transcript_keep_lines(), and rejects empty output (a scanned
+    PDF with no text layer, an empty file) as an error instead of
+    silently creating a blank transcript."""
     suffix = Path(path).suffix.lower()
     if suffix == ".txt":
         raw = import_txt(path)
@@ -147,7 +152,7 @@ def import_file(path: str) -> str:
     else:
         raise TranscriptImportError(f"Unsupported file type: {suffix or Path(path).name}")
 
-    cleaned = clean_transcript(raw)
+    cleaned = clean_transcript_keep_lines(raw)
     if not cleaned:
         raise TranscriptImportError(f"{Path(path).name} didn't contain any readable text.")
     return cleaned

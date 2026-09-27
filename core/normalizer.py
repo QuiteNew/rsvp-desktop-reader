@@ -6,6 +6,14 @@ its own paragraph, keeps headings such as "Chapter 3" on their own
 line, drops lines that are only a number (usually PDF page numbers),
 and rejoins lines that were broken in the middle of a sentence.
 
+It also repairs two kinds of damage that text pulled out of a PDF
+often has. Combined letters such as "ﬁ" become plain letters, and a
+"\ufffd" (the replacement character a PDF reader writes when it can't
+tell what a letter was) right before an "i" or "l" becomes an "f",
+since it's almost always the lost first half of "fi", "fl" or "ffi".
+That second one is a guess, which is why it only happens here, where
+the button can revert it, and not on import.
+
 It only works with the line breaks that are already there. It never
 splits a line in two, except at bullet symbols such as "•", which don't
 appear in ordinary prose. That keeps it out of guessing where a
@@ -24,6 +32,8 @@ No GUI dependency here (see core/ vs gui/ in the project brief)."""
 
 import re
 
+from core.parser import expand_ligatures
+
 BULLET_SYMBOLS = "•●○◦▪▫■□‣►▶➢➤✓✔⁃"
 
 HEADING_WORDS = (
@@ -38,6 +48,8 @@ _BULLET_CLASS = "[" + re.escape(BULLET_SYMBOLS) + "]"
 _INLINE_BULLET = re.compile(r"[ \t]*(" + _BULLET_CLASS + r")[ \t]*")
 
 _SPACE_RUN = re.compile(r"[ \t]+")
+
+_LOST_F = re.compile("\ufffd(?=[il])")
 
 # Markers that count wherever they start a line. A marker may also sit
 # alone on its line, with the item's text on the next one, which is
@@ -56,7 +68,10 @@ _LETTER_MARKER = re.compile(
     r"^(?:[A-Za-z][.)]|\([A-Za-z]\)"
     r"|[ivxlcdm]+[.)]|[IVXLCDM]+[.)]|\((?:[ivxlcdm]+|[IVXLCDM]+)\))\s+(?=\S)"
 )
-_DECIMAL_MARKER = re.compile(r"^\d{1,3}(?:\.\d{1,3})+\s+(?=\S)")
+# A section number ("1.1 Scope") is followed by a word. Requiring a
+# letter after it keeps rows of numbers, such as chart axis labels
+# ("0.50 0.25 0.00") copied out of a PDF, from being read as markers.
+_DECIMAL_MARKER = re.compile(r"^\d{1,3}(?:\.\d{1,3})+\s+(?=[^\W\d_])")
 
 # The heading word can be in any case; the number after it can be
 # digits ("2.1"), an uppercase roman numeral ("IV") or a single capital
@@ -133,6 +148,8 @@ def normalize_transcript(text: str) -> str:
 
 def _prepare_lines(text: str) -> list[str]:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = expand_ligatures(text)
+    text = _LOST_F.sub("f", text)
     text = _INLINE_BULLET.sub(r"\n\1 ", text)
     return [_SPACE_RUN.sub(" ", line).strip() for line in text.split("\n")]
 
