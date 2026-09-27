@@ -1,17 +1,20 @@
 import customtkinter as ctk
 
 from core.normalizer import can_revert, toggle_normalization
+from gui.icons import normalize_icon, revert_icon
 
 
 class TranscriptInput(ctk.CTkFrame):
     """Paste-in prompt shown when the selected transcript has no text yet,
     with Normalize and Start reading buttons underneath.
 
-    The Normalize button toggles between "Normalize" and "Revert" (see
-    core/normalizer.py's toggle_normalization()). This widget only keeps
-    a copy of the transcript's undo information to decide the label;
-    whoever owns it passes that in with set_normalization() and saves
-    the result of each click through on_normalized."""
+    The Normalize button toggles between a page-with-checkmark icon
+    (normalize) and a plain page icon (revert); see gui/icons.py, and
+    core/normalizer.py's toggle_normalization() for what each click
+    does. This widget only keeps a copy of the transcript's undo
+    information to decide which icon to show. Whoever owns it passes
+    that in with set_normalization() and saves the result of each click
+    through on_normalized."""
 
     def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None):
         super().__init__(master, fg_color="transparent")
@@ -26,7 +29,7 @@ class TranscriptInput(ctk.CTkFrame):
             self.textbox.insert("1.0", initial_text)
 
         # Tk raises <<Modified>> for typing, deleting, pasting and for
-        # changes made in code, so it keeps the button's label in step
+        # changes made in code, so it keeps the button's icon in step
         # with the text whatever changed it.
         self.textbox.bind("<<Modified>>", self._handle_text_modified)
 
@@ -34,6 +37,11 @@ class TranscriptInput(ctk.CTkFrame):
         # box's left edge, and Start reading in the middle. uniform keeps
         # the two outer columns the same width, so Start reading stays
         # truly centered however wide the window is.
+        #
+        # The Normalize button is 36x28 with Start reading's rounded
+        # corners. CTkButton pads its content by the corner radius (6px)
+        # at each side and its border spacing (2px) at top and bottom,
+        # so the 24px icon fills it exactly: 24 + 2*6 wide, 24 + 2*2 tall.
         button_row = ctk.CTkFrame(self, fg_color="transparent")
         button_row.pack(fill="x", padx=20, pady=(0, 20))
         button_row.grid_columnconfigure(0, weight=1, uniform="side")
@@ -43,7 +51,17 @@ class TranscriptInput(ctk.CTkFrame):
         self.start_button = ctk.CTkButton(button_row, text="Start reading", command=self._handle_submit)
         self.start_button.grid(row=0, column=1)
 
-        self.normalize_button = ctk.CTkButton(button_row, text="Normalize", command=self._handle_normalize)
+        self._normalize_image = normalize_icon()
+        self._revert_image = revert_icon()
+        self.normalize_button = ctk.CTkButton(
+            button_row, text="", image=self._normalize_image, width=36, height=28,
+            command=self._handle_normalize,
+        )
+        # The plain Tk label CTkButton shows the image in adds a small
+        # border of its own, and how big it is varies by platform. Removing
+        # it keeps the button exactly 36x28 everywhere. CTkButton has no
+        # public option for this, hence the private _image_label.
+        self.normalize_button._image_label.configure(borderwidth=0, padx=0, pady=0, highlightthickness=0)
         self.normalize_button.grid(row=0, column=0, sticky="w")
 
     def get_text(self) -> str:
@@ -60,7 +78,7 @@ class TranscriptInput(ctk.CTkFrame):
     def set_normalization(self, pre_normalize_text: str, normalized_text: str) -> None:
         """Take the current transcript's undo information (see
         core/models.py). Must be called whenever a different transcript's
-        text is shown, so the label never reflects the previous one."""
+        text is shown, so the icon never reflects the previous one."""
         self._pre_normalize_text = pre_normalize_text
         self._normalized_text = normalized_text
         self._refresh_normalize_button()
@@ -85,9 +103,9 @@ class TranscriptInput(ctk.CTkFrame):
 
     def _refresh_normalize_button(self) -> None:
         if can_revert(self.get_text(), self._pre_normalize_text, self._normalized_text):
-            self.normalize_button.configure(text="Revert")
+            self.normalize_button.configure(image=self._revert_image)
         else:
-            self.normalize_button.configure(text="Normalize")
+            self.normalize_button.configure(image=self._normalize_image)
 
     def _handle_submit(self) -> None:
         self.on_submit(self.get_text())
