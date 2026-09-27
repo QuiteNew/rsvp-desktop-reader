@@ -1,5 +1,5 @@
 import pytest
-from core.normalizer import normalize_transcript
+from core.normalizer import can_revert, normalize_transcript, toggle_normalization
 
 
 # Markers that always count: each item becomes its own paragraph
@@ -251,3 +251,54 @@ def test_messy_paste_with_several_problems_at_once():
 def test_normalizing_twice_changes_nothing_more(text):
     once = normalize_transcript(text)
     assert normalize_transcript(once) == once
+
+
+# can_revert: which label the button shows
+
+def test_can_revert_when_text_is_still_what_normalizing_produced():
+    assert can_revert("Buy milk\n\nBuy eggs", "1. Buy milk\n2. Buy eggs", "Buy milk\n\nBuy eggs")
+
+def test_can_revert_ignores_the_edit_boxs_trailing_newline():
+    assert can_revert("Buy milk\n\nBuy eggs\n", "1. Buy milk\n2. Buy eggs", "Buy milk\n\nBuy eggs")
+
+def test_cannot_revert_after_an_edit():
+    assert not can_revert("Buy milk\n\nBuy bread", "1. Buy milk\n2. Buy eggs", "Buy milk\n\nBuy eggs")
+
+def test_cannot_revert_with_nothing_saved():
+    assert not can_revert("Buy milk", "", "")
+
+
+# toggle_normalization: what one click does
+
+def test_first_click_normalizes_and_remembers_the_original():
+    result = toggle_normalization("1. Buy milk\n2. Buy eggs\n", "", "")
+    assert result.text == "Buy milk\n\nBuy eggs"
+    assert result.pre_normalize_text == "1. Buy milk\n2. Buy eggs"
+    assert result.normalized_text == "Buy milk\n\nBuy eggs"
+
+def test_second_click_reverts_and_forgets_the_original():
+    first = toggle_normalization("1. Buy milk\n2. Buy eggs", "", "")
+    second = toggle_normalization(first.text + "\n", first.pre_normalize_text, first.normalized_text)
+    assert second.text == "1. Buy milk\n2. Buy eggs"
+    assert second.pre_normalize_text == ""
+    assert second.normalized_text == ""
+
+def test_click_after_an_edit_normalizes_the_edited_text():
+    # The old original is no longer offered; the edited text becomes
+    # the new original.
+    result = toggle_normalization("1. Buy bread", "1. Buy milk", "Buy milk")
+    assert result.text == "Buy bread"
+    assert result.pre_normalize_text == "1. Buy bread"
+    assert result.normalized_text == "Buy bread"
+
+def test_click_on_text_with_nothing_to_normalize_changes_nothing():
+    result = toggle_normalization("Already tidy.\n", "", "")
+    assert result.text == "Already tidy."
+    assert result.pre_normalize_text == ""
+    assert result.normalized_text == ""
+
+def test_click_on_empty_text_changes_nothing():
+    result = toggle_normalization("\n", "", "")
+    assert result.text == ""
+    assert result.pre_normalize_text == ""
+    assert result.normalized_text == ""

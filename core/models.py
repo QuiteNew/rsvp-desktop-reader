@@ -38,3 +38,12 @@ class Transcript:
     times_read: int = 0
     total_words_read: int = 0
     total_time_spent_seconds: int = 0
+
+    # Undo information for the edit view's Normalize button (see
+    # core/normalizer.py's toggle_normalization()). pre_normalize_text is
+    # the text as it was before normalizing, and normalized_text is what
+    # normalizing produced. Both are empty when there's nothing to
+    # revert, which is also the right value for old save files, so no
+    # backfill is needed.
+    pre_normalize_text: str = ""
+    normalized_text: str = ""

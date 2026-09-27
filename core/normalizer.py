@@ -28,9 +28,13 @@ to show up as a word, followed by a full sentence-end pause.
 Running this on text it already produced returns that text unchanged,
 so clicking Normalize on normalized text does nothing.
 
+toggle_normalization() and can_revert() at the bottom hold the
+button's click logic, so the GUI only has to show what they decide.
+
 No GUI dependency here (see core/ vs gui/ in the project brief)."""
 
 import re
+from dataclasses import dataclass
 
 from core.parser import expand_ligatures
 
@@ -198,3 +202,40 @@ def _join(previous: str, line: str) -> str:
     if _HYPHEN_BREAK.search(previous) and _starts_lowercase_or_digit(line):
         return previous + line
     return previous + " " + line
+
+
+@dataclass(frozen=True)
+class NormalizationToggle:
+    """The result of one click of the Normalize button: the text to
+    show in the edit box, and the undo information to save with the
+    transcript (see core/models.py)."""
+    text: str
+    pre_normalize_text: str
+    normalized_text: str
+
+
+def can_revert(current_text: str, pre_normalize_text: str, normalized_text: str) -> bool:
+    """Whether the button should offer to revert: an original is saved
+    and the edit box still holds exactly what normalizing produced. Any
+    edit since then breaks the match. Whitespace at either end is
+    ignored, since the edit box adds a trailing newline and saved drafts
+    are stripped."""
+    return bool(pre_normalize_text) and current_text.strip() == normalized_text
+
+
+def toggle_normalization(current_text: str, pre_normalize_text: str, normalized_text: str) -> NormalizationToggle:
+    """What one click of the Normalize button does.
+
+    If can_revert() says so, it brings back the saved original and
+    clears the undo information. Otherwise it normalizes current_text
+    and remembers the original so the next click can undo it. If
+    normalizing wouldn't change anything, the text is returned as it was
+    and nothing is remembered, so the button stays on Normalize."""
+    if can_revert(current_text, pre_normalize_text, normalized_text):
+        return NormalizationToggle(pre_normalize_text, "", "")
+
+    original = current_text.strip()
+    normalized = normalize_transcript(current_text)
+    if normalized == original:
+        return NormalizationToggle(original, "", "")
+    return NormalizationToggle(normalized, original, normalized)

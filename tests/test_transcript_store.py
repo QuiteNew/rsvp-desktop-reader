@@ -181,6 +181,19 @@ def test_set_transcript_stopped_updates_is_stopped(store):
     store.set_transcript_stopped(t.id, True)
     assert store.transcripts[0].is_stopped is True
 
+def test_set_transcript_normalization_saves_both_fields(store):
+    t = store.add_transcript("Title", "General")
+    store.set_transcript_normalization(t.id, "1. Original", "Original")
+    assert store.transcripts[0].pre_normalize_text == "1. Original"
+    assert store.transcripts[0].normalized_text == "Original"
+
+def test_set_transcript_normalization_with_empty_strings_clears_it(store):
+    t = store.add_transcript("Title", "General")
+    store.set_transcript_normalization(t.id, "1. Original", "Original")
+    store.set_transcript_normalization(t.id, "", "")
+    assert store.transcripts[0].pre_normalize_text == ""
+    assert store.transcripts[0].normalized_text == ""
+
 def test_setter_on_nonexistent_id_is_a_safe_no_op(store):
     # Every setter uses the same pattern, a _find_transcript call followed
     # by an `if t:` guard. This checks that pattern with one setter instead
@@ -314,6 +327,20 @@ def test_session_stats_persist_across_reload(tmp_path):
     assert reloaded_t1.total_words_read == 200
     assert reloaded_t1.total_time_spent_seconds == 45
 
+def test_normalization_undo_information_persists_across_reload(tmp_path):
+    # So Revert is still offered after switching transcripts or
+    # restarting the app.
+    directory = str(tmp_path)
+
+    first = TranscriptStore(data_directory=directory)
+    t1 = first.add_transcript("Lecture notes", "General")
+    first.set_transcript_normalization(t1.id, "1. Original", "Original")
+
+    second = TranscriptStore(data_directory=directory)
+    reloaded_t1 = next(t for t in second.transcripts if t.id == t1.id)
+    assert reloaded_t1.pre_normalize_text == "1. Original"
+    assert reloaded_t1.normalized_text == "Original"
+
 def test_next_id_continues_incrementing_after_reload(tmp_path):
     directory = str(tmp_path)
 
@@ -376,6 +403,23 @@ def test_old_save_file_missing_stats_fields_defaults_them_to_zero(tmp_path):
     assert t.times_read == 0
     assert t.total_words_read == 0
     assert t.total_time_spent_seconds == 0
+
+def test_old_save_file_missing_normalization_fields_defaults_them_to_empty(tmp_path):
+    """Like the stats fields above, a save file from before the Normalize
+    button has no pre_normalize_text or normalized_text. Both fall back
+    to the dataclass default, which means "nothing to revert"."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text(json.dumps({
+        "next_id": 2,
+        "current_space_index": 0,
+        "spaces": ["General"],
+        "transcripts": [{"id": 1, "title": "Old Transcript", "space": "General"}],
+    }), encoding="utf-8")
+
+    store = TranscriptStore(data_directory=str(tmp_path))
+    t = store.transcripts[0]
+    assert t.pre_normalize_text == ""
+    assert t.normalized_text == ""
 
 
 # set_data_directory

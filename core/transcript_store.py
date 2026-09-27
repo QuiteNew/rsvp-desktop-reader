@@ -366,6 +366,15 @@ class TranscriptStore:
             t.is_stopped = is_stopped
             self._save()
 
+    def set_transcript_normalization(self, transcript_id: int, pre_normalize_text: str, normalized_text: str) -> None:
+        """Save the Normalize button's undo information (see
+        core/models.py). Pass two empty strings to clear it."""
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.pre_normalize_text = pre_normalize_text
+            t.normalized_text = normalized_text
+            self._save()
+
     def add_session_stats(self, transcript_id: int, words_read: int, active_seconds: float) -> None:
         """Roll one finished reading session's numbers into this
         transcript's running totals. Called once a session actually ends
