@@ -288,7 +288,9 @@ Settings are organized into four tabs:
 - ~~Quality of life polish~~
 - ~~Keyboard shortcuts~~
 - ~~Comment and ctk.label clean up~~
-- Transcript draft normalization
+- ~~Transcript draft normalization~~
+- Selective running
+- Quality of life polish 2.0
 
 
 

@@ -393,6 +393,37 @@ def test_splitting_runs_alongside_the_other_steps():
     assert normalize_transcript(out, split_long_paragraphs=True) == out  # stable
 
 
+# A pasted wall is usually many physical lines, not one, since text copied
+# from a PDF or web page keeps its hard line breaks. Those must split too.
+
+_MULTILINE_WALL = "\n".join([_SENTENCE.strip()] * 12)  # 12 lines, one sentence each
+
+
+def test_a_multiline_wall_is_split_into_several_paragraphs():
+    out = normalize_transcript(_MULTILINE_WALL, split_long_paragraphs=True)
+    paragraphs = out.split("\n\n")
+    assert len(paragraphs) > 1
+    assert " ".join(paragraphs).split() == _MULTILINE_WALL.split()
+
+
+def test_a_multiline_wall_is_not_paragraphed_when_off():
+    # Off by default: normal tidying still runs, but no paragraph breaks
+    # are inserted.
+    assert "\n\n" not in normalize_transcript(_MULTILINE_WALL, split_long_paragraphs=False)
+
+
+def test_splitting_a_multiline_wall_twice_changes_nothing_more():
+    once = normalize_transcript(_MULTILINE_WALL, split_long_paragraphs=True)
+    assert normalize_transcript(once, split_long_paragraphs=True) == once
+
+
+def test_a_short_multiline_paragraph_keeps_its_own_lines():
+    # A handful of lines that don't add up to a wall are left exactly as
+    # the normal steps produced them, not reflowed into one line.
+    text = "First line here.\nSecond line here.\nThird line here."
+    assert normalize_transcript(text, split_long_paragraphs=True) == text
+
+
 # Normalizing twice gives the same result as normalizing once, so the
 # button does nothing on text that's already normalized.
 

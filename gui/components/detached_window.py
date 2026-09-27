@@ -17,6 +17,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
+        split_long_paragraphs_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -42,6 +43,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
+        self.split_long_paragraphs_enabled = split_long_paragraphs_enabled
 
         self.title(transcript.title)
         apply_app_icon(self)
@@ -66,7 +68,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
 
         self.input_view = TranscriptInput(
             self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text,
-            on_normalized=self._handle_normalized,
+            on_normalized=self._handle_normalized, split_long_paragraphs=split_long_paragraphs_enabled,
         )
         self.reader_display = ReaderDisplay(
             self,
@@ -109,6 +111,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_length_pacing_enabled(self, enabled: bool) -> None:
         self.length_pacing_enabled = enabled
         self.reader_display.set_length_pacing_enabled(enabled)
+
+    def set_split_long_paragraphs_enabled(self, enabled: bool) -> None:
+        self.split_long_paragraphs_enabled = enabled
+        self.input_view.set_split_long_paragraphs(enabled)
 
     def _render_current_state(self) -> None:
         self.toolbar.pack_forget()

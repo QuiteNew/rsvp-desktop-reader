@@ -124,6 +124,7 @@ class RSVPApp(ctk.CTk):
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
             guide_mark_color=self.settings_store.guide_mark_color,
             length_pacing_enabled=self.settings_store.length_pacing_enabled,
+            split_long_paragraphs_enabled=self.settings_store.split_long_paragraphs_enabled,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -627,6 +628,7 @@ class RSVPApp(ctk.CTk):
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             length_pacing_enabled=self.settings_store.length_pacing_enabled,
+            split_long_paragraphs_enabled=self.settings_store.split_long_paragraphs_enabled,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -691,6 +693,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_length_pacing_enabled(values["length_pacing_enabled"])
         self.canvas.set_length_pacing_enabled(values["length_pacing_enabled"])
+
+        self.settings_store.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
+        self.canvas.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 

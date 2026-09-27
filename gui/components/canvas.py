@@ -25,6 +25,7 @@ class Canvas(ctk.CTkFrame):
         guide_mark_length_percent: int = 35,
         guide_mark_color: str = "#3B2E27",
         length_pacing_enabled: bool = False,
+        split_long_paragraphs_enabled: bool = False,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -43,6 +44,7 @@ class Canvas(ctk.CTkFrame):
         self._guide_mark_length_percent = guide_mark_length_percent
         self._guide_mark_color = guide_mark_color
         self._length_pacing_enabled = length_pacing_enabled
+        self._split_long_paragraphs_enabled = split_long_paragraphs_enabled
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -70,6 +72,7 @@ class Canvas(ctk.CTkFrame):
         self.empty_label = ctk.CTkLabel(self.content_area, text="Select or create a transcript to begin")
         self.input_view = TranscriptInput(
             self.content_area, on_submit=self._handle_text_submitted, on_normalized=self._handle_normalized,
+            split_long_paragraphs=self._split_long_paragraphs_enabled,
         )
         self.reader_display = ReaderDisplay(
             self.content_area,
@@ -216,6 +219,12 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.set_length_pacing_enabled(enabled)
 
+    def set_split_long_paragraphs_enabled(self, enabled: bool) -> None:
+        self._split_long_paragraphs_enabled = enabled
+        self.input_view.set_split_long_paragraphs(enabled)
+        if self._detached_window:
+            self._detached_window.set_split_long_paragraphs_enabled(enabled)
+
     def save_pending_draft(self) -> None:
         self._capture_current_draft()
 
@@ -361,6 +370,7 @@ class Canvas(ctk.CTkFrame):
             guide_mark_length_percent=self._guide_mark_length_percent,
             guide_mark_color=self._guide_mark_color,
             length_pacing_enabled=self._length_pacing_enabled,
+            split_long_paragraphs_enabled=self._split_long_paragraphs_enabled,
         )
         self._show_detached_placeholder()
 

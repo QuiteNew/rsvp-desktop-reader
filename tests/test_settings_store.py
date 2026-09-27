@@ -283,3 +283,30 @@ def test_set_highlight_offset_does_not_affect_other_settings(store):
     store.set_defaults(500, "#111111", "#222222", "#333333", 32)
     store.set_highlight_offset_px(-2)
     assert store.default_wpm == 500
+
+
+# split_long_paragraphs_enabled
+
+def test_fresh_store_split_long_paragraphs_matches_defaults(store):
+    assert store.split_long_paragraphs_enabled == AppSettings().split_long_paragraphs_enabled
+
+def test_set_split_long_paragraphs_enabled_true(store):
+    store.set_split_long_paragraphs_enabled(True)
+    assert store.split_long_paragraphs_enabled is True
+
+def test_set_split_long_paragraphs_enabled_false(store):
+    store.set_split_long_paragraphs_enabled(True)
+    store.set_split_long_paragraphs_enabled(False)
+    assert store.split_long_paragraphs_enabled is False
+
+def test_set_split_long_paragraphs_does_not_affect_other_settings(store):
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
+    store.set_split_long_paragraphs_enabled(True)
+    assert store.default_wpm == 500
+
+def test_split_long_paragraphs_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_split_long_paragraphs_enabled(True)
+    second = SettingsStore(settings_directory=directory)
+    assert second.split_long_paragraphs_enabled is True

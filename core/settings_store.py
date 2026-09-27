@@ -51,6 +51,9 @@ class AppSettings:
     guide_mark_color_is_default: bool = True  # whether guide_mark_color is still tracking the app-wide Light/Dark
                                                # default, or something picked by hand in Settings. See
                                                # SettingsStore.set_guide_mark_color() and resync_guide_mark_color_default().
+    split_long_paragraphs_enabled: bool = False  # global, not per-transcript: whether the Normalize button also breaks a
+                                                  # long wall of prose into paragraphs at sentence ends. Off by default.
+                                                  # See core/normalizer.py's normalize_transcript(split_long_paragraphs=...).
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -209,6 +212,10 @@ class SettingsStore:
     def guide_mark_color(self) -> str:
         return self._settings.guide_mark_color
 
+    @property
+    def split_long_paragraphs_enabled(self) -> bool:
+        return self._settings.split_long_paragraphs_enabled
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -269,6 +276,10 @@ class SettingsStore:
 
     def set_length_pacing_enabled(self, enabled: bool) -> None:
         self._settings.length_pacing_enabled = enabled
+        self._save()
+
+    def set_split_long_paragraphs_enabled(self, enabled: bool) -> None:
+        self._settings.split_long_paragraphs_enabled = enabled
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:

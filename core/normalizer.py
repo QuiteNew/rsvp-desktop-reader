@@ -288,16 +288,24 @@ def _split_numbered_run(line: str) -> str:
 
 
 def _break_up_long_paragraphs(paragraphs: list[list[str]]) -> list[list[str]]:
-    """Break each long single-line paragraph into several at sentence
-    ends. A paragraph is only touched when it's one line, at least
-    _LONG_PARAGRAPH_CHARS long, and has three or more sentences; anything
-    else is passed through unchanged."""
+    """Break each long paragraph into several at sentence ends. A
+    paragraph's lines are joined into one string first, so a wall pasted
+    as many physical lines (the usual shape of text copied from a PDF or
+    web page) is handled, not just one that happens to be a single line.
+    The reflowed paragraphs replace the original only when the join is at
+    least _LONG_PARAGRAPH_CHARS long and actually splits into more than
+    one; anything shorter, or that stays a single paragraph (two
+    sentences or fewer, or one long sentence), is passed through
+    unchanged with its own lines intact."""
     result: list[list[str]] = []
     for paragraph in paragraphs:
-        if len(paragraph) == 1 and len(paragraph[0]) >= _LONG_PARAGRAPH_CHARS:
-            result.extend([chunk] for chunk in _split_into_paragraphs(paragraph[0]))
-        else:
-            result.append(paragraph)
+        joined = " ".join(paragraph)
+        if len(joined) >= _LONG_PARAGRAPH_CHARS:
+            chunks = _split_into_paragraphs(joined)
+            if len(chunks) > 1:
+                result.extend([chunk] for chunk in chunks)
+                continue
+        result.append(paragraph)
     return result
 
 

@@ -17,17 +17,21 @@ class TranscriptInput(ctk.CTkFrame):
     through on_normalized.
 
     A click that finds nothing to change shows "Nothing to change" beside
-    the button for a moment, so it doesn't look like the click was lost."""
+    the button for a moment, so it doesn't look like the click was lost.
+
+    Whether a click also splits long paragraphs is a global Settings
+    toggle, passed in and kept current through set_split_long_paragraphs()."""
 
     FEEDBACK_MS = 2000
 
-    def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None):
+    def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None, split_long_paragraphs: bool = False):
         super().__init__(master, fg_color="transparent")
         self.on_submit = on_submit
         self.on_normalized = on_normalized
         self._pre_normalize_text = ""
         self._normalized_text = ""
         self._feedback_after_id = None
+        self._split_long_paragraphs = split_long_paragraphs
 
         self.textbox = ctk.CTkTextbox(self, width=500, height=250)
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
@@ -95,9 +99,19 @@ class TranscriptInput(ctk.CTkFrame):
         self._normalized_text = normalized_text
         self._refresh_normalize_button()
 
+    def set_split_long_paragraphs(self, enabled: bool) -> None:
+        """Whether the Normalize button also splits a long wall of prose
+        into paragraphs. Read at click time by _handle_normalize(); see
+        core/normalizer.py. Kept in step by whoever owns this widget when
+        the Settings toggle changes."""
+        self._split_long_paragraphs = enabled
+
     def _handle_normalize(self) -> None:
         text_before = self.get_text().strip()
-        result = toggle_normalization(self.get_text(), self._pre_normalize_text, self._normalized_text)
+        result = toggle_normalization(
+            self.get_text(), self._pre_normalize_text, self._normalized_text,
+            split_long_paragraphs=self._split_long_paragraphs,
+        )
         self._pre_normalize_text = result.pre_normalize_text
         self._normalized_text = result.normalized_text
         self.set_text(result.text)

@@ -31,6 +31,7 @@ class SettingsWindow(ctk.CTkToplevel):
         default_font_size, font_size_step, highlight_offset_px,
         skip_word_count, pause_on_skip,
         length_pacing_enabled,
+        split_long_paragraphs_enabled,
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
         guide_mark_length_percent,
@@ -106,7 +107,8 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_defaults_tab(
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
-            skip_word_count, pause_on_skip, length_pacing_enabled, guide_mark_horizontal_enabled,
+            skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled,
+            guide_mark_horizontal_enabled,
             guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
@@ -288,7 +290,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -425,6 +427,15 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
+        self.split_long_paragraphs_switch = self._styled_switch(scroll, "Split long paragraphs when normalizing")
+        (self.split_long_paragraphs_switch.select() if split_long_paragraphs_enabled else self.split_long_paragraphs_switch.deselect())
+        self.split_long_paragraphs_switch.pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(
+            scroll,
+            text="When you click Normalize, also break a long wall of text into paragraphs at sentence ends, so it's easier to read in the edit box. This only changes how the text is laid out for editing, never what gets read or the reading speed. Applies globally; takes effect the next time you click Normalize.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript and all future ones",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
@@ -532,6 +543,8 @@ class SettingsWindow(ctk.CTkToplevel):
         (self.guide_mark_horizontal_switch.select() if original.guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
 
         (self.length_pacing_switch.select() if original.length_pacing_enabled else self.length_pacing_switch.deselect())
+
+        (self.split_long_paragraphs_switch.select() if original.split_long_paragraphs_enabled else self.split_long_paragraphs_switch.deselect())
 
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
@@ -807,6 +820,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["pause_on_skip"] = bool(self.pause_on_skip_switch.get())
         values["guide_mark_horizontal_enabled"] = bool(self.guide_mark_horizontal_switch.get())
         values["length_pacing_enabled"] = bool(self.length_pacing_switch.get())
+        values["split_long_paragraphs_enabled"] = bool(self.split_long_paragraphs_switch.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory
