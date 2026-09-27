@@ -311,6 +311,88 @@ def test_messy_paste_with_several_problems_at_once():
     assert normalize_transcript(text) == expected
 
 
+# Splitting a long wall of prose into paragraphs (opt-in, off by default)
+
+_SENTENCE = "This is a sentence that carries a little weight and length. "  # ~59 chars
+
+
+def test_splitting_is_off_by_default():
+    wall = (_SENTENCE * 12).strip()
+    assert normalize_transcript(wall) == wall
+    assert normalize_transcript(wall, split_long_paragraphs=False) == wall
+
+
+def test_a_long_wall_is_split_into_several_paragraphs():
+    wall = (_SENTENCE * 12).strip()  # ~700 chars, 12 sentences
+    out = normalize_transcript(wall, split_long_paragraphs=True)
+    paragraphs = out.split("\n\n")
+    assert len(paragraphs) > 1
+    # only regrouped: no word is lost, added or reordered
+    assert " ".join(paragraphs).split() == wall.split()
+
+
+def test_splitting_a_wall_twice_changes_nothing_more():
+    wall = (_SENTENCE * 12).strip()
+    once = normalize_transcript(wall, split_long_paragraphs=True)
+    assert normalize_transcript(once, split_long_paragraphs=True) == once
+
+
+def test_a_short_paragraph_is_left_alone():
+    text = "Short one. Short two. Short three. Short four."
+    assert normalize_transcript(text, split_long_paragraphs=True) == text
+
+
+def test_a_long_paragraph_of_two_sentences_is_left_alone():
+    text = "A" * 300 + " ends here. " + "B" * 300 + " also ends here."
+    assert normalize_transcript(text, split_long_paragraphs=True) == text
+
+
+def test_a_long_run_on_with_no_sentence_end_is_left_alone():
+    text = ("word " * 120).strip()  # ~600 chars, no . ! or ?
+    assert normalize_transcript(text, split_long_paragraphs=True) == text
+
+
+def test_a_quote_can_sit_at_a_sentence_end():
+    pad = "Padding sentence to clear the length gate here. " * 8
+    text = pad + 'He said "Hello." She left the room.'
+    out = normalize_transcript(text, split_long_paragraphs=True)
+    assert " ".join(out.split("\n\n")).split() == text.split()
+    assert '"Hello."' in out
+
+
+def test_never_splits_after_an_abbreviation_or_initial():
+    part = ("The team at Google Inc. reviewed the U.S. data with Dr. Smith, e.g. the "
+            "key trends noted earlier by J. W. Forrester. ")
+    wall = (part * 5).strip()
+    out = normalize_transcript(wall, split_long_paragraphs=True)
+    paragraphs = out.split("\n\n")
+    assert len(paragraphs) > 1  # it really did split
+    for paragraph in paragraphs:
+        ending = paragraph.rstrip().lower()
+        for abbr in ("inc.", "u.s.", "dr.", "e.g.", "j.", "w."):
+            assert not ending.endswith(abbr)
+
+
+def test_never_splits_at_a_decimal_or_an_ellipsis():
+    part = ("The reading covered pi is 3.14 in the notes and then continued for a "
+            "while... eventually reaching a natural stopping point at last here. ")
+    wall = (part * 5).strip()
+    out = normalize_transcript(wall, split_long_paragraphs=True)
+    for paragraph in out.split("\n\n"):
+        stripped = paragraph.rstrip()
+        assert not stripped.endswith("3.14")
+        assert not stripped.endswith("...")
+
+
+def test_splitting_runs_alongside_the_other_steps():
+    # A wall that also carries a timestamp and a trailing numbered list.
+    wall = "[00:00:05] " + (_SENTENCE * 10) + "Steps: 1. First 2. Second 3. Third"
+    out = normalize_transcript(wall, split_long_paragraphs=True)
+    assert "00:00:05" not in out          # timestamp gone
+    assert "\n\nFirst\n\nSecond\n\nThird" in out  # list split out
+    assert normalize_transcript(out, split_long_paragraphs=True) == out  # stable
+
+
 # Normalizing twice gives the same result as normalizing once, so the
 # button does nothing on text that's already normalized.
 

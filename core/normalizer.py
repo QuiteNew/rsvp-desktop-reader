@@ -40,6 +40,10 @@ to show up as a word, followed by a full sentence-end pause.
 Running this on text it already produced returns that text unchanged,
 so clicking Normalize on normalized text does nothing.
 
+When split_long_paragraphs is on (a Settings toggle, off by default),
+a final step breaks a wall of prose into paragraphs at sentence ends,
+purely so the edit box is readable; it never changes what gets read.
+
 toggle_normalization() and can_revert() at the bottom hold the
 button's click logic, so the GUI only has to show what they decide.
 
@@ -92,6 +96,34 @@ _MAX_PASSES = 5
 
 _SPACE_RUN = re.compile(r"[ \t]+")
 
+# A paragraph is only broken up when it's at least this long. Below it,
+# and for any paragraph of two sentences or fewer, the text is left as
+# it is. Splitting closes the current paragraph once it passes this
+# length and starts the next sentence in a new one, so paragraphs come
+# out roughly this size and a little over.
+_LONG_PARAGRAPH_CHARS = 400
+
+# Words that end in a period without ending a sentence, so a split must
+# not happen after them. Stored without the trailing dot and lowercased;
+# the ones with an internal dot ("e.g", "u.s") are matched whole.
+_ABBREVIATIONS = frozenset({
+    "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc",
+    "e.g", "i.e", "cf", "al", "inc", "ltd", "co", "corp", "vol", "no",
+    "pp", "p", "fig", "eq", "ch", "a.m", "p.m", "u.s", "u.k", "ph.d",
+})
+
+# A candidate sentence end: one or more of . ! ? , then any closing
+# quotes or brackets, then a space, then the next sentence's first
+# character (an opening quote or a capital). The first group is the
+# run of end marks, checked below so an ellipsis "..." isn't treated
+# as an end.
+_SENTENCE_END_CANDIDATE = re.compile(
+    r'([.!?]+)["\'”’)\]]*\s+(?=["\'“‘([]*[A-Z])'
+)
+# The word sitting right before the end mark, used to spot an
+# abbreviation or a single initial ("J.").
+_WORD_BEFORE_END = re.compile(r'([A-Za-z][A-Za-z.]*)$')
+
 _LOST_F = re.compile("\ufffd(?=[il])")
 
 # Markers that count wherever they start a line. A marker may also sit
@@ -134,19 +166,21 @@ _CLAUSE_END = re.compile(r"[,;]$")
 _HYPHEN_BREAK = re.compile(r"[A-Za-z]-$")
 
 
-def normalize_transcript(text: str) -> str:
+def normalize_transcript(text: str, split_long_paragraphs: bool = False) -> str:
     """Return a normalized copy of text. See the module docstring for
-    what changes and what's deliberately left alone."""
-    result = _normalize_once(text)
+    what changes and what's deliberately left alone. When
+    split_long_paragraphs is on, a wall of prose is also broken into
+    paragraphs at sentence ends."""
+    result = _normalize_once(text, split_long_paragraphs)
     for _ in range(_MAX_PASSES - 1):
-        again = _normalize_once(result)
+        again = _normalize_once(result, split_long_paragraphs)
         if again == result:
             break
         result = again
     return result
 
 
-def _normalize_once(text: str) -> str:
+def _normalize_once(text: str, split_long_paragraphs: bool = False) -> str:
     lines = _prepare_lines(text)
     letter_markers_trusted = _count_matches(_LETTER_MARKER, lines) >= 2
     decimal_markers_trusted = _count_matches(_DECIMAL_MARKER, lines) >= 2
@@ -196,6 +230,8 @@ def _normalize_once(text: str) -> str:
             current.append(line)
 
     finish_paragraph()
+    if split_long_paragraphs:
+        paragraphs = _break_up_long_paragraphs(paragraphs)
     return "\n\n".join("\n".join(paragraph) for paragraph in paragraphs)
 
 
@@ -249,6 +285,70 @@ def _split_numbered_run(line: str) -> str:
     for position in sorted(split_points, reverse=True):
         line = line[:position] + "\n" + line[position:]
     return line
+
+
+def _break_up_long_paragraphs(paragraphs: list[list[str]]) -> list[list[str]]:
+    """Break each long single-line paragraph into several at sentence
+    ends. A paragraph is only touched when it's one line, at least
+    _LONG_PARAGRAPH_CHARS long, and has three or more sentences; anything
+    else is passed through unchanged."""
+    result: list[list[str]] = []
+    for paragraph in paragraphs:
+        if len(paragraph) == 1 and len(paragraph[0]) >= _LONG_PARAGRAPH_CHARS:
+            result.extend([chunk] for chunk in _split_into_paragraphs(paragraph[0]))
+        else:
+            result.append(paragraph)
+    return result
+
+
+def _split_into_paragraphs(line: str) -> list[str]:
+    """Group the sentences of one long line into paragraphs, starting a
+    new one each time the current paragraph passes _LONG_PARAGRAPH_CHARS.
+    A line of two sentences or fewer is returned unchanged, so there's
+    always something real to split."""
+    sentences = _split_sentences(line)
+    if len(sentences) < 3:
+        return [line]
+    paragraphs = []
+    current = ""
+    for sentence in sentences:
+        current = sentence if not current else current + " " + sentence
+        if len(current) >= _LONG_PARAGRAPH_CHARS:
+            paragraphs.append(current)
+            current = ""
+    if current:
+        paragraphs.append(current)
+    return paragraphs
+
+
+def _split_sentences(line: str) -> list[str]:
+    """Split a line into sentences at real sentence ends. Joining the
+    result back with single spaces reproduces the line. A candidate end
+    is skipped when it's an ellipsis, or when the word before it is an
+    abbreviation ("Dr.", "e.g.") or a single initial ("J."), so the
+    split errs toward leaving text together rather than cutting it in
+    the wrong place."""
+    starts = []
+    for match in _SENTENCE_END_CANDIDATE.finditer(line):
+        marks = match.group(1)
+        if set(marks) == {"."} and len(marks) >= 2:
+            continue  # an ellipsis, not a sentence end
+        word = _WORD_BEFORE_END.search(line[:match.start()])
+        if word:
+            token = word.group(1).lower().rstrip(".")
+            if len(token) == 1 or token in _ABBREVIATIONS:
+                continue
+        starts.append(match.end())
+
+    if not starts:
+        return [line]
+    sentences = []
+    cut = 0
+    for start in starts:
+        sentences.append(line[cut:start].strip())
+        cut = start
+    sentences.append(line[cut:].strip())
+    return sentences
 
 
 def _count_matches(pattern: re.Pattern, lines: list[str]) -> int:
@@ -316,19 +416,24 @@ def can_revert(current_text: str, pre_normalize_text: str, normalized_text: str)
     return bool(pre_normalize_text) and current_text.strip() == normalized_text
 
 
-def toggle_normalization(current_text: str, pre_normalize_text: str, normalized_text: str) -> NormalizationToggle:
+def toggle_normalization(
+    current_text: str, pre_normalize_text: str, normalized_text: str,
+    split_long_paragraphs: bool = False,
+) -> NormalizationToggle:
     """What one click of the Normalize button does.
 
     If can_revert() says so, it brings back the saved original and
     clears the undo information. Otherwise it normalizes current_text
     and remembers the original so the next click can undo it. If
     normalizing wouldn't change anything, the text is returned as it was
-    and nothing is remembered, so the button stays on Normalize."""
+    and nothing is remembered, so the button stays on Normalize.
+
+    split_long_paragraphs is passed straight to normalize_transcript()."""
     if can_revert(current_text, pre_normalize_text, normalized_text):
         return NormalizationToggle(pre_normalize_text, "", "")
 
     original = current_text.strip()
-    normalized = normalize_transcript(current_text)
+    normalized = normalize_transcript(current_text, split_long_paragraphs)
     if normalized == original:
         return NormalizationToggle(original, "", "")
     return NormalizationToggle(normalized, original, normalized)
