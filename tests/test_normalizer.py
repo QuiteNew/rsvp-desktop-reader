@@ -202,6 +202,88 @@ def test_replacement_character_anywhere_else_is_left_alone():
     assert normalize_transcript("caf\ufffd au lait") == "caf\ufffd au lait"
 
 
+# Timestamps
+
+def test_bracketed_timestamp_is_removed():
+    assert normalize_transcript("[00:01:23] Welcome to the show.") == "Welcome to the show."
+
+def test_parenthesized_short_timestamp_is_removed():
+    assert normalize_transcript("(1:23) Today we talk.") == "Today we talk."
+
+def test_bare_hour_minute_second_timestamp_is_removed():
+    assert normalize_transcript("00:02:45 rapid reading.") == "rapid reading."
+
+def test_bare_time_of_day_is_left_alone():
+    assert normalize_transcript("We met at 10:30 today.") == "We met at 10:30 today."
+
+def test_line_holding_only_a_timestamp_does_not_split_a_sentence():
+    assert normalize_transcript("the quick\n[00:01:00]\nbrown fox") == "the quick brown fox"
+
+def test_removed_timestamp_does_not_strand_punctuation():
+    # A removed timestamp shouldn't leave a lone comma that then gets
+    # flashed as its own word while reading.
+    assert normalize_transcript("text [00:01:23], more") == "text, more"
+
+def test_parenthesised_timestamp_list_collapses_cleanly():
+    text = "See ([00:01:23], (1:23), 00:02:45, the notes)"
+    assert normalize_transcript(text) == "See (the notes)"
+
+def test_pasted_subtitle_file_is_cleaned_up():
+    text = (
+        "1\n00:00:01,000 --> 00:00:04,000\nHello world.\n\n"
+        "2\n00:00:04,500 --> 00:00:06,000\nand then we went\nto the store.\n"
+    )
+    assert normalize_transcript(text) == "Hello world.\n\nand then we went to the store."
+
+
+# Lists that continue inside a single line
+
+def test_numbered_run_inside_a_line_is_split():
+    assert normalize_transcript("Steps: 1. Mix 2. Bake 3. Eat") == "Steps:\n\nMix\n\nBake\n\nEat"
+
+def test_parenthesis_numbered_runs_can_restart_at_one():
+    text = "Buy: 1) milk 2) eggs and 1) bread 2) jam"
+    assert normalize_transcript(text) == "Buy:\n\nmilk\n\neggs and\n\nbread\n\njam"
+
+def test_lone_number_with_a_period_is_left_alone():
+    assert normalize_transcript("Version 2. Then we left.") == "Version 2. Then we left."
+
+def test_numbers_that_do_not_count_up_from_one_are_left_alone():
+    assert normalize_transcript("Priority 1. Then 3. later") == "Priority 1. Then 3. later"
+
+def test_page_reference_is_not_taken_as_a_list_marker():
+    text = "Tribune, December 16, 1992, p. 1. 2. J. W. Forrester"
+    assert normalize_transcript(text) == text
+
+def test_figure_references_are_not_taken_as_list_markers():
+    assert normalize_transcript("See Fig. 1. and Fig. 2. for details.") == "See Fig. 1. and Fig. 2. for details."
+
+def test_checkboxes_inside_a_line_split_it():
+    assert normalize_transcript("[ ] todo one [x] done two") == "todo one\n\ndone two"
+
+def test_checkboxes_at_the_start_of_lines():
+    assert normalize_transcript("[X] Buy milk\n[ ] Buy eggs") == "Buy milk\n\nBuy eggs"
+
+def test_checkbox_with_nothing_after_it_is_removed():
+    assert normalize_transcript("the chaotic text block [X].") == "the chaotic text block."
+
+def test_one_line_paste_with_checkboxes_and_empty_numbered_runs():
+    # The kind of text that first showed these weren't handled: one
+    # long line, checkboxes between sentences, and a run of numbers
+    # with nothing after them.
+    text = (
+        "Frogs jump over mushrooms [X] Cats run past algorithms [X] "
+        "Mice navigate labyrinths 1. 2. 3. 1) 2) 3) with words mixed together [X]."
+    )
+    expected = (
+        "Frogs jump over mushrooms\n\n"
+        "Cats run past algorithms\n\n"
+        "Mice navigate labyrinths\n\n"
+        "with words mixed together."
+    )
+    assert normalize_transcript(text) == expected
+
+
 # Everything together
 
 def test_messy_paste_with_several_problems_at_once():
@@ -247,13 +329,21 @@ def test_messy_paste_with_several_problems_at_once():
     # Stripping "12." exposes "0.50" at the start of a line; a second
     # pass must not then treat that as a marker too.
     "12. 0.50 0.25\n13. 0.75 0.10",
+    "[00:01:23] Welcome.\n(1:23) Next.",
+    "Steps: 1. Mix 2. Bake 3. Eat",
+    # A run split inside the first line, then broken lines joined back
+    # up, can line up a new run that only a second pass would split.
+    "Intro 1. First item that\ncontinues 2. Second 3. Third",
+    "Frogs [X] Cats [X] Mice 1. 2. 3. 1) 2) 3) words [X].",
+    "text [00:01:23], more",
+    "See ([00:01:23], (1:23), 00:02:45, the notes)",
 ])
 def test_normalizing_twice_changes_nothing_more(text):
     once = normalize_transcript(text)
     assert normalize_transcript(once) == once
 
 
-# can_revert: which label the button shows
+# can_revert: which icon the button shows
 
 def test_can_revert_when_text_is_still_what_normalizing_produced():
     assert can_revert("Buy milk\n\nBuy eggs", "1. Buy milk\n2. Buy eggs", "Buy milk\n\nBuy eggs")

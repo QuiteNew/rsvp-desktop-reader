@@ -6,6 +6,15 @@ its own paragraph, keeps headings such as "Chapter 3" on their own
 line, drops lines that are only a number (usually PDF page numbers),
 and rejoins lines that were broken in the middle of a sentence.
 
+It removes timestamps, using core/parser.py's TIMESTAMP_PATTERN so it
+agrees with reading and importing: any in square brackets or
+parentheses ("[00:01:23]", "(1:23)"), full hour:minute:second ones
+("00:02:45"), subtitle timing lines, and a bare "0:05" alone on its
+line. A "10:30" inside a sentence is left alone, since that's usually a
+time of day. A line that held nothing but a timestamp is dropped,
+rather than being left behind as a blank line that would split a
+paragraph.
+
 It also repairs two kinds of damage that text pulled out of a PDF
 often has. Combined letters such as "ﬁ" become plain letters, and a
 "\ufffd" (the replacement character a PDF reader writes when it can't
@@ -14,11 +23,14 @@ since it's almost always the lost first half of "fi", "fl" or "ffi".
 That second one is a guess, which is why it only happens here, where
 the button can revert it, and not on import.
 
-It only works with the line breaks that are already there. It never
-splits a line in two, except at bullet symbols such as "•", which don't
-appear in ordinary prose. That keeps it out of guessing where a
-sentence ends inside a line, where "Dr.", "e.g." and "3.14" make
-mistakes likely.
+It mostly works with the line breaks that are already there. It only
+splits a line in two where a list clearly continues inside it: at
+bullet symbols such as "•" and checkboxes such as "[X]", which don't
+appear in ordinary prose, and at numbering that counts up in order
+within the line ("1. ... 2. ... 3."). A single "version 2." never
+forms such a run, so it's left alone. Otherwise it stays out of
+guessing where a sentence ends inside a line, where "Dr.", "e.g." and
+"3.14" make mistakes likely.
 
 Line breaks don't change what gets read, since core/parser.py's
 clean_transcript() flattens all whitespace first. What does change is
@@ -36,7 +48,7 @@ No GUI dependency here (see core/ vs gui/ in the project brief)."""
 import re
 from dataclasses import dataclass
 
-from core.parser import expand_ligatures
+from core.parser import expand_ligatures, strip_timestamps
 
 BULLET_SYMBOLS = "•●○◦▪▫■□‣►▶➢➤✓✔⁃"
 
@@ -51,6 +63,33 @@ _BULLET_CLASS = "[" + re.escape(BULLET_SYMBOLS) + "]"
 # "Fruits: • Apples • Pears" ends up as one line per item.
 _INLINE_BULLET = re.compile(r"[ \t]*(" + _BULLET_CLASS + r")[ \t]*")
 
+# A checkbox, "[X]", "[x]" or "[ ]". Like a bullet symbol it starts a new
+# line wherever it appears, but only when text follows it. One with
+# nothing after it but closing punctuation ("...the end [X].") is simply
+# removed, since it would otherwise become an empty item.
+_CHECKBOX = r"\[[ xX]\]"
+_INLINE_CHECKBOX = re.compile(r"[ \t]*(" + _CHECKBOX + r")[ \t]+(?=\S)")
+_TRAILING_CHECKBOX = re.compile(r"[ \t]*" + _CHECKBOX + r"(?=[.!?,;:]*[ \t]*$)", re.MULTILINE)
+
+# A number used as a list marker inside a line: "2." or "2)", standing
+# on its own between spaces. The lookarounds keep "3.14", "v2." and
+# "(2)" out.
+_INLINE_NUMBER = re.compile(r"(?<!\S)(\d{1,3})([.)])(?=\s|$)")
+
+# A number right after one of these is a reference ("p. 12.", "Fig. 3.",
+# "Vol. 2."), not a list marker, so it's never split off or removed.
+_REFERENCE_ABBREVIATIONS = re.compile(
+    r"(?i)(?:^|\s)(?:p|pp|no|nos|vol|ch|chap|fig|figs|sec|eq|art|para|pt)\.\s*$"
+)
+
+# How many times normalize_transcript() may repeat its pass. Splitting a
+# numbered run happens before broken lines are joined back up, so the
+# joining can occasionally line up a new run that only a second pass
+# would split. Repeating until nothing changes means one click always
+# does everything a second click would. Two passes are almost always
+# enough; the cap only guards against looping forever.
+_MAX_PASSES = 5
+
 _SPACE_RUN = re.compile(r"[ \t]+")
 
 _LOST_F = re.compile("\ufffd(?=[il])")
@@ -60,7 +99,7 @@ _LOST_F = re.compile("\ufffd(?=[il])")
 # common in text copied out of a PDF. Numbers are capped at three
 # digits so a wrapped year like "1990." isn't mistaken for one.
 _CLEAR_MARKER = re.compile(
-    r"^(?:" + _BULLET_CLASS + r"|[-*–]"
+    r"^(?:" + _BULLET_CLASS + r"|" + _CHECKBOX + r"|[-*–]"
     r"|\d{1,3}(?:\.\d{1,3})*[.):]"
     r"|\(\d{1,3}\)|\[\d{1,3}\])(?:\s+|$)"
 )
@@ -98,6 +137,16 @@ _HYPHEN_BREAK = re.compile(r"[A-Za-z]-$")
 def normalize_transcript(text: str) -> str:
     """Return a normalized copy of text. See the module docstring for
     what changes and what's deliberately left alone."""
+    result = _normalize_once(text)
+    for _ in range(_MAX_PASSES - 1):
+        again = _normalize_once(result)
+        if again == result:
+            break
+        result = again
+    return result
+
+
+def _normalize_once(text: str) -> str:
     lines = _prepare_lines(text)
     letter_markers_trusted = _count_matches(_LETTER_MARKER, lines) >= 2
     decimal_markers_trusted = _count_matches(_DECIMAL_MARKER, lines) >= 2
@@ -155,7 +204,51 @@ def _prepare_lines(text: str) -> list[str]:
     text = expand_ligatures(text)
     text = _LOST_F.sub("f", text)
     text = _INLINE_BULLET.sub(r"\n\1 ", text)
-    return [_SPACE_RUN.sub(" ", line).strip() for line in text.split("\n")]
+    text = _TRAILING_CHECKBOX.sub("", text)
+    text = _INLINE_CHECKBOX.sub(r"\n\1 ", text)
+
+    lines = []
+    for line in text.split("\n"):
+        without_timestamps = strip_timestamps(line)
+        if line.strip() and not without_timestamps.strip():
+            # Nothing but a timestamp: drop the line entirely, so it
+            # doesn't turn into a blank line that splits a paragraph.
+            continue
+        lines.extend(_split_numbered_run(without_timestamps).split("\n"))
+    return [_SPACE_RUN.sub(" ", line).strip() for line in lines]
+
+
+def _split_numbered_run(line: str) -> str:
+    """Put a line break before each marker of a numbered list that runs
+    inside the line: "Steps: 1. Mix 2. Bake" becomes "Steps:", "1. Mix"
+    and "2. Bake". A run has to start at 1 and count up by one with the
+    same closing mark, and has to reach at least 2, so a lone number
+    with a period in ordinary prose never splits anything. "1. 2. 3."
+    and "1) 2) 3)" are separate runs, and a new run can start again at
+    1 later in the same line."""
+    split_points = []
+    for mark in ".)":
+        run: list[int] = []
+        expected = 1
+        for match in _INLINE_NUMBER.finditer(line):
+            if match.group(2) != mark:
+                continue
+            if _REFERENCE_ABBREVIATIONS.search(line[:match.start()]):
+                continue
+            number = int(match.group(1))
+            if number == expected:
+                run.append(match.start())
+                expected += 1
+            else:
+                if len(run) >= 2:
+                    split_points.extend(run)
+                run, expected = ([match.start()], 2) if number == 1 else ([], 1)
+        if len(run) >= 2:
+            split_points.extend(run)
+
+    for position in sorted(split_points, reverse=True):
+        line = line[:position] + "\n" + line[position:]
+    return line
 
 
 def _count_matches(pattern: re.Pattern, lines: list[str]) -> int:

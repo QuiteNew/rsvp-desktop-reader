@@ -14,7 +14,12 @@ class TranscriptInput(ctk.CTkFrame):
     does. This widget only keeps a copy of the transcript's undo
     information to decide which icon to show. Whoever owns it passes
     that in with set_normalization() and saves the result of each click
-    through on_normalized."""
+    through on_normalized.
+
+    A click that finds nothing to change shows "Nothing to change" beside
+    the button for a moment, so it doesn't look like the click was lost."""
+
+    FEEDBACK_MS = 2000
 
     def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None):
         super().__init__(master, fg_color="transparent")
@@ -22,6 +27,7 @@ class TranscriptInput(ctk.CTkFrame):
         self.on_normalized = on_normalized
         self._pre_normalize_text = ""
         self._normalized_text = ""
+        self._feedback_after_id = None
 
         self.textbox = ctk.CTkTextbox(self, width=500, height=250)
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
@@ -64,6 +70,12 @@ class TranscriptInput(ctk.CTkFrame):
         self.normalize_button._image_label.configure(borderwidth=0, padx=0, pady=0, highlightthickness=0)
         self.normalize_button.grid(row=0, column=0, sticky="w")
 
+        # Shares the button's column, so Start reading stays centered.
+        self.feedback_label = ctk.CTkLabel(
+            button_row, text="", text_color="gray50", font=ctk.CTkFont(size=12),
+        )
+        self.feedback_label.grid(row=0, column=0, sticky="w", padx=(44, 0))
+
     def get_text(self) -> str:
         """Return whatever's currently typed, submitted or not."""
         return self.textbox.get("1.0", "end")
@@ -84,12 +96,28 @@ class TranscriptInput(ctk.CTkFrame):
         self._refresh_normalize_button()
 
     def _handle_normalize(self) -> None:
+        text_before = self.get_text().strip()
         result = toggle_normalization(self.get_text(), self._pre_normalize_text, self._normalized_text)
         self._pre_normalize_text = result.pre_normalize_text
         self._normalized_text = result.normalized_text
         self.set_text(result.text)
+        if result.text == text_before:
+            self._show_feedback("Nothing to change")
         if self.on_normalized:
             self.on_normalized(result)
+
+    def _show_feedback(self, message: str) -> None:
+        if self._feedback_after_id is not None:
+            self.after_cancel(self._feedback_after_id)
+        self.feedback_label.configure(text=message)
+        self._feedback_after_id = self.after(self.FEEDBACK_MS, self._clear_feedback)
+
+    def _clear_feedback(self) -> None:
+        self._feedback_after_id = None
+        # The window may have closed in the meantime (a detached window
+        # closed within the two seconds), with this label gone with it.
+        if self.feedback_label.winfo_exists():
+            self.feedback_label.configure(text="")
 
     def _handle_text_modified(self, event=None) -> None:
         # Tk only raises <<Modified>> when its modified flag changes, so
