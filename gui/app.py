@@ -115,6 +115,7 @@ class RSVPApp(ctk.CTk):
             on_draft_changed=self._handle_draft_changed,
             on_stopped_changed=self._handle_stopped_changed,
             on_session_stats=self._handle_session_stats,
+            on_normalization_changed=self._handle_normalization_changed,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             highlight_offset_px=self.settings_store.highlight_offset_px,
@@ -546,6 +547,19 @@ class RSVPApp(ctk.CTk):
             self.store.set_transcript_text(transcript.id, text)
         else:
             self.store.set_transcript_draft_text(transcript.id, text)
+        # The Normalize button's Revert only lasts while the text is still
+        # exactly what normalizing produced. Any other text reaching here,
+        # an edit or the empty draft Start reading saves, ends it.
+        if transcript.pre_normalize_text and text != transcript.normalized_text:
+            self.store.set_transcript_normalization(transcript.id, "", "")
+
+    def _handle_normalization_changed(self, transcript, result) -> None:
+        """One click of the Normalize button, from either window (see
+        core/normalizer.py's toggle_normalization()). The undo information
+        is saved first, so the draft save right after sees the text as
+        matching it rather than as an edit."""
+        self.store.set_transcript_normalization(transcript.id, result.pre_normalize_text, result.normalized_text)
+        self._handle_draft_changed(transcript, result.text)
 
     def _handle_wpm_changed(self, wpm: int) -> None:
         if not self._current_transcript:

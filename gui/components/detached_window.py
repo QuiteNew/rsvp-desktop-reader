@@ -13,7 +13,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def __init__(
         self, master, transcript, on_text_submitted, on_closed,
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
-        on_session_stats=None,
+        on_session_stats=None, on_normalization_changed=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
@@ -37,6 +37,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.on_position_changed = on_position_changed
         self.on_pause_changed = on_pause_changed
         self.on_stopped_changed = on_stopped_changed
+        self.on_normalization_changed = on_normalization_changed
         self.on_session_stats = on_session_stats
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
@@ -64,7 +65,8 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         )
 
         self.input_view = TranscriptInput(
-            self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text
+            self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text,
+            on_normalized=self._handle_normalized,
         )
         self.reader_display = ReaderDisplay(
             self,
@@ -115,6 +117,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
 
         if self.transcript.is_stopped:
             self.input_view.set_text(self.transcript.raw_text)
+            self.input_view.set_normalization(self.transcript.pre_normalize_text, self.transcript.normalized_text)
             self.input_view.pack(fill="both", expand=True)
         elif self.transcript.raw_text.strip():
             self.toolbar.pack(anchor="ne", padx=10, pady=10)
@@ -130,7 +133,12 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
                 start_paused=self.transcript.is_paused,
             )
         else:
+            self.input_view.set_normalization(self.transcript.pre_normalize_text, self.transcript.normalized_text)
             self.input_view.pack(fill="both", expand=True)
+
+    def _handle_normalized(self, result) -> None:
+        if self.on_normalization_changed:
+            self.on_normalization_changed(self.transcript, result)
 
     def _handle_text_submitted(self, raw_text: str) -> None:
         self._handle_stopped_changed(False)

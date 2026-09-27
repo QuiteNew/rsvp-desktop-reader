@@ -17,7 +17,7 @@ class Canvas(ctk.CTkFrame):
         self, master,
         on_text_submitted=None, on_maximize_toggle=None,
         on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
-        on_stopped_changed=None, on_session_stats=None,
+        on_stopped_changed=None, on_session_stats=None, on_normalization_changed=None,
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
@@ -34,6 +34,7 @@ class Canvas(ctk.CTkFrame):
         self.on_draft_changed = on_draft_changed
         self.on_stopped_changed = on_stopped_changed
         self.on_session_stats = on_session_stats
+        self.on_normalization_changed = on_normalization_changed
         self._skip_word_count = skip_word_count
         self._pause_on_skip = pause_on_skip
         self._highlight_offset_px = highlight_offset_px
@@ -67,7 +68,9 @@ class Canvas(ctk.CTkFrame):
         self.content_area = ctk.CTkFrame(self, fg_color="transparent")
 
         self.empty_label = ctk.CTkLabel(self.content_area, text="Select or create a transcript to begin")
-        self.input_view = TranscriptInput(self.content_area, on_submit=self._handle_text_submitted)
+        self.input_view = TranscriptInput(
+            self.content_area, on_submit=self._handle_text_submitted, on_normalized=self._handle_normalized,
+        )
         self.reader_display = ReaderDisplay(
             self.content_area,
             on_position_changed=self._handle_position_changed,
@@ -97,7 +100,7 @@ class Canvas(ctk.CTkFrame):
         if transcript.id == self._detached_transcript_id:
             self._show_detached_placeholder()
         elif transcript.is_stopped:
-            self.input_view.set_text(transcript.raw_text)
+            self._fill_input(transcript.raw_text)
             self._show_input()
         elif transcript.raw_text.strip():
             self._show_reader()
@@ -112,7 +115,7 @@ class Canvas(ctk.CTkFrame):
                 start_paused=transcript.is_paused,
             )
         else:
-            self.input_view.set_text(transcript.draft_text)
+            self._fill_input(transcript.draft_text)
             self._show_input()
 
     def handle_transcript_deleted(self, transcript_id: int) -> None:
@@ -246,6 +249,19 @@ class Canvas(ctk.CTkFrame):
         if self.on_stopped_changed and self.current_transcript:
             self.on_stopped_changed(self.current_transcript, is_stopped)
 
+    def _fill_input(self, text: str) -> None:
+        """Show text in the edit box along with the current transcript's
+        Normalize undo information, so the button's label always belongs
+        to the transcript on screen."""
+        self.input_view.set_text(text)
+        self.input_view.set_normalization(
+            self.current_transcript.pre_normalize_text, self.current_transcript.normalized_text,
+        )
+
+    def _handle_normalized(self, result) -> None:
+        if self.on_normalization_changed and self.current_transcript:
+            self.on_normalization_changed(self.current_transcript, result)
+
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.current_transcript:
             self._handle_stopped_changed(False)
@@ -305,7 +321,7 @@ class Canvas(ctk.CTkFrame):
         self._handle_position_changed(0)
         self._handle_pause_changed(False)
         self._handle_stopped_changed(True)
-        self.input_view.set_text(self.current_transcript.raw_text)
+        self._fill_input(self.current_transcript.raw_text)
         self._show_input()
 
     def _handle_maximize_toggle(self) -> None:
@@ -336,6 +352,7 @@ class Canvas(ctk.CTkFrame):
             on_pause_changed=self.on_pause_changed,
             on_stopped_changed=self.on_stopped_changed,
             on_session_stats=self.on_session_stats,
+            on_normalization_changed=self.on_normalization_changed,
             skip_word_count=self._skip_word_count,
             pause_on_skip=self._pause_on_skip,
             highlight_offset_px=self._highlight_offset_px,

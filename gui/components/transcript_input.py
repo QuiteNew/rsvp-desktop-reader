@@ -1,20 +1,50 @@
 import customtkinter as ctk
 
+from core.normalizer import can_revert, toggle_normalization
+
 
 class TranscriptInput(ctk.CTkFrame):
-    """Paste-in prompt shown when the selected transcript has no text yet."""
+    """Paste-in prompt shown when the selected transcript has no text yet,
+    with Normalize and Start reading buttons underneath.
 
-    def __init__(self, master, on_submit, initial_text: str = ""):
+    The Normalize button toggles between "Normalize" and "Revert" (see
+    core/normalizer.py's toggle_normalization()). This widget only keeps
+    a copy of the transcript's undo information to decide the label;
+    whoever owns it passes that in with set_normalization() and saves
+    the result of each click through on_normalized."""
+
+    def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None):
         super().__init__(master, fg_color="transparent")
         self.on_submit = on_submit
+        self.on_normalized = on_normalized
+        self._pre_normalize_text = ""
+        self._normalized_text = ""
 
         self.textbox = ctk.CTkTextbox(self, width=500, height=250)
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
         if initial_text:
             self.textbox.insert("1.0", initial_text)
 
-        self.start_button = ctk.CTkButton(self, text="Start reading", command=self._handle_submit)
-        self.start_button.pack(pady=(0, 20))
+        # Tk raises <<Modified>> for typing, deleting, pasting and for
+        # changes made in code, so it keeps the button's label in step
+        # with the text whatever changed it.
+        self.textbox.bind("<<Modified>>", self._handle_text_modified)
+
+        # Three columns: Normalize at the far left, lined up with the text
+        # box's left edge, and Start reading in the middle. uniform keeps
+        # the two outer columns the same width, so Start reading stays
+        # truly centered however wide the window is.
+        button_row = ctk.CTkFrame(self, fg_color="transparent")
+        button_row.pack(fill="x", padx=20, pady=(0, 20))
+        button_row.grid_columnconfigure(0, weight=1, uniform="side")
+        button_row.grid_columnconfigure(1, weight=0)
+        button_row.grid_columnconfigure(2, weight=1, uniform="side")
+
+        self.start_button = ctk.CTkButton(button_row, text="Start reading", command=self._handle_submit)
+        self.start_button.grid(row=0, column=1)
+
+        self.normalize_button = ctk.CTkButton(button_row, text="Normalize", command=self._handle_normalize)
+        self.normalize_button.grid(row=0, column=0, sticky="w")
 
     def get_text(self) -> str:
         """Return whatever's currently typed, submitted or not."""
@@ -25,6 +55,39 @@ class TranscriptInput(ctk.CTkFrame):
         self.textbox.delete("1.0", "end")
         if text:
             self.textbox.insert("1.0", text)
+        self._refresh_normalize_button()
+
+    def set_normalization(self, pre_normalize_text: str, normalized_text: str) -> None:
+        """Take the current transcript's undo information (see
+        core/models.py). Must be called whenever a different transcript's
+        text is shown, so the label never reflects the previous one."""
+        self._pre_normalize_text = pre_normalize_text
+        self._normalized_text = normalized_text
+        self._refresh_normalize_button()
+
+    def _handle_normalize(self) -> None:
+        result = toggle_normalization(self.get_text(), self._pre_normalize_text, self._normalized_text)
+        self._pre_normalize_text = result.pre_normalize_text
+        self._normalized_text = result.normalized_text
+        self.set_text(result.text)
+        if self.on_normalized:
+            self.on_normalized(result)
+
+    def _handle_text_modified(self, event=None) -> None:
+        # Tk only raises <<Modified>> when its modified flag changes, so
+        # the flag has to be reset each time to hear about the next edit.
+        # Resetting it raises the event once more, with the flag already
+        # False, which is skipped here.
+        if not self.textbox.edit_modified():
+            return
+        self.textbox.edit_modified(False)
+        self._refresh_normalize_button()
+
+    def _refresh_normalize_button(self) -> None:
+        if can_revert(self.get_text(), self._pre_normalize_text, self._normalized_text):
+            self.normalize_button.configure(text="Revert")
+        else:
+            self.normalize_button.configure(text="Normalize")
 
     def _handle_submit(self) -> None:
         self.on_submit(self.get_text())
