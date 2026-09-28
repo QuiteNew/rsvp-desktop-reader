@@ -6,6 +6,7 @@ from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
 from gui.components.stop_button import StopButton
 from gui.components.detached_window import DetachedTranscriptWindow
+from gui.components.selection_preview_window import SelectionPreviewWindow
 from gui.theme import HEARTH_PAPER
 
 
@@ -54,6 +55,11 @@ class Canvas(ctk.CTkFrame):
         # its position, stats and pause state are not persisted to the
         # transcript. See play_selection() and _stop_ephemeral().
         self._ephemeral = False
+        # Open selection-preview windows (right-click Detach), as
+        # (window, transcript_id, index) tuples. Several may be open at
+        # once; each is independent and persists nothing. See
+        # open_selection_preview().
+        self._selection_previews = []
 
         self.button_row = ctk.CTkFrame(self, fg_color="transparent")
         self.button_row.grid_columnconfigure(0, weight=1)
@@ -285,9 +291,60 @@ class Canvas(ctk.CTkFrame):
         self.play_selection(text)
 
     def _handle_detach_selection(self, text: str) -> None:
-        # Opens the highlighted text in an ephemeral preview window. Wired
-        # up in a later step.
-        pass
+        self.open_selection_preview(text)
+
+    def open_selection_preview(self, text: str) -> None:
+        """Open a standalone, independent window seeded with the highlighted
+        text (right-click Detach). It opens on its own edit box, so you
+        choose when (or whether) to start reading, and nothing done in it
+        touches this transcript's draft, saved text, position or stats (see
+        SelectionPreviewWindow). Several may be open at once; each carries
+        the transcript's name plus a per-transcript number in its title,
+        and a small cascade offset so successive windows don't land exactly
+        on top of each other. Its styling is a snapshot of the transcript's
+        current WPM, colours, font and guide-mark settings."""
+        transcript = self.current_transcript
+        if transcript is None or not text.strip():
+            return
+        index = self._next_preview_index(transcript.id)
+        window = SelectionPreviewWindow(
+            self,
+            title=f"{transcript.title} ({index})",
+            text=text,
+            wpm=transcript.wpm,
+            font_color=transcript.font_color,
+            highlight_color=transcript.highlight_color,
+            background_color=transcript.background_color,
+            font_size=transcript.font_size,
+            on_closed=self._handle_preview_closed,
+            cascade_offset=30 * (len(self._selection_previews) % 6),
+            skip_word_count=self._skip_word_count,
+            pause_on_skip=self._pause_on_skip,
+            length_pacing_enabled=self._length_pacing_enabled,
+            split_long_paragraphs_enabled=self._split_long_paragraphs_enabled,
+            highlight_offset_px=self._highlight_offset_px,
+            guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
+            guide_mark_thickness_px=self._guide_mark_thickness_px,
+            guide_mark_length_percent=self._guide_mark_length_percent,
+            guide_mark_color=self._guide_mark_color,
+        )
+        self._selection_previews.append((window, transcript.id, index))
+
+    def _next_preview_index(self, transcript_id) -> int:
+        """The smallest positive number not currently used by an open
+        preview of this transcript, so titles stay small and a closed
+        window's number can be reused, while every open window keeps a
+        stable, distinct title."""
+        used = {idx for (_w, tid, idx) in self._selection_previews if tid == transcript_id}
+        index = 1
+        while index in used:
+            index += 1
+        return index
+
+    def _handle_preview_closed(self, window) -> None:
+        self._selection_previews = [
+            entry for entry in self._selection_previews if entry[0] is not window
+        ]
 
     def play_selection(self, text: str) -> None:
         """Run just the highlighted text as a preview in the reader,

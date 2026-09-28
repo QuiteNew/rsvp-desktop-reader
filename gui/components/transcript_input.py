@@ -43,8 +43,15 @@ class TranscriptInput(ctk.CTkFrame):
         self._normalized_text = ""
         self._feedback_after_id = None
         self._split_long_paragraphs = split_long_paragraphs
+        # The right-click popup is created once, on first use, then reused:
+        # shown by deiconify() and hidden by withdraw(), never destroyed
+        # until this widget is (see _open_selection_menu for why it must
+        # outlive its own close). _selection_menu holds that reused popup,
+        # _selection_menu_visible tracks whether it's currently shown.
         self._selection_menu = None
+        self._selection_menu_visible = False
         self._outside_click_bound = False
+        self._escape_bound = False
 
         self.textbox = ctk.CTkTextbox(self, width=500, height=250)
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
@@ -204,13 +211,37 @@ class TranscriptInput(ctk.CTkFrame):
         soft near-black surface with light text in Dark mode, and a warm
         neutral highlight for the hovered row rather than the system's
         default blue. Clicking a row runs it and closes the popup; clicking
-        away, pressing Escape, or the window losing focus closes it with no
-        action."""
-        popup = tk.Toplevel(self)
-        popup.withdraw()  # placed before it's shown, so it never flashes at 0,0
-        popup.overrideredirect(True)
-        popup.configure(bg=WARM_LINE)  # a 1px border around the inner surface
-        self._selection_menu = popup
+        away or pressing Escape closes it with no action.
+
+        The popup is created once and then reused: shown here with
+        deiconify() and hidden by _close_selection_menu() with withdraw(),
+        never destroyed between uses. This is deliberate, and the reason is
+        CustomTkinter. When choosing Detach opens a CTkToplevel, that
+        window's Windows-only titlebar setup snapshots whatever has focus
+        (this popup) and re-applies it a moment later via
+        after(10, widget.focus). If the popup had been destroyed on click
+        (the obvious approach), that delayed focus would land on a
+        destroyed window and Tk would raise "bad window path name". Keeping
+        the single popup alive means that delayed focus always finds a real
+        window; it just focuses a hidden one, which is harmless. The popup
+        is a child of this widget, so it's torn down with it.
+
+        Dismissal is driven from the main window (a one-time click binding
+        and an Escape binding), so it works without the popup needing its
+        own keyboard focus (see _ensure_outside_click_binding and
+        _ensure_escape_binding)."""
+        popup = self._selection_menu
+        if popup is None or not popup.winfo_exists():
+            popup = tk.Toplevel(self)
+            popup.withdraw()  # placed before it's shown, so it never flashes at 0,0
+            popup.overrideredirect(True)
+            popup.configure(bg=WARM_LINE)  # a 1px border around the inner surface
+            self._selection_menu = popup
+        else:
+            # Reused popup: clear the previous rows before rebuilding them,
+            # since the selected text (and so each row's action) has changed.
+            for child in popup.winfo_children():
+                child.destroy()
 
         inner = tk.Frame(popup, bg=HEARTH_PAPER, bd=0)
         inner.pack(padx=1, pady=1)
@@ -232,15 +263,16 @@ class TranscriptInput(ctk.CTkFrame):
 
         self._place_selection_menu(popup, x_root, y_root)
         popup.deiconify()
-        popup.bind("<Escape>", lambda e: self._close_selection_menu())
-        popup.bind("<FocusOut>", lambda e: self._close_selection_menu())
-        # Close on a click elsewhere in the main window. No Tk grab is used:
-        # a grab on a borderless popup can leave the whole app unresponsive,
+        self._selection_menu_visible = True
+        # Close on a click elsewhere in the main window, or on Escape. Both
+        # are bound on the main window, not the popup, so they work without
+        # the popup taking focus (see the docstring). No Tk grab is used: a
+        # grab on a borderless popup can leave the whole app unresponsive,
         # its own close button included, if a dismissal path ever fails to
         # run. The popup is its own toplevel, so clicks on its rows don't
-        # reach this binding.
+        # reach the outside-click binding.
         self._ensure_outside_click_binding()
-        popup.focus_set()
+        self._ensure_escape_binding()
 
     def _place_selection_menu(self, popup, x_root: int, y_root: int) -> None:
         """Put the popup at the cursor, nudged back onto the screen if it
@@ -273,8 +305,31 @@ class TranscriptInput(ctk.CTkFrame):
         # popup is open. The popup is its own toplevel, so clicks on its own
         # rows never reach here; anything that does means the click was away
         # from the popup, so close it. A no-op when no popup is open.
-        if self._selection_menu is not None:
+        if self._selection_menu_visible:
             self._close_selection_menu()
+        return None
+
+    def _ensure_escape_binding(self) -> None:
+        # Bound once on the main window and left in place for the widget's
+        # life, like the outside-click binding: a cheap no-op whenever no
+        # popup is open. Escape is handled here rather than on the popup so
+        # it works without the popup taking focus (see _open_selection_menu).
+        if self._escape_bound:
+            return
+        try:
+            self.winfo_toplevel().bind("<Escape>", self._handle_escape_key, add="+")
+            self._escape_bound = True
+        except tk.TclError:
+            pass
+
+    def _handle_escape_key(self, event):
+        # Close an open selection popup on Escape, and swallow the keypress
+        # so it doesn't also trigger anything else. When no popup is open,
+        # do nothing and let Escape fall through to any other handler (the
+        # app's reading-stop shortcut, for one).
+        if self._selection_menu_visible:
+            self._close_selection_menu()
+            return "break"
         return None
 
     def _choose_selection(self, dispatch, text: str) -> str:
@@ -283,15 +338,20 @@ class TranscriptInput(ctk.CTkFrame):
         return "break"
 
     def _close_selection_menu(self) -> None:
+        # Hide the reused popup rather than destroying it, so a focus call
+        # CustomTkinter may have scheduled on it can't hit a dead window
+        # (see _open_selection_menu). It's recreated only if it was somehow
+        # already gone.
+        if not self._selection_menu_visible:
+            return
+        self._selection_menu_visible = False
         popup = self._selection_menu
-        self._selection_menu = None
         if popup is None:
             return
         try:
-            popup.withdraw()  # disappears at once; destroyed once this event settles
+            popup.withdraw()
         except tk.TclError:
             pass
-        popup.after_idle(popup.destroy)
 
     def _dispatch_play(self, text: str) -> None:
         if self.on_play_selection:
