@@ -310,3 +310,35 @@ def test_split_long_paragraphs_persists_and_reloads(tmp_path):
     first.set_split_long_paragraphs_enabled(True)
     second = SettingsStore(settings_directory=directory)
     assert second.split_long_paragraphs_enabled is True
+
+
+# resume_rewind
+
+def test_fresh_store_resume_rewind_matches_defaults(store):
+    defaults = AppSettings()
+    assert store.resume_rewind_enabled == defaults.resume_rewind_enabled
+    assert store.resume_rewind_words == defaults.resume_rewind_words
+
+def test_set_resume_rewind_updates_both_values(store):
+    store.set_resume_rewind(True, 5)
+    assert store.resume_rewind_enabled is True
+    assert store.resume_rewind_words == 5
+
+def test_set_resume_rewind_disable(store):
+    store.set_resume_rewind(True, 4)
+    store.set_resume_rewind(False, 2)
+    assert store.resume_rewind_enabled is False
+    assert store.resume_rewind_words == 2
+
+def test_set_resume_rewind_does_not_affect_other_settings(store):
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
+    store.set_resume_rewind(True, 3)
+    assert store.default_wpm == 500
+
+def test_resume_rewind_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_resume_rewind(True, 4)
+    second = SettingsStore(settings_directory=directory)
+    assert second.resume_rewind_enabled is True
+    assert second.resume_rewind_words == 4

@@ -77,6 +77,8 @@ class ReaderDisplay(ctk.CTkFrame):
         self.session: ReaderSession | None = None
         self._after_id: str | None = None
         self._is_paused = False
+        self._resume_rewind_enabled = False
+        self._resume_rewind_words = 3
         self._highlight_offset_px = 0
         self._guide_mark_horizontal_enabled = False
         self._guide_mark_length_ratio = self.GUIDE_MARK_LENGTH_RATIO
@@ -202,6 +204,17 @@ class ReaderDisplay(ctk.CTkFrame):
             self._cancel_pending()
             self._end_active_span()
         else:
+            # Resuming. If resume-rewind is on, step back a few words first
+            # so reading re-enters with a little context rather than exactly
+            # where it left off. seek() clamps at the first word, and the
+            # top-of-method guard already ruled out a finished session, so
+            # stepping back can never land past the end. The re-rendered
+            # position is reported so the saved position matches where
+            # reading actually resumed.
+            if self._resume_rewind_enabled:
+                self.session.seek(-self._resume_rewind_words)
+                self._show_current_frame()
+                self._report_position()
             self._schedule_next()
             self._start_active_span()
         self._update_guide_marks()
@@ -254,6 +267,14 @@ class ReaderDisplay(ctk.CTkFrame):
     def set_length_pacing_enabled(self, enabled: bool) -> None:
         if self.session:
             self.session.set_length_pacing_enabled(enabled)
+
+    def set_resume_rewind(self, enabled: bool, words: int) -> None:
+        """Whether resuming from a pause first steps back `words` words for
+        re-entry context, and by how many. Read at resume time in
+        toggle_pause(); nothing changes about the currently displayed word
+        until the next resume."""
+        self._resume_rewind_enabled = enabled
+        self._resume_rewind_words = words
 
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self.configure(fg_color=background_color)

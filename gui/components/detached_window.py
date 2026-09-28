@@ -18,6 +18,8 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
         split_long_paragraphs_enabled: bool = False,
+        resume_rewind_enabled: bool = False,
+        resume_rewind_words: int = 3,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -80,6 +82,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_thickness(guide_mark_thickness_px)
         self.reader_display.set_guide_mark_length_percent(guide_mark_length_percent)
         self.reader_display.set_guide_mark_color(guide_mark_color)
+        self.reader_display.set_resume_rewind(resume_rewind_enabled, resume_rewind_words)
 
         self._render_current_state()
         self._bind_shortcuts()
@@ -115,6 +118,9 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_split_long_paragraphs_enabled(self, enabled: bool) -> None:
         self.split_long_paragraphs_enabled = enabled
         self.input_view.set_split_long_paragraphs(enabled)
+
+    def set_resume_rewind(self, enabled: bool, words: int) -> None:
+        self.reader_display.set_resume_rewind(enabled, words)
 
     def _render_current_state(self) -> None:
         self.toolbar.pack_forget()

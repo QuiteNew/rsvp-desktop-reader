@@ -22,6 +22,7 @@ GUIDE_MARK_THICKNESS_RANGE = (2, 6)  # 1px is deliberately excluded: a 1px-thick
                                       # so allowing 1 here would let a user silently make the
                                       # vertical marks disappear too.
 GUIDE_MARK_LENGTH_PERCENT_RANGE = (15, 60)
+RESUME_REWIND_WORDS_RANGE = (1, 5)
 
 @dataclass
 class AppSettings:
@@ -54,6 +55,10 @@ class AppSettings:
     split_long_paragraphs_enabled: bool = False  # global, not per-transcript: whether the Normalize button also breaks a
                                                   # long wall of prose into paragraphs at sentence ends. Off by default.
                                                   # See core/normalizer.py's normalize_transcript(split_long_paragraphs=...).
+    resume_rewind_enabled: bool = False  # global, not per-transcript: when resuming from a pause, step back a few words
+                                          # first for re-entry context. Off by default. See ReaderDisplay.toggle_pause().
+    resume_rewind_words: int = 3  # how many words to step back on resume when resume_rewind_enabled is on.
+                                   # See RESUME_REWIND_WORDS_RANGE for the allowed range.
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -216,6 +221,14 @@ class SettingsStore:
     def split_long_paragraphs_enabled(self) -> bool:
         return self._settings.split_long_paragraphs_enabled
 
+    @property
+    def resume_rewind_enabled(self) -> bool:
+        return self._settings.resume_rewind_enabled
+
+    @property
+    def resume_rewind_words(self) -> int:
+        return self._settings.resume_rewind_words
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -280,6 +293,13 @@ class SettingsStore:
 
     def set_split_long_paragraphs_enabled(self, enabled: bool) -> None:
         self._settings.split_long_paragraphs_enabled = enabled
+        self._save()
+
+    def set_resume_rewind(self, enabled: bool, words: int) -> None:
+        """Set both resume-rewind fields together, since Settings' Apply
+        submits them as a pair (the toggle plus its word count)."""
+        self._settings.resume_rewind_enabled = enabled
+        self._settings.resume_rewind_words = words
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:

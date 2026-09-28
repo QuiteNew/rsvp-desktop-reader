@@ -27,6 +27,8 @@ class Canvas(ctk.CTkFrame):
         guide_mark_color: str = "#3B2E27",
         length_pacing_enabled: bool = False,
         split_long_paragraphs_enabled: bool = False,
+        resume_rewind_enabled: bool = False,
+        resume_rewind_words: int = 3,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -46,6 +48,8 @@ class Canvas(ctk.CTkFrame):
         self._guide_mark_color = guide_mark_color
         self._length_pacing_enabled = length_pacing_enabled
         self._split_long_paragraphs_enabled = split_long_paragraphs_enabled
+        self._resume_rewind_enabled = resume_rewind_enabled
+        self._resume_rewind_words = resume_rewind_words
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -96,6 +100,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_thickness(self._guide_mark_thickness_px)
         self.reader_display.set_guide_mark_length_percent(self._guide_mark_length_percent)
         self.reader_display.set_guide_mark_color(self._guide_mark_color)
+        self.reader_display.set_resume_rewind(self._resume_rewind_enabled, self._resume_rewind_words)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -241,6 +246,16 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.set_split_long_paragraphs_enabled(enabled)
 
+    def set_resume_rewind(self, enabled: bool, words: int) -> None:
+        self._resume_rewind_enabled = enabled
+        self._resume_rewind_words = words
+        self.reader_display.set_resume_rewind(enabled, words)
+        if self._detached_window:
+            self._detached_window.set_resume_rewind(enabled, words)
+        # Open selection previews are deliberately not updated: like their
+        # other styling, each snapshots the setting at open time (see
+        # open_selection_preview).
+
     def save_pending_draft(self) -> None:
         self._capture_current_draft()
 
@@ -322,6 +337,8 @@ class Canvas(ctk.CTkFrame):
             pause_on_skip=self._pause_on_skip,
             length_pacing_enabled=self._length_pacing_enabled,
             split_long_paragraphs_enabled=self._split_long_paragraphs_enabled,
+            resume_rewind_enabled=self._resume_rewind_enabled,
+            resume_rewind_words=self._resume_rewind_words,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
@@ -499,6 +516,8 @@ class Canvas(ctk.CTkFrame):
             guide_mark_color=self._guide_mark_color,
             length_pacing_enabled=self._length_pacing_enabled,
             split_long_paragraphs_enabled=self._split_long_paragraphs_enabled,
+            resume_rewind_enabled=self._resume_rewind_enabled,
+            resume_rewind_words=self._resume_rewind_words,
         )
         self._show_detached_placeholder()
 

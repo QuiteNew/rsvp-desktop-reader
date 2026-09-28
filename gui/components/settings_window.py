@@ -9,6 +9,7 @@ from core.settings_store import (
     SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
     WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE,
     HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
+    RESUME_REWIND_WORDS_RANGE,
 )
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
@@ -32,6 +33,8 @@ class SettingsWindow(ctk.CTkToplevel):
         skip_word_count, pause_on_skip,
         length_pacing_enabled,
         split_long_paragraphs_enabled,
+        resume_rewind_enabled,
+        resume_rewind_words,
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
         guide_mark_length_percent,
@@ -108,6 +111,7 @@ class SettingsWindow(ctk.CTkToplevel):
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
             skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled,
+            resume_rewind_enabled, resume_rewind_words,
             guide_mark_horizontal_enabled,
             guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color,
         )
@@ -290,7 +294,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -436,6 +440,33 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
+        self.resume_rewind_switch = self._styled_switch(scroll, "Rewind a few words when resuming")
+        (self.resume_rewind_switch.select() if resume_rewind_enabled else self.resume_rewind_switch.deselect())
+        self.resume_rewind_switch.pack(anchor="w", pady=(0, 5))
+
+        rewind_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        rewind_row.pack(fill="x", pady=(0, 4))
+        ctk.CTkLabel(
+            rewind_row, text="Words to rewind on resume:",
+            text_color=COCOA_INK, font=self.label_font, wraplength=300, justify="left", anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        self.resume_rewind_words_entry = self._styled_entry(rewind_row)
+        self.resume_rewind_words_entry.configure(width=40)
+        self.resume_rewind_words_entry.insert(0, str(resume_rewind_words))
+        self.resume_rewind_words_entry.pack(side="left", padx=(8, 0))
+
+        low, high = RESUME_REWIND_WORDS_RANGE
+        ctk.CTkLabel(
+            scroll,
+            text=(
+                "When you resume after pausing, reading first steps back this many words, "
+                "so you pick up with a little context instead of exactly where you stopped. "
+                f"Applies globally, to the main and detached windows. Allowed range: {low} to {high}. "
+                "Takes effect after clicking Apply, and only while the toggle above is on."
+            ),
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript and all future ones",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
@@ -545,6 +576,9 @@ class SettingsWindow(ctk.CTkToplevel):
         (self.length_pacing_switch.select() if original.length_pacing_enabled else self.length_pacing_switch.deselect())
 
         (self.split_long_paragraphs_switch.select() if original.split_long_paragraphs_enabled else self.split_long_paragraphs_switch.deselect())
+
+        (self.resume_rewind_switch.select() if original.resume_rewind_enabled else self.resume_rewind_switch.deselect())
+        self._set_entry_value(self.resume_rewind_words_entry, original.resume_rewind_words)
 
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
@@ -783,6 +817,7 @@ class SettingsWindow(ctk.CTkToplevel):
             "bottom_band_height": (self.bottom_band_height_entry, *BOTTOM_BAND_HEIGHT_RANGE),
             "font_size_step": (self.font_size_step_entry, *FONT_SIZE_STEP_RANGE),
             "guide_mark_thickness_px": (self.guide_mark_thickness_entry, *GUIDE_MARK_THICKNESS_RANGE),
+            "resume_rewind_words": (self.resume_rewind_words_entry, *RESUME_REWIND_WORDS_RANGE),
         }
 
         values = {}
@@ -821,6 +856,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["guide_mark_horizontal_enabled"] = bool(self.guide_mark_horizontal_switch.get())
         values["length_pacing_enabled"] = bool(self.length_pacing_switch.get())
         values["split_long_paragraphs_enabled"] = bool(self.split_long_paragraphs_switch.get())
+        values["resume_rewind_enabled"] = bool(self.resume_rewind_switch.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory

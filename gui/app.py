@@ -125,6 +125,8 @@ class RSVPApp(ctk.CTk):
             guide_mark_color=self.settings_store.guide_mark_color,
             length_pacing_enabled=self.settings_store.length_pacing_enabled,
             split_long_paragraphs_enabled=self.settings_store.split_long_paragraphs_enabled,
+            resume_rewind_enabled=self.settings_store.resume_rewind_enabled,
+            resume_rewind_words=self.settings_store.resume_rewind_words,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -629,6 +631,8 @@ class RSVPApp(ctk.CTk):
             pause_on_skip=self.settings_store.pause_on_skip,
             length_pacing_enabled=self.settings_store.length_pacing_enabled,
             split_long_paragraphs_enabled=self.settings_store.split_long_paragraphs_enabled,
+            resume_rewind_enabled=self.settings_store.resume_rewind_enabled,
+            resume_rewind_words=self.settings_store.resume_rewind_words,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -696,6 +700,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
         self.canvas.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
+
+        self.settings_store.set_resume_rewind(values["resume_rewind_enabled"], values["resume_rewind_words"])
+        self.canvas.set_resume_rewind(values["resume_rewind_enabled"], values["resume_rewind_words"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 
