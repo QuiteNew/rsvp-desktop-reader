@@ -1,5 +1,6 @@
 import pytest
 from core.reader import ReaderSession
+from core.timing import WARM_UP_START_MULTIPLIER, WARM_UP_WORD_COUNT
 
 
 # Construction and the full pipeline
@@ -332,3 +333,66 @@ def test_set_wpm_updates_wpm_attribute():
     session = ReaderSession("hello", wpm=300)
     session.set_wpm(450)
     assert session.wpm == 450
+
+
+# current_delay_ms: warm-up (ease-in) ramp
+# Expected values follow WARM_UP_START_MULTIPLIER / WARM_UP_WORD_COUNT in
+# core/timing.py, so the tests can't drift if those are later tuned. All use
+# plain, unpunctuated words with length pacing off, so the only multiplier in
+# play is the warm-up one, except where noted.
+
+_START = WARM_UP_START_MULTIPLIER
+
+def test_warm_up_disabled_by_default():
+    session = ReaderSession("one two", wpm=300)
+    assert session.current_delay_ms() == 200
+
+def test_warm_up_first_word_is_slowest():
+    session = ReaderSession("one two three", wpm=300, warm_up_enabled=True)
+    assert session.current_delay_ms() == round(200 * _START)
+
+def test_warm_up_ramps_down_to_base_over_the_word_count():
+    text = " ".join(f"word{i}" for i in range(WARM_UP_WORD_COUNT + 5))
+    session = ReaderSession(text, wpm=300, warm_up_enabled=True)
+    delays = []
+    while not session.is_finished:
+        delays.append(session.current_delay_ms())
+        session.advance()
+    assert delays[0] == round(200 * _START)
+    assert all(earlier >= later for earlier, later in zip(delays, delays[1:]))
+    assert delays[WARM_UP_WORD_COUNT] == 200  # ramp is over by here
+    assert delays[-1] == 200
+
+def test_warm_up_composes_with_sentence_pause():
+    # First word ends a sentence (2.5x -> 500ms), and warm-up scales that up
+    # again at the very start of the session.
+    session = ReaderSession("Stop. go on", wpm=300, warm_up_enabled=True)
+    assert session.current_delay_ms() == round(500 * _START)
+
+def test_warm_up_counts_words_shown_not_transcript_index():
+    # Starting mid-transcript still eases in from the first shown word, since
+    # the ramp counts words shown this session, not the transcript position.
+    text = " ".join(f"word{i}" for i in range(30))
+    session = ReaderSession(text, wpm=300, start_index=10, warm_up_enabled=True)
+    assert session.current_delay_ms() == round(200 * _START)
+
+def test_warm_up_live_toggle_via_set_warm_up_enabled():
+    session = ReaderSession("one two three", wpm=300)
+    assert session.current_delay_ms() == 200
+    session.set_warm_up_enabled(True)
+    assert session.current_delay_ms() == round(200 * _START)
+
+def test_warm_up_reset_restarts_the_ramp():
+    text = " ".join(f"word{i}" for i in range(30))
+    session = ReaderSession(text, wpm=300, warm_up_enabled=True)
+    for _ in range(WARM_UP_WORD_COUNT):
+        session.advance()
+    assert session.current_delay_ms() == 200  # past the ramp
+    session.reset()
+    assert session.current_delay_ms() == round(200 * _START)  # eased in again from the top
+
+def test_warm_up_finished_session_returns_unmultiplied_base():
+    session = ReaderSession("Hi.", wpm=300, warm_up_enabled=True)
+    session.advance()
+    assert session.is_finished is True
+    assert session.current_delay_ms() == 200

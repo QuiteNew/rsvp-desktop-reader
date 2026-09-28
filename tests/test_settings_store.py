@@ -342,3 +342,30 @@ def test_resume_rewind_persists_and_reloads(tmp_path):
     second = SettingsStore(settings_directory=directory)
     assert second.resume_rewind_enabled is True
     assert second.resume_rewind_words == 4
+
+
+# warm_up_enabled
+
+def test_fresh_store_warm_up_matches_defaults(store):
+    assert store.warm_up_enabled == AppSettings().warm_up_enabled
+
+def test_set_warm_up_enabled_true(store):
+    store.set_warm_up_enabled(True)
+    assert store.warm_up_enabled is True
+
+def test_set_warm_up_enabled_false(store):
+    store.set_warm_up_enabled(True)
+    store.set_warm_up_enabled(False)
+    assert store.warm_up_enabled is False
+
+def test_set_warm_up_does_not_affect_other_settings(store):
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
+    store.set_warm_up_enabled(True)
+    assert store.default_wpm == 500
+
+def test_warm_up_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_warm_up_enabled(True)
+    second = SettingsStore(settings_directory=directory)
+    assert second.warm_up_enabled is True

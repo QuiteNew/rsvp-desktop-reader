@@ -20,6 +20,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         split_long_paragraphs_enabled: bool = False,
         resume_rewind_enabled: bool = False,
         resume_rewind_words: int = 3,
+        warm_up_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -46,6 +47,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
         self.split_long_paragraphs_enabled = split_long_paragraphs_enabled
+        self.warm_up_enabled = warm_up_enabled
 
         self.title(transcript.title)
         apply_app_icon(self)
@@ -122,6 +124,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self.reader_display.set_resume_rewind(enabled, words)
 
+    def set_warm_up_enabled(self, enabled: bool) -> None:
+        self.warm_up_enabled = enabled
+        self.reader_display.set_warm_up_enabled(enabled)
+
     def _render_current_state(self) -> None:
         self.toolbar.pack_forget()
         self.input_view.pack_forget()
@@ -141,6 +147,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
                 ReaderSession(
                     self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position,
                     length_pacing_enabled=self.length_pacing_enabled,
+                    warm_up_enabled=self.warm_up_enabled,
                 ),
                 start_paused=self.transcript.is_paused,
             )

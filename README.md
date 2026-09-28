@@ -292,7 +292,7 @@ Settings are organized into four tabs:
 - ~~Transcript draft normalization~~
 - ~~Selective running~~
 - Quality of life polish 2.0
-- Settings additions
+- ~~Settings additions~~
 - Peripheral context line
 - Chunking (multi-word flash)
 - Progress scrubber / seek bar

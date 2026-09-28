@@ -35,6 +35,7 @@ class SettingsWindow(ctk.CTkToplevel):
         split_long_paragraphs_enabled,
         resume_rewind_enabled,
         resume_rewind_words,
+        warm_up_enabled,
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
         guide_mark_length_percent,
@@ -111,7 +112,7 @@ class SettingsWindow(ctk.CTkToplevel):
             defaults_tab, default_wpm, default_font_color, default_highlight_color,
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
             skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled,
-            resume_rewind_enabled, resume_rewind_words,
+            resume_rewind_enabled, resume_rewind_words, warm_up_enabled,
             guide_mark_horizontal_enabled,
             guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color,
         )
@@ -294,7 +295,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -428,6 +429,15 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkLabel(
             scroll,
             text="Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies, since they don't stack. Applies globally, takes effect after clicking Apply.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
+        self.warm_up_switch = self._styled_switch(scroll, "Ease in at the start of reading")
+        (self.warm_up_switch.select() if warm_up_enabled else self.warm_up_switch.deselect())
+        self.warm_up_switch.pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(
+            scroll,
+            text="Starts each reading session at about half speed and builds up to your chosen speed over the first several words, so you settle in instead of being hit with full speed right away. It stacks with the pacing above. Applies globally, to the main and detached windows, and takes effect after clicking Apply.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -574,6 +584,8 @@ class SettingsWindow(ctk.CTkToplevel):
         (self.guide_mark_horizontal_switch.select() if original.guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
 
         (self.length_pacing_switch.select() if original.length_pacing_enabled else self.length_pacing_switch.deselect())
+
+        (self.warm_up_switch.select() if original.warm_up_enabled else self.warm_up_switch.deselect())
 
         (self.split_long_paragraphs_switch.select() if original.split_long_paragraphs_enabled else self.split_long_paragraphs_switch.deselect())
 
@@ -856,6 +868,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["guide_mark_horizontal_enabled"] = bool(self.guide_mark_horizontal_switch.get())
         values["length_pacing_enabled"] = bool(self.length_pacing_switch.get())
         values["split_long_paragraphs_enabled"] = bool(self.split_long_paragraphs_switch.get())
+        values["warm_up_enabled"] = bool(self.warm_up_switch.get())
         values["resume_rewind_enabled"] = bool(self.resume_rewind_switch.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["guide_mark_color"] = self.default_guide_mark_color

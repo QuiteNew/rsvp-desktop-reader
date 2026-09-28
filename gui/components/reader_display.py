@@ -268,6 +268,10 @@ class ReaderDisplay(ctk.CTkFrame):
         if self.session:
             self.session.set_length_pacing_enabled(enabled)
 
+    def set_warm_up_enabled(self, enabled: bool) -> None:
+        if self.session:
+            self.session.set_warm_up_enabled(enabled)
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         """Whether resuming from a pause first steps back `words` words for
         re-entry context, and by how many. Read at resume time in

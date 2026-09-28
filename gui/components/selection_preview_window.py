@@ -44,6 +44,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         split_long_paragraphs_enabled: bool = False,
         resume_rewind_enabled: bool = False,
         resume_rewind_words: int = 3,
+        warm_up_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -67,6 +68,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
+        self.warm_up_enabled = warm_up_enabled
 
         self.title(title)
         apply_app_icon(self)
@@ -163,6 +165,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
             ReaderSession(
                 text, wpm=self.wpm, start_index=0,
                 length_pacing_enabled=self.length_pacing_enabled,
+                warm_up_enabled=self.warm_up_enabled,
             ),
             start_paused=False,
         )

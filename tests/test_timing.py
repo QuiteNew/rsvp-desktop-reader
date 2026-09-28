@@ -2,6 +2,8 @@ import pytest
 from core.timing import (
     wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier,
     effective_pacing_length, HYPHEN_PACING_BONUS_CHARS,
+    warm_up_multiplier, apply_warm_up,
+    WARM_UP_START_MULTIPLIER, WARM_UP_WORD_COUNT,
 )
 from core.punctuation import PACE_NONE, PACE_CLAUSE, PACE_SENTENCE
 
@@ -151,3 +153,49 @@ def test_effective_pacing_length_is_strictly_greater_than_len_when_hyphenated():
     # word's effective length must always be more than its raw length.
     word = "well-known"
     assert effective_pacing_length(word) > len(word)
+
+
+# warm_up_multiplier: the ease-in ramp, linear from the start multiplier
+# down to 1.0 over WARM_UP_WORD_COUNT words. Expressed against the constants
+# so the tests can't drift if those are later tuned.
+
+def test_warm_up_multiplier_starts_at_the_start_multiplier():
+    assert warm_up_multiplier(0) == WARM_UP_START_MULTIPLIER
+
+def test_warm_up_multiplier_reaches_one_at_the_ramp_end():
+    assert warm_up_multiplier(WARM_UP_WORD_COUNT) == 1.0
+
+def test_warm_up_multiplier_stays_one_past_the_ramp_end():
+    assert warm_up_multiplier(WARM_UP_WORD_COUNT + 50) == 1.0
+
+def test_warm_up_multiplier_negative_words_clamp_to_the_start_multiplier():
+    # A negative count should never speed the reader up past the target
+    # rate; it clamps to the slowest (start) multiplier instead.
+    assert warm_up_multiplier(-5) == WARM_UP_START_MULTIPLIER
+
+def test_warm_up_multiplier_is_halfway_at_the_ramp_midpoint():
+    # Linear ramp: halfway through the word count, the multiplier is halfway
+    # between the start multiplier and 1.0.
+    midpoint = WARM_UP_WORD_COUNT // 2
+    expected = 1.0 + (WARM_UP_START_MULTIPLIER - 1.0) * ((WARM_UP_WORD_COUNT - midpoint) / WARM_UP_WORD_COUNT)
+    assert warm_up_multiplier(midpoint) == pytest.approx(expected)
+
+def test_warm_up_multiplier_decreases_monotonically_across_the_ramp():
+    values = [warm_up_multiplier(w) for w in range(0, WARM_UP_WORD_COUNT + 1)]
+    assert all(earlier >= later for earlier, later in zip(values, values[1:]))
+    assert values[0] > values[-1]
+
+
+# apply_warm_up: multiplies a delay by the ramp, rounded
+
+def test_apply_warm_up_at_start_scales_by_the_start_multiplier():
+    assert apply_warm_up(200, 0) == round(200 * WARM_UP_START_MULTIPLIER)
+
+def test_apply_warm_up_after_ramp_leaves_delay_unchanged():
+    assert apply_warm_up(200, WARM_UP_WORD_COUNT) == 200
+
+def test_apply_warm_up_never_shortens_the_delay():
+    # Warm-up only ever slows the start down; the returned delay is always
+    # at least the delay passed in, for any point in (or past) the ramp.
+    for words in range(0, WARM_UP_WORD_COUNT + 5):
+        assert apply_warm_up(200, words) >= 200

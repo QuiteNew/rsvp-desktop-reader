@@ -59,6 +59,9 @@ class AppSettings:
                                           # first for re-entry context. Off by default. See ReaderDisplay.toggle_pause().
     resume_rewind_words: int = 3  # how many words to step back on resume when resume_rewind_enabled is on.
                                    # See RESUME_REWIND_WORDS_RANGE for the allowed range.
+    warm_up_enabled: bool = False  # global, not per-transcript: ease in at the start of a reading session,
+                                    # ramping from half speed up to the target rate over the first words.
+                                    # Off by default. See core/timing.py's warm_up_multiplier().
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -229,6 +232,10 @@ class SettingsStore:
     def resume_rewind_words(self) -> int:
         return self._settings.resume_rewind_words
 
+    @property
+    def warm_up_enabled(self) -> bool:
+        return self._settings.warm_up_enabled
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -300,6 +307,10 @@ class SettingsStore:
         submits them as a pair (the toggle plus its word count)."""
         self._settings.resume_rewind_enabled = enabled
         self._settings.resume_rewind_words = words
+        self._save()
+
+    def set_warm_up_enabled(self, enabled: bool) -> None:
+        self._settings.warm_up_enabled = enabled
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:

@@ -49,6 +49,22 @@ VERY_LONG_WORD_MULTIPLIER = 1.7  # length band 4 (14+ letters)
 # and trivial to adjust since nothing else depends on the exact number.
 HYPHEN_PACING_BONUS_CHARS = 4
 
+# Warm-up (ease-in) ramp. When warm-up is enabled (see core/reader.py's
+# ReaderSession.warm_up_enabled), the first words of a reading session play
+# slower and speed up to the normal rate, easing the eyes in. Expressed as
+# a delay multiplier applied on top of the final per-word delay, after
+# punctuation and length pacing, so it composes with them: everything is
+# proportionally slower during the ramp.
+#
+# Linear from WARM_UP_START_MULTIPLIER at the first word down to 1.0 (no
+# effect) once WARM_UP_WORD_COUNT words have been shown. 2.0 means the very
+# first word sits on screen twice as long, i.e. half the target speed.
+#
+# Starting values that haven't been tuned against real reading yet, and
+# trivial to adjust since nothing else depends on the exact numbers.
+WARM_UP_START_MULTIPLIER = 2.0
+WARM_UP_WORD_COUNT = 20
+
 
 def wpm_to_delay_ms(wpm: int) -> int:
     """Convert a words-per-minute rate into a per-word delay in milliseconds."""
@@ -97,6 +113,29 @@ def apply_length_multiplier(base_delay_ms: int, length_band: int) -> int:
     if length_band == 2:
         return round(base_delay_ms * MEDIUM_WORD_MULTIPLIER)
     return base_delay_ms
+
+
+def warm_up_multiplier(words_shown: int) -> float:
+    """The warm-up delay multiplier for a word this many words into the
+    reading session. WARM_UP_START_MULTIPLIER at words_shown 0, easing
+    linearly to 1.0 at words_shown >= WARM_UP_WORD_COUNT, and a flat 1.0
+    afterwards. Never below 1.0, so warm-up only ever slows the start down,
+    never speeds it past the target rate, even if words_shown is somehow
+    negative."""
+    if words_shown >= WARM_UP_WORD_COUNT:
+        return 1.0
+    if words_shown <= 0:
+        return WARM_UP_START_MULTIPLIER
+    remaining_fraction = (WARM_UP_WORD_COUNT - words_shown) / WARM_UP_WORD_COUNT
+    return 1.0 + (WARM_UP_START_MULTIPLIER - 1.0) * remaining_fraction
+
+
+def apply_warm_up(base_delay_ms: int, words_shown: int) -> int:
+    """Scale a per-word delay up by the warm-up ramp (see
+    warm_up_multiplier). Applied last, on top of whatever punctuation and
+    length pacing already produced, so it slows the whole start of a
+    reading session proportionally."""
+    return round(base_delay_ms * warm_up_multiplier(words_shown))
 
 
 if __name__ == "__main__":

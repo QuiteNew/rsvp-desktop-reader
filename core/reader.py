@@ -1,7 +1,7 @@
 from core.parser import clean_transcript
 from core.tokenizer import tokenize
 from core.orp import split_at_orp, get_orp_index_for_length, ORPWord
-from core.timing import wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier, effective_pacing_length
+from core.timing import wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier, effective_pacing_length, apply_warm_up
 from core.punctuation import split_punctuation, classify_pacing
 
 
@@ -11,6 +11,7 @@ class ReaderSession:
     def __init__(
         self, raw_text: str, wpm: int = 300, start_index: int = 0,
         length_pacing_enabled: bool = False,
+        warm_up_enabled: bool = False,
     ):
         clean = clean_transcript(raw_text)
         words = tokenize(clean)
@@ -44,6 +45,13 @@ class ReaderSession:
         self.wpm = wpm
         self.index = max(0, min(start_index, len(self.frames)))
         self.length_pacing_enabled = length_pacing_enabled
+        self.warm_up_enabled = warm_up_enabled
+        # How many words have been shown since this session began, used to
+        # position the warm-up ramp (see core/timing.py's
+        # warm_up_multiplier). Counts words actually advanced past, not the
+        # transcript index, so starting mid-transcript still eases in and
+        # skipping doesn't restart the ramp. Reset by reset().
+        self._words_shown = 0
 
     @property
     def total_words(self) -> int:
@@ -64,7 +72,7 @@ class ReaderSession:
             return base
         punctuation_delay = apply_pacing_multiplier(base, self._paces[self.index])
         if not self.length_pacing_enabled:
-            return punctuation_delay
+            return self._with_warm_up(punctuation_delay)
         # Only the larger of the two pauses applies; they don't stack.
         # A word that's both long and ends a sentence doesn't get an
         # unusually long compounded pause, just whichever single reason
@@ -74,11 +82,20 @@ class ReaderSession:
         # round() is monotonic, so the larger resulting delay always
         # comes from the larger multiplier.
         length_delay = apply_length_multiplier(base, self._length_bands[self.index])
-        return max(punctuation_delay, length_delay)
+        return self._with_warm_up(max(punctuation_delay, length_delay))
+
+    def _with_warm_up(self, delay_ms: int) -> int:
+        """Apply the warm-up ramp to an already-paced delay, if warm-up is
+        on. Kept as the single exit point for current_delay_ms's two return
+        paths so the ramp is never accidentally skipped on one of them."""
+        if not self.warm_up_enabled:
+            return delay_ms
+        return apply_warm_up(delay_ms, self._words_shown)
 
     def advance(self) -> None:
         if not self.is_finished:
             self.index += 1
+            self._words_shown += 1
 
     def seek(self, delta: int) -> None:
         """Jump the current position by delta words: negative moves
@@ -88,9 +105,16 @@ class ReaderSession:
 
     def reset(self) -> None:
         self.index = 0
+        # Restart the warm-up ramp too: restart() is a deliberate "read this
+        # from the top again", so it should ease back in just like a fresh
+        # session start.
+        self._words_shown = 0
 
     def set_wpm(self, new_wpm: int) -> None:
         self.wpm = new_wpm
 
     def set_length_pacing_enabled(self, enabled: bool) -> None:
         self.length_pacing_enabled = enabled
+
+    def set_warm_up_enabled(self, enabled: bool) -> None:
+        self.warm_up_enabled = enabled
