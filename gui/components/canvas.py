@@ -50,6 +50,10 @@ class Canvas(ctk.CTkFrame):
         self._detached_transcript = None
         self._detached_window = None
         self._input_currently_shown = False
+        # True while a selection preview (right-click Play) is running, so
+        # its position, stats and pause state are not persisted to the
+        # transcript. See play_selection() and _stop_ephemeral().
+        self._ephemeral = False
 
         self.button_row = ctk.CTkFrame(self, fg_color="transparent")
         self.button_row.grid_columnconfigure(0, weight=1)
@@ -100,6 +104,9 @@ class Canvas(ctk.CTkFrame):
     def load_transcript(self, transcript) -> None:
         self._capture_current_draft()
         self.reader_display.stop()
+        # Loading a real transcript ends any selection preview. Cleared
+        # after stop() above so that preview's finalize stays suppressed.
+        self._ephemeral = False
         self.current_transcript = transcript
 
         if transcript.id == self._detached_transcript_id:
@@ -130,6 +137,7 @@ class Canvas(ctk.CTkFrame):
         if was_current:
             self.current_transcript = None
             self.reader_display.stop()
+            self._ephemeral = False
 
         if was_detached:
             detached_window = self._detached_window
@@ -274,16 +282,55 @@ class Canvas(ctk.CTkFrame):
             self.on_normalization_changed(self.current_transcript, result)
 
     def _handle_play_selection(self, text: str) -> None:
-        # Runs just the highlighted text as an ephemeral preview, without
-        # touching the transcript's saved progress. The right-click menu
-        # already reaches here; the playback itself is wired up in a later
-        # step.
-        pass
+        self.play_selection(text)
 
     def _handle_detach_selection(self, text: str) -> None:
         # Opens the highlighted text in an ephemeral preview window. Wired
         # up in a later step.
         pass
+
+    def play_selection(self, text: str) -> None:
+        """Run just the highlighted text as a preview in the reader,
+        without changing the transcript's saved position, started/stopped
+        state or reading stats. It uses the transcript's current WPM,
+        colours and font, starts at the first word, and drops back to the
+        edit box (with its full text intact) when stopped or finished. See
+        the _ephemeral flag and _stop_ephemeral()."""
+        transcript = self.current_transcript
+        if transcript is None or not text.strip():
+            return
+        self._ephemeral = True
+        self.reader_display.stop()
+        self._show_reader()
+        self.toolbar.set_paused(False)
+        self.reader_display.set_colors(transcript.font_color, transcript.highlight_color, transcript.background_color)
+        self.reader_display.set_font_size(transcript.font_size)
+        self.reader_display.load_session(
+            ReaderSession(
+                text, wpm=transcript.wpm, start_index=0,
+                length_pacing_enabled=self._length_pacing_enabled,
+            ),
+            start_paused=False,
+        )
+        # Move keyboard focus off the (now hidden) edit box so Space/arrows/
+        # R drive the reader instead of typing into the draft. The reader
+        # area isn't an Entry/Text, so the app's shortcut guard lets them
+        # through (see gui/app.py's _shortcut_should_fire). Re-applied after
+        # idle so the closing right-click popup's teardown can't hand focus
+        # back to the edit box.
+        self.reader_display.focus_set()
+        self.after_idle(self.reader_display.focus_set)
+
+    def _stop_ephemeral(self) -> None:
+        """End a selection preview and return to the edit box, which kept
+        its full text while the preview ran. Persists nothing: the
+        transcript's position, stopped state and stats are untouched. The
+        reader is stopped while _ephemeral is still True, so its finalize
+        stays suppressed, then the flag is cleared."""
+        self.reader_display.stop()
+        self._ephemeral = False
+        self.toolbar.set_paused(False)
+        self._show_input()
 
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.current_transcript:
@@ -293,14 +340,20 @@ class Canvas(ctk.CTkFrame):
             self.on_text_submitted(self.current_transcript, raw_text)
 
     def _handle_position_changed(self, index: int) -> None:
+        if self._ephemeral:
+            return
         if self.on_position_changed and self.current_transcript:
             self.on_position_changed(self.current_transcript, index)
 
     def _handle_session_stats(self, words_read: int, active_seconds: float) -> None:
+        if self._ephemeral:
+            return
         if self.on_session_stats and self.current_transcript:
             self.on_session_stats(self.current_transcript, words_read, active_seconds)
 
     def _handle_pause_changed(self, is_paused: bool) -> None:
+        if self._ephemeral:
+            return
         if self.on_pause_changed and self.current_transcript:
             self.on_pause_changed(self.current_transcript, is_paused)
 
@@ -335,6 +388,9 @@ class Canvas(ctk.CTkFrame):
         self.current_transcript.raw_text, which for a transcript that's
         never been submitted yet is an empty string, silently wiping out
         whatever was typed."""
+        if self._ephemeral:
+            self._stop_ephemeral()
+            return
         if not self.current_transcript:
             return
         if self._input_currently_shown or self.current_transcript.id == self._detached_transcript_id:
@@ -355,6 +411,7 @@ class Canvas(ctk.CTkFrame):
         if not self.current_transcript:
             return
         self.reader_display.stop()
+        self._ephemeral = False
         self._detached_transcript_id = self.current_transcript.id
         self._detached_transcript = self.current_transcript
 
