@@ -73,6 +73,8 @@ class Canvas(ctk.CTkFrame):
         self.input_view = TranscriptInput(
             self.content_area, on_submit=self._handle_text_submitted, on_normalized=self._handle_normalized,
             split_long_paragraphs=self._split_long_paragraphs_enabled,
+            on_play_selection=self._handle_play_selection,
+            on_detach_selection=self._handle_detach_selection,
         )
         self.reader_display = ReaderDisplay(
             self.content_area,
@@ -270,6 +272,18 @@ class Canvas(ctk.CTkFrame):
     def _handle_normalized(self, result) -> None:
         if self.on_normalization_changed and self.current_transcript:
             self.on_normalization_changed(self.current_transcript, result)
+
+    def _handle_play_selection(self, text: str) -> None:
+        # Runs just the highlighted text as an ephemeral preview, without
+        # touching the transcript's saved progress. The right-click menu
+        # already reaches here; the playback itself is wired up in a later
+        # step.
+        pass
+
+    def _handle_detach_selection(self, text: str) -> None:
+        # Opens the highlighted text in an ephemeral preview window. Wired
+        # up in a later step.
+        pass
 
     def _handle_text_submitted(self, raw_text: str) -> None:
         if self.current_transcript:

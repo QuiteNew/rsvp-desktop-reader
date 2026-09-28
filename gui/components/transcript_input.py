@@ -1,7 +1,10 @@
+import tkinter as tk
+
 import customtkinter as ctk
 
 from core.normalizer import can_revert, toggle_normalization
 from gui.icons import normalize_icon, revert_icon
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_BODY
 
 
 class TranscriptInput(ctk.CTkFrame):
@@ -20,18 +23,28 @@ class TranscriptInput(ctk.CTkFrame):
     the button for a moment, so it doesn't look like the click was lost.
 
     Whether a click also splits long paragraphs is a global Settings
-    toggle, passed in and kept current through set_split_long_paragraphs()."""
+    toggle, passed in and kept current through set_split_long_paragraphs().
+
+    Right-clicking a selection in the edit box opens a small Play / Detach
+    context menu (see _show_selection_menu), for running just the
+    highlighted part of the transcript. The owner decides what those do
+    by passing on_play_selection and on_detach_selection; when neither is
+    given, no menu appears."""
 
     FEEDBACK_MS = 2000
 
-    def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None, split_long_paragraphs: bool = False):
+    def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None, split_long_paragraphs: bool = False, on_play_selection=None, on_detach_selection=None):
         super().__init__(master, fg_color="transparent")
         self.on_submit = on_submit
         self.on_normalized = on_normalized
+        self.on_play_selection = on_play_selection
+        self.on_detach_selection = on_detach_selection
         self._pre_normalize_text = ""
         self._normalized_text = ""
         self._feedback_after_id = None
         self._split_long_paragraphs = split_long_paragraphs
+        self._selection_menu = None
+        self._outside_click_bound = False
 
         self.textbox = ctk.CTkTextbox(self, width=500, height=250)
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
@@ -42,6 +55,13 @@ class TranscriptInput(ctk.CTkFrame):
         # changes made in code, so it keeps the button's icon in step
         # with the text whatever changed it.
         self.textbox.bind("<<Modified>>", self._handle_text_modified)
+
+        # Right-click on a selection offers to Play or Detach just that
+        # part of the transcript. Bound on the underlying tkinter Text,
+        # since that's where the selection and the mouse event live.
+        inner_textbox = getattr(self.textbox, "_textbox", None)
+        if inner_textbox is not None:
+            inner_textbox.bind("<Button-3>", self._show_selection_menu)
 
         # Three columns: Normalize at the far left, lined up with the text
         # box's left edge, and Start reading in the middle. uniform keeps
@@ -151,3 +171,132 @@ class TranscriptInput(ctk.CTkFrame):
 
     def _handle_submit(self) -> None:
         self.on_submit(self.get_text())
+
+    def _selected_text(self) -> str:
+        """The transcript text currently highlighted in the edit box, or an
+        empty string if nothing (or only whitespace) is selected."""
+        inner = getattr(self.textbox, "_textbox", None)
+        if inner is None or not inner.tag_ranges("sel"):
+            return ""
+        try:
+            return inner.get("sel.first", "sel.last").strip()
+        except tk.TclError:
+            return ""
+
+    def _show_selection_menu(self, event):
+        # Only open the menu when text is actually selected and at least
+        # one action is wired up; otherwise a right-click does nothing.
+        text = self._selected_text()
+        if not text or not (self.on_play_selection or self.on_detach_selection):
+            return None
+        self._close_selection_menu()
+        self._open_selection_menu(text, event.x_root, event.y_root)
+        return "break"
+
+    def _open_selection_menu(self, text: str, x_root: int, y_root: int) -> None:
+        """A small right-click popup offering to run the selected text.
+        Built as a borderless Toplevel positioned with geometry() rather
+        than a native tk.Menu: under CustomTkinter's high-DPI window
+        scaling tk_popup places a native menu far from the cursor, while a
+        plain Toplevel positioned with geometry() lands exactly at the
+        cursor at any scale. Colours follow the app theme (see
+        gui/theme.py): a soft light surface with dark text in Light mode, a
+        soft near-black surface with light text in Dark mode, and a warm
+        neutral highlight for the hovered row rather than the system's
+        default blue. Clicking a row runs it and closes the popup; clicking
+        away, pressing Escape, or the window losing focus closes it with no
+        action."""
+        popup = tk.Toplevel(self)
+        popup.withdraw()  # placed before it's shown, so it never flashes at 0,0
+        popup.overrideredirect(True)
+        popup.configure(bg=WARM_LINE)  # a 1px border around the inner surface
+        self._selection_menu = popup
+
+        inner = tk.Frame(popup, bg=HEARTH_PAPER, bd=0)
+        inner.pack(padx=1, pady=1)
+
+        rows = []
+        if self.on_play_selection:
+            rows.append(("Play", self._dispatch_play))
+        if self.on_detach_selection:
+            rows.append(("Detach", self._dispatch_detach))
+        for label, dispatch in rows:
+            row = tk.Label(
+                inner, text=label, bg=HEARTH_PAPER, fg=COCOA_INK,
+                font=(FONT_BODY, 11), anchor="w", padx=18, pady=6, cursor="hand2",
+            )
+            row.pack(fill="x")
+            row.bind("<Enter>", lambda e, r=row: r.configure(bg=WARM_TAUPE))
+            row.bind("<Leave>", lambda e, r=row: r.configure(bg=HEARTH_PAPER))
+            row.bind("<Button-1>", lambda e, d=dispatch: self._choose_selection(d, text))
+
+        self._place_selection_menu(popup, x_root, y_root)
+        popup.deiconify()
+        popup.bind("<Escape>", lambda e: self._close_selection_menu())
+        popup.bind("<FocusOut>", lambda e: self._close_selection_menu())
+        # Close on a click elsewhere in the main window. No Tk grab is used:
+        # a grab on a borderless popup can leave the whole app unresponsive,
+        # its own close button included, if a dismissal path ever fails to
+        # run. The popup is its own toplevel, so clicks on its rows don't
+        # reach this binding.
+        self._ensure_outside_click_binding()
+        popup.focus_set()
+
+    def _place_selection_menu(self, popup, x_root: int, y_root: int) -> None:
+        """Put the popup at the cursor, nudged back onto the screen if it
+        would spill past the right or bottom edge. The coordinates are real
+        screen pixels, which geometry() places correctly at any display
+        scaling (see _open_selection_menu)."""
+        popup.update_idletasks()
+        width = popup.winfo_reqwidth()
+        height = popup.winfo_reqheight()
+        screen_w = popup.winfo_screenwidth()
+        screen_h = popup.winfo_screenheight()
+        x = max(0, min(x_root, screen_w - width))
+        y = max(0, min(y_root, screen_h - height))
+        popup.geometry(f"+{x}+{y}")
+
+    def _ensure_outside_click_binding(self) -> None:
+        # Bound once on the main window and left in place for the widget's
+        # life: it's a cheap no-op whenever no popup is open, which avoids
+        # bind/unbind churn and the funcid pitfalls that come with it.
+        if self._outside_click_bound:
+            return
+        try:
+            self.winfo_toplevel().bind("<Button-1>", self._handle_outside_click, add="+")
+            self._outside_click_bound = True
+        except tk.TclError:
+            pass
+
+    def _handle_outside_click(self, event):
+        # A left-click landed somewhere in the main window while a selection
+        # popup is open. The popup is its own toplevel, so clicks on its own
+        # rows never reach here; anything that does means the click was away
+        # from the popup, so close it. A no-op when no popup is open.
+        if self._selection_menu is not None:
+            self._close_selection_menu()
+        return None
+
+    def _choose_selection(self, dispatch, text: str) -> str:
+        self._close_selection_menu()
+        dispatch(text)
+        return "break"
+
+    def _close_selection_menu(self) -> None:
+        popup = self._selection_menu
+        self._selection_menu = None
+        if popup is None:
+            return
+        try:
+            popup.withdraw()  # disappears at once; destroyed once this event settles
+        except tk.TclError:
+            pass
+        popup.after_idle(popup.destroy)
+
+    def _dispatch_play(self, text: str) -> None:
+        if self.on_play_selection:
+            self.on_play_selection(text)
+
+    def _dispatch_detach(self, text: str) -> None:
+        if self.on_detach_selection:
+            self.on_detach_selection(text)
