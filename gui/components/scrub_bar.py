@@ -7,6 +7,14 @@ class ScrubBar(ctk.CTkFrame):
     """A reading-position slider with a "word X of Y" read-out, shown in
     the reader's control row.
 
+    The read-out sits on its own line directly above the slider, so the
+    whole bar is only as wide as the slider itself. It used to sit inline
+    to the slider's right, which added roughly 120px to the bar's width
+    and, once the toolbar grew its own time and percent read-out pills,
+    crowded them off the edge at the default window size. Stacking
+    reclaims that width. See gui/components/canvas.py's three-column
+    control row for the layout this feeds into.
+
     It plays two roles at once, which is the whole reason for the guard
     flag below. As reading advances, its owner calls set_position() to
     walk the thumb along on its own; when the user drags the thumb, the
@@ -42,7 +50,6 @@ class ScrubBar(ctk.CTkFrame):
             button_hover_color=EMBER_GLOW_HOVER, fg_color=WARM_LINE,
             command=self._handle_slide,
         )
-        self.slider.pack(side="left")
         # A real "let go" event, which the command callback alone can't
         # give. CTkSlider.bind forwards to its inner canvas and preserves
         # CTk's own <ButtonRelease-1> handling (add="+"). Used to decide,
@@ -52,9 +59,18 @@ class ScrubBar(ctk.CTkFrame):
         self.readout = ctk.CTkLabel(
             self, text="", text_color=COCOA_INK,
             font=ctk.CTkFont(family=FONT_BODY, size=12),
-            width=110, anchor="w",
+            anchor="center",
         )
-        self.readout.pack(side="left", padx=(10, 0))
+
+        # Read-out on top, centred over the slider; slider beneath it.
+        # Packing order sets the vertical order for side="top", so the
+        # label is packed first even though the slider is created first.
+        # fill="x" lets the label span the bar's width so anchor="center"
+        # centres the word count over the slider rather than parking it at
+        # one end. The small gap keeps the taller, two-line bar from
+        # feeling cramped against the control row above and below.
+        self.readout.pack(side="top", fill="x", pady=(0, 3))
+        self.slider.pack(side="top", anchor="w")
 
         self.clear()
 

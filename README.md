@@ -295,11 +295,11 @@ Settings are organized into four tabs:
 - ~~Settings additions~~
 - Peripheral context line
 - Chunking (multi-word flash)
-- Progress scrubber / seek bar
+- ~~Progress scrubber/seek bar~~
 - Bookmarks
 - Estimated read time and live progress %
 - Additional data insertion formats
-- 
+
 
 
 
