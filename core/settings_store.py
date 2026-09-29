@@ -66,6 +66,11 @@ class AppSettings:
                                        # pauses reading on the word it landed on. On by default. When off,
                                        # reading keeps its prior play state after a scrub (resumes if it was
                                        # playing, stays paused otherwise). See ReaderDisplay.scrub_end().
+    peripheral_context_enabled: bool = False  # global, not per-transcript: show a dim line of the surrounding
+                                               # words (previous and upcoming) below the focal word, so
+                                               # peripheral vision keeps the thread of the sentence. Off by
+                                               # default. See gui/components/reader_display.py's
+                                               # set_peripheral_context().
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -244,6 +249,10 @@ class SettingsStore:
     def scrub_pause_enabled(self) -> bool:
         return self._settings.scrub_pause_enabled
 
+    @property
+    def peripheral_context_enabled(self) -> bool:
+        return self._settings.peripheral_context_enabled
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -323,6 +332,10 @@ class SettingsStore:
 
     def set_scrub_pause_enabled(self, enabled: bool) -> None:
         self._settings.scrub_pause_enabled = enabled
+        self._save()
+
+    def set_peripheral_context_enabled(self, enabled: bool) -> None:
+        self._settings.peripheral_context_enabled = enabled
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:

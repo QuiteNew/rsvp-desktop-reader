@@ -23,6 +23,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
+        peripheral_context_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -51,6 +52,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.split_long_paragraphs_enabled = split_long_paragraphs_enabled
         self.warm_up_enabled = warm_up_enabled
         self.scrub_pause_enabled = scrub_pause_enabled
+        self.peripheral_context_enabled = peripheral_context_enabled
 
         self.title(transcript.title)
         apply_app_icon(self)
@@ -100,6 +102,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_color(guide_mark_color)
         self.reader_display.set_resume_rewind(resume_rewind_enabled, resume_rewind_words)
         self.reader_display.set_scrub_pause(scrub_pause_enabled)
+        self.reader_display.set_peripheral_context(peripheral_context_enabled)
 
         self._render_current_state()
         self._bind_shortcuts()
@@ -146,6 +149,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_scrub_pause(self, enabled: bool) -> None:
         self.scrub_pause_enabled = enabled
         self.reader_display.set_scrub_pause(enabled)
+
+    def set_peripheral_context_enabled(self, enabled: bool) -> None:
+        self.peripheral_context_enabled = enabled
+        self.reader_display.set_peripheral_context(enabled)
 
     def _render_current_state(self) -> None:
         self.control_row.pack_forget()

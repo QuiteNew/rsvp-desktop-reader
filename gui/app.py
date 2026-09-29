@@ -129,6 +129,7 @@ class RSVPApp(ctk.CTk):
             resume_rewind_words=self.settings_store.resume_rewind_words,
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
+            peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -637,6 +638,7 @@ class RSVPApp(ctk.CTk):
             resume_rewind_words=self.settings_store.resume_rewind_words,
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
+            peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -713,6 +715,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_scrub_pause_enabled(values["scrub_pause_enabled"])
         self.canvas.set_scrub_pause(values["scrub_pause_enabled"])
+
+        self.settings_store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
+        self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 

@@ -38,6 +38,7 @@ class SettingsWindow(ctk.CTkToplevel):
         resume_rewind_words,
         warm_up_enabled,
         scrub_pause_enabled,
+        peripheral_context_enabled,
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
         guide_mark_length_percent,
@@ -115,6 +116,7 @@ class SettingsWindow(ctk.CTkToplevel):
             default_background_color, default_font_size, font_size_step, highlight_offset_px,
             skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled,
             resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled,
+            peripheral_context_enabled,
             guide_mark_horizontal_enabled,
             guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color,
         )
@@ -297,7 +299,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, peripheral_context_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -488,6 +490,15 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
+        self.peripheral_context_switch = self._styled_switch(scroll, "Show surrounding words")
+        (self.peripheral_context_switch.select() if peripheral_context_enabled else self.peripheral_context_switch.deselect())
+        self.peripheral_context_switch.pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(
+            scroll,
+            text="Shows a dim line beneath the flashing word with the words just before and after it, so you keep a little sense of the sentence around what you're reading without your eyes leaving the centre. Applies globally, to the main and detached windows, and takes effect after clicking Apply.",
+            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(0, 20))
+
         ctk.CTkLabel(
             scroll, text="Skip controls below apply immediately, to the current transcript and all future ones",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
@@ -604,6 +615,8 @@ class SettingsWindow(ctk.CTkToplevel):
         self._set_entry_value(self.resume_rewind_words_entry, original.resume_rewind_words)
 
         (self.scrub_pause_switch.select() if original.scrub_pause_enabled else self.scrub_pause_switch.deselect())
+
+        (self.peripheral_context_switch.select() if original.peripheral_context_enabled else self.peripheral_context_switch.deselect())
 
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
@@ -869,6 +882,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["warm_up_enabled"] = bool(self.warm_up_switch.get())
         values["resume_rewind_enabled"] = bool(self.resume_rewind_switch.get())
         values["scrub_pause_enabled"] = bool(self.scrub_pause_switch.get())
+        values["peripheral_context_enabled"] = bool(self.peripheral_context_switch.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory

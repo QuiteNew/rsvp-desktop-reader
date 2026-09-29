@@ -32,6 +32,7 @@ class Canvas(ctk.CTkFrame):
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
+        peripheral_context_enabled: bool = False,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -55,6 +56,7 @@ class Canvas(ctk.CTkFrame):
         self._resume_rewind_words = resume_rewind_words
         self._warm_up_enabled = warm_up_enabled
         self._scrub_pause_enabled = scrub_pause_enabled
+        self._peripheral_context_enabled = peripheral_context_enabled
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -120,6 +122,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_color(self._guide_mark_color)
         self.reader_display.set_resume_rewind(self._resume_rewind_enabled, self._resume_rewind_words)
         self.reader_display.set_scrub_pause(self._scrub_pause_enabled)
+        self.reader_display.set_peripheral_context(self._peripheral_context_enabled)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -284,6 +287,15 @@ class Canvas(ctk.CTkFrame):
         # their other styling (see open_selection_preview), so they aren't
         # updated here.
 
+    def set_peripheral_context_enabled(self, enabled: bool) -> None:
+        self._peripheral_context_enabled = enabled
+        self.reader_display.set_peripheral_context(enabled)
+        if self._detached_window:
+            self._detached_window.set_peripheral_context_enabled(enabled)
+        # Open selection previews snapshot the setting at open time, like
+        # their other styling (see open_selection_preview), so they aren't
+        # updated here.
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self._resume_rewind_enabled = enabled
         self._resume_rewind_words = words
@@ -379,6 +391,7 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
+            peripheral_context_enabled=self._peripheral_context_enabled,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
@@ -588,6 +601,7 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
+            peripheral_context_enabled=self._peripheral_context_enabled,
         )
         self._show_detached_placeholder()
 
