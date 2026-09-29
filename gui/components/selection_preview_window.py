@@ -98,6 +98,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
             show_skip=True,
             show_maximize=False,
             show_detach=False,
+            show_progress=True,
         )
         self.toolbar.pack(side="right")
 
@@ -115,7 +116,9 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         # No persistence callbacks: this preview never writes to the store.
         # It does take a position callback, but only to drive the scrubber's
         # thumb as reading advances; nothing here reaches the transcript.
-        self.reader_display = ReaderDisplay(self, on_position_changed=self._handle_position_changed)
+        self.reader_display = ReaderDisplay(
+            self, on_position_changed=self._handle_position_changed, on_progress=self._handle_progress,
+        )
         self.reader_display.set_highlight_offset(highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(guide_mark_horizontal_enabled)
         self.reader_display.set_guide_mark_thickness(guide_mark_thickness_px)
@@ -224,6 +227,9 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         # persisted here; this preview writes to no store.
         is_paused = self.reader_display.scrub_end()
         self.toolbar.set_paused(is_paused)
+
+    def _handle_progress(self, remaining_ms: int, percent: int) -> None:
+        self.toolbar.set_progress(remaining_ms, percent)
 
     def _handle_pause_toggle(self) -> None:
         is_paused = self.reader_display.toggle_pause()

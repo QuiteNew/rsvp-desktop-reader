@@ -73,6 +73,20 @@ def wpm_to_delay_ms(wpm: int) -> int:
     return round(60000 / wpm)
 
 
+def pacing_multiplier(pace: str) -> float:
+    """The raw delay multiplier for a word's pacing class: sentence,
+    clause, or none. PACE_NONE and any unrecognized value return 1.0, the
+    same "no extra pause" fallback apply_pacing_multiplier() uses. Exposed
+    on its own so a remaining-time estimate can sum multipliers directly,
+    without rounding each word through a base delay first (see
+    ReaderSession.remaining_ms())."""
+    if pace == PACE_SENTENCE:
+        return SENTENCE_PAUSE_MULTIPLIER
+    if pace == PACE_CLAUSE:
+        return CLAUSE_PAUSE_MULTIPLIER
+    return 1.0
+
+
 def apply_pacing_multiplier(base_delay_ms: int, pace: str) -> int:
     """Scale a base per-word delay up for a word that ends a sentence or
     clause. pace is expected to be PACE_SENTENCE, PACE_CLAUSE, or
@@ -80,11 +94,7 @@ def apply_pacing_multiplier(base_delay_ms: int, pace: str) -> int:
     is treated as "no extra pause" rather than raising, so an
     unrecognized or future pacing value degrades safely instead of
     crashing playback."""
-    if pace == PACE_SENTENCE:
-        return round(base_delay_ms * SENTENCE_PAUSE_MULTIPLIER)
-    if pace == PACE_CLAUSE:
-        return round(base_delay_ms * CLAUSE_PAUSE_MULTIPLIER)
-    return base_delay_ms
+    return round(base_delay_ms * pacing_multiplier(pace))
 
 
 def effective_pacing_length(word: str) -> int:
@@ -98,6 +108,20 @@ def effective_pacing_length(word: str) -> int:
     return len(word) + HYPHEN_PACING_BONUS_CHARS * word.count("-")
 
 
+def length_multiplier(length_band: int) -> float:
+    """The raw delay multiplier for a word's length band (see
+    apply_length_multiplier for the banding and the >=/== reasoning). 1.0
+    for the two shortest bands and anything out of range. The float
+    counterpart to pacing_multiplier(), used by remaining-time estimates."""
+    if length_band >= 4:
+        return VERY_LONG_WORD_MULTIPLIER
+    if length_band == 3:
+        return LONG_WORD_MULTIPLIER
+    if length_band == 2:
+        return MEDIUM_WORD_MULTIPLIER
+    return 1.0
+
+
 def apply_length_multiplier(base_delay_ms: int, length_band: int) -> int:
     """Scale a base per-word delay up for a long word. length_band is
     expected to be an ORP band index (core/orp.py's get_orp_index(),
@@ -106,13 +130,7 @@ def apply_length_multiplier(base_delay_ms: int, length_band: int) -> int:
     multiplier, and anything below band 2, including an unexpected
     negative value, degrades safely to "no extra pause" rather than
     raising."""
-    if length_band >= 4:
-        return round(base_delay_ms * VERY_LONG_WORD_MULTIPLIER)
-    if length_band == 3:
-        return round(base_delay_ms * LONG_WORD_MULTIPLIER)
-    if length_band == 2:
-        return round(base_delay_ms * MEDIUM_WORD_MULTIPLIER)
-    return base_delay_ms
+    return round(base_delay_ms * length_multiplier(length_band))
 
 
 def warm_up_multiplier(words_shown: int) -> float:
@@ -136,6 +154,23 @@ def apply_warm_up(base_delay_ms: int, words_shown: int) -> int:
     length pacing already produced, so it slows the whole start of a
     reading session proportionally."""
     return round(base_delay_ms * warm_up_multiplier(words_shown))
+
+
+def format_duration(total_seconds: int) -> str:
+    """Format a whole number of seconds as a short, human-readable
+    duration: "0s", "45s", "12m 34s", or "1h 05m", switching units only
+    once each threshold is crossed, so a short span doesn't show a
+    misleading "0h 00m" and a long one doesn't show a wall of seconds.
+    Shared by the reader's remaining-time read-out and the Settings stats
+    tab (see gui/components/canvas_toolbar.py and settings_window.py)."""
+    total_seconds = max(0, total_seconds)
+    if total_seconds < 60:
+        return f"{total_seconds}s"
+    minutes, seconds = divmod(total_seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m"
 
 
 if __name__ == "__main__":

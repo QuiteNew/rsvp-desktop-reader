@@ -72,7 +72,7 @@ class ReaderDisplay(ctk.CTkFrame):
                                                 # colors, receding into the background rather
                                                 # than drawing attention.
 
-    def __init__(self, master, on_position_changed=None, on_session_stats=None):
+    def __init__(self, master, on_position_changed=None, on_session_stats=None, on_progress=None):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
         self._after_id: str | None = None
@@ -91,6 +91,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._guide_mark_length_ratio = self.GUIDE_MARK_LENGTH_RATIO
         self.on_position_changed = on_position_changed
         self.on_session_stats = on_session_stats
+        self.on_progress = on_progress
 
         # Per-session stats tracking: see load_session(),
         # finalize_session(), _start_active_span()/_end_active_span(),
@@ -166,6 +167,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._show_current_frame()
         self._schedule_next()
         self._update_guide_marks()
+        self._report_progress()
 
     def stop(self) -> None:
         self.finalize_session()
@@ -316,10 +318,12 @@ class ReaderDisplay(ctk.CTkFrame):
     def set_wpm(self, wpm: int) -> None:
         if self.session:
             self.session.set_wpm(wpm)
+            self._report_progress()  # a faster/slower rate changes the time remaining
 
     def set_length_pacing_enabled(self, enabled: bool) -> None:
         if self.session:
             self.session.set_length_pacing_enabled(enabled)
+            self._report_progress()  # switches which estimate table is used
 
     def set_warm_up_enabled(self, enabled: bool) -> None:
         if self.session:
@@ -591,6 +595,24 @@ class ReaderDisplay(ctk.CTkFrame):
     def _report_position(self) -> None:
         if self.on_position_changed and self.session:
             self.on_position_changed(self.session.index)
+        # Progress read-outs move with the position, so they're reported
+        # from the same points. Kept as its own guarded call (not gated on
+        # on_position_changed) so a reader with only on_progress still
+        # updates.
+        self._report_progress()
+
+    def _report_progress(self) -> None:
+        """Push estimated time remaining and progress percent to on_progress,
+        for the reader's read-outs. Called wherever the position or the
+        estimate changes (advancing, seeking, scrubbing, resuming with
+        rewind, restarting, loading, and on a WPM or length-pacing change).
+        Percent is the current word's position through the transcript, 100
+        once finished."""
+        if self.on_progress is None or self.session is None:
+            return
+        total = self.session.total_words
+        percent = max(0, min(100, round(100 * self.session.index / total))) if total else 0
+        self.on_progress(self.session.remaining_ms(), percent)
 
     def _start_active_span(self) -> None:
         self._active_span_start = time.monotonic()

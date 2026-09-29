@@ -4,6 +4,9 @@ from core.timing import (
     effective_pacing_length, HYPHEN_PACING_BONUS_CHARS,
     warm_up_multiplier, apply_warm_up,
     WARM_UP_START_MULTIPLIER, WARM_UP_WORD_COUNT,
+    pacing_multiplier, length_multiplier, format_duration,
+    SENTENCE_PAUSE_MULTIPLIER, CLAUSE_PAUSE_MULTIPLIER,
+    MEDIUM_WORD_MULTIPLIER, LONG_WORD_MULTIPLIER, VERY_LONG_WORD_MULTIPLIER,
 )
 from core.punctuation import PACE_NONE, PACE_CLAUSE, PACE_SENTENCE
 
@@ -199,3 +202,67 @@ def test_apply_warm_up_never_shortens_the_delay():
     # at least the delay passed in, for any point in (or past) the ramp.
     for words in range(0, WARM_UP_WORD_COUNT + 5):
         assert apply_warm_up(200, words) >= 200
+
+
+# pacing_multiplier / length_multiplier: the raw float multipliers, used by
+# remaining-time estimates. apply_pacing_multiplier/apply_length_multiplier
+# are now defined in terms of these, so they must line up.
+
+def test_pacing_multiplier_values():
+    assert pacing_multiplier(PACE_SENTENCE) == SENTENCE_PAUSE_MULTIPLIER
+    assert pacing_multiplier(PACE_CLAUSE) == CLAUSE_PAUSE_MULTIPLIER
+    assert pacing_multiplier(PACE_NONE) == 1.0
+
+def test_pacing_multiplier_unknown_is_one():
+    assert pacing_multiplier("not-a-real-pace") == 1.0
+
+def test_apply_pacing_multiplier_matches_the_float_multiplier():
+    for pace in (PACE_SENTENCE, PACE_CLAUSE, PACE_NONE, "unknown"):
+        assert apply_pacing_multiplier(200, pace) == round(200 * pacing_multiplier(pace))
+
+def test_length_multiplier_values():
+    assert length_multiplier(0) == 1.0
+    assert length_multiplier(1) == 1.0
+    assert length_multiplier(2) == MEDIUM_WORD_MULTIPLIER
+    assert length_multiplier(3) == LONG_WORD_MULTIPLIER
+    assert length_multiplier(4) == VERY_LONG_WORD_MULTIPLIER
+
+def test_length_multiplier_beyond_band_4_stays_at_top():
+    assert length_multiplier(5) == VERY_LONG_WORD_MULTIPLIER
+
+def test_length_multiplier_negative_is_one():
+    assert length_multiplier(-1) == 1.0
+
+def test_apply_length_multiplier_matches_the_float_multiplier():
+    for band in (0, 1, 2, 3, 4, 5, -1):
+        assert apply_length_multiplier(200, band) == round(200 * length_multiplier(band))
+
+
+# format_duration: short, adaptive H/M/S read-out
+
+def test_format_duration_zero():
+    assert format_duration(0) == "0s"
+
+def test_format_duration_seconds_only():
+    assert format_duration(45) == "45s"
+
+def test_format_duration_just_under_a_minute():
+    assert format_duration(59) == "59s"
+
+def test_format_duration_minutes_and_seconds():
+    assert format_duration(72) == "1m 12s"
+
+def test_format_duration_pads_seconds():
+    assert format_duration(65) == "1m 05s"
+
+def test_format_duration_many_minutes():
+    assert format_duration(754) == "12m 34s"
+
+def test_format_duration_exactly_one_hour():
+    assert format_duration(3600) == "1h 00m"
+
+def test_format_duration_hours_drop_seconds():
+    assert format_duration(3900) == "1h 05m"
+
+def test_format_duration_negative_clamps_to_zero():
+    assert format_duration(-5) == "0s"

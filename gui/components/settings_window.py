@@ -11,6 +11,7 @@ from core.settings_store import (
     HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
     RESUME_REWIND_WORDS_RANGE,
 )
+from core.timing import format_duration
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 
@@ -808,28 +809,13 @@ class SettingsWindow(ctk.CTkToplevel):
             stats_text = (
                 f"{t.times_read} {reads_word}  ·  "
                 f"{t.total_words_read:,} words read  ·  "
-                f"{self._format_duration(t.total_time_spent_seconds)} total"
+                f"{format_duration(t.total_time_spent_seconds)} total"
             )
             ctk.CTkLabel(
                 row, text=stats_text,
                 text_color=COCOA_INK, font=self.small_font,
                 anchor="w", wraplength=380, justify="left",
             ).pack(fill="x", padx=12, pady=(0, 10))
-
-    @staticmethod
-    def _format_duration(total_seconds: int) -> str:
-        """Formats a whole number of seconds as a short, human-readable
-        duration ("0s", "45s", "12m 34s", or "1h 05m"), switching units
-        only once each threshold is crossed, so a short read doesn't show
-        a misleading "0h 00m" and a long one doesn't show a wall of
-        seconds."""
-        if total_seconds < 60:
-            return f"{total_seconds}s"
-        minutes, seconds = divmod(total_seconds, 60)
-        if minutes < 60:
-            return f"{minutes}m {seconds:02d}s"
-        hours, minutes = divmod(minutes, 60)
-        return f"{hours}h {minutes:02d}m"
 
     # ---- Apply ----
 

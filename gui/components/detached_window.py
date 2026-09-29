@@ -79,6 +79,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             show_skip=True,
             show_maximize=False,
             show_detach=False,
+            show_progress=True,
         )
         self.toolbar.pack(side="right")
 
@@ -90,6 +91,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self,
             on_position_changed=self._handle_position_changed,
             on_session_stats=self._handle_session_stats,
+            on_progress=self._handle_progress,
         )
         self.reader_display.set_highlight_offset(highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(guide_mark_horizontal_enabled)
@@ -199,6 +201,9 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         is_paused = self.reader_display.scrub_end()
         self.toolbar.set_paused(is_paused)
         self._handle_pause_changed(is_paused)
+
+    def _handle_progress(self, remaining_ms: int, percent: int) -> None:
+        self.toolbar.set_progress(remaining_ms, percent)
 
     def _handle_session_stats(self, words_read: int, active_seconds: float) -> None:
         if self.on_session_stats:

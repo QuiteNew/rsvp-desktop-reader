@@ -368,6 +368,70 @@ def test_seek_to_does_not_restart_the_warm_up_ramp():
     assert session.current_delay_ms() == delay_before
 
 
+# remaining_ms: estimated time left, summed from the paced per-word delays
+
+def test_remaining_ms_plain_words_is_count_times_base():
+    # base at 300 wpm is 200ms; plain words carry no pacing pause, so
+    # remaining is simply words-left * base.
+    session = ReaderSession("one two three four", wpm=300)
+    assert session.remaining_ms() == 4 * 200
+
+def test_remaining_ms_shrinks_as_you_advance():
+    session = ReaderSession("one two three four", wpm=300)
+    session.advance()
+    session.advance()
+    assert session.remaining_ms() == 2 * 200
+
+def test_remaining_ms_is_zero_when_finished():
+    session = ReaderSession("one two", wpm=300)
+    session.advance()
+    session.advance()
+    assert session.is_finished is True
+    assert session.remaining_ms() == 0
+
+def test_remaining_ms_includes_sentence_pause():
+    # "Stop." ends a sentence (2.5x -> 500ms at base 200), "Go" is plain
+    # (200ms), so from the start the estimate is 700.
+    session = ReaderSession("Stop. Go", wpm=300)
+    assert session.remaining_ms() == 500 + 200
+
+def test_remaining_ms_counts_length_pause_only_when_enabled():
+    # "responsibility" is length band 4. Off, it's a plain 200ms word, so
+    # remaining is 200 + 200 = 400. On, it's 1.7x -> 340, so 340 + 200 = 540.
+    off = ReaderSession("responsibility here", wpm=300)
+    assert off.remaining_ms() == 400
+    on = ReaderSession("responsibility here", wpm=300, length_pacing_enabled=True)
+    assert on.remaining_ms() == 540
+
+def test_remaining_ms_tracks_a_live_length_pacing_toggle():
+    session = ReaderSession("responsibility here", wpm=300)
+    assert session.remaining_ms() == 400
+    session.set_length_pacing_enabled(True)
+    assert session.remaining_ms() == 540
+
+def test_remaining_ms_scales_with_wpm():
+    session = ReaderSession("one two three four", wpm=300)
+    assert session.remaining_ms() == 800
+    session.set_wpm(600)  # base halves to 100ms
+    assert session.remaining_ms() == 400
+
+def test_remaining_ms_ignores_warm_up():
+    # Warm-up would slow the first words during playback, but the estimate
+    # deliberately excludes it, so it reads the same either way.
+    plain = ReaderSession("one two three four", wpm=300)
+    warmed = ReaderSession("one two three four", wpm=300, warm_up_enabled=True)
+    assert warmed.remaining_ms() == plain.remaining_ms()
+
+def test_remaining_ms_updates_after_seek():
+    session = ReaderSession("one two three four five six", wpm=300)
+    session.seek_to(4)
+    assert session.remaining_ms() == 2 * 200
+
+def test_remaining_ms_empty_transcript_is_zero():
+    session = ReaderSession("", wpm=300)
+    assert session.remaining_ms() == 0
+
+
 # reset
 
 def test_reset_returns_to_index_zero():

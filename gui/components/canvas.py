@@ -94,6 +94,7 @@ class Canvas(ctk.CTkFrame):
             on_restart=self.restart,
             on_maximize_toggle=self._handle_maximize_toggle,
             on_detach=self._handle_detach,
+            show_progress=True,
         )
         self.toolbar.grid(row=0, column=2, sticky="e")
 
@@ -110,6 +111,7 @@ class Canvas(ctk.CTkFrame):
             self.content_area,
             on_position_changed=self._handle_position_changed,
             on_session_stats=self._handle_session_stats,
+            on_progress=self._handle_progress,
         )
         self.reader_display.set_highlight_offset(self._highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(self._guide_mark_horizontal_enabled)
@@ -482,6 +484,9 @@ class Canvas(ctk.CTkFrame):
         self.toolbar.set_paused(is_paused)
         self._handle_pause_changed(is_paused)
 
+    def _handle_progress(self, remaining_ms: int, percent: int) -> None:
+        self.toolbar.set_progress(remaining_ms, percent)
+
     def _handle_session_stats(self, words_read: int, active_seconds: float) -> None:
         if self._ephemeral:
             return
@@ -622,24 +627,28 @@ class Canvas(ctk.CTkFrame):
     def _show_empty(self) -> None:
         self._input_currently_shown = False
         self._hide_scrub_bar()
+        self.toolbar.set_progress_shown(False)
         self._layout(show_buttons=False)
         self._show_content(self.empty_label)
 
     def _show_input(self) -> None:
         self._input_currently_shown = True
         self._hide_scrub_bar()
+        self.toolbar.set_progress_shown(False)
         self._layout(show_buttons=True)
         self._show_content(self.input_view)
 
     def _show_reader(self) -> None:
         self._input_currently_shown = False
         self.scrub_bar.grid()
+        self.toolbar.set_progress_shown(True)
         self._layout(show_buttons=True)
         self._show_content(self.reader_display)
 
     def _show_detached_placeholder(self) -> None:
         self._input_currently_shown = False
         self._hide_scrub_bar()
+        self.toolbar.set_progress_shown(False)
         self._layout(show_buttons=False)
         self._show_content(self.detached_placeholder)
 

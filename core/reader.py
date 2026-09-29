@@ -1,7 +1,10 @@
 from core.parser import clean_transcript
 from core.tokenizer import tokenize
 from core.orp import split_at_orp, get_orp_index_for_length, ORPWord
-from core.timing import wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier, effective_pacing_length, apply_warm_up
+from core.timing import (
+    wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier,
+    effective_pacing_length, apply_warm_up, pacing_multiplier, length_multiplier,
+)
 from core.punctuation import split_punctuation, classify_pacing
 
 
@@ -41,6 +44,26 @@ class ReaderSession:
             self.frames.append(frame)
             self._paces.append(classify_pacing(leading + trailing))
             self._length_bands.append(get_orp_index_for_length(effective_pacing_length(orp_subject)))
+
+        # Per-word delay multipliers (relative to the flat base delay),
+        # summed from each position to the end, so remaining_ms() is O(1)
+        # and independent of WPM (which only scales the base delay). Two
+        # tables: punctuation pacing alone, and punctuation combined with
+        # length pacing (the larger of the two per word, matching
+        # current_delay_ms). Toggling length pacing just switches which
+        # table remaining_ms() reads, with no rebuild. Warm-up is
+        # deliberately excluded: it's a brief start-of-session ramp, so
+        # leaving it out keeps the estimate stable and close. Each table has
+        # total_words + 1 entries; the last is 0.0, so a finished session
+        # reads 0.
+        n = len(self.frames)
+        self._suffix_punct_mult = [0.0] * (n + 1)
+        self._suffix_paced_mult = [0.0] * (n + 1)
+        for i in range(n - 1, -1, -1):
+            punct = pacing_multiplier(self._paces[i])
+            paced = max(punct, length_multiplier(self._length_bands[i]))
+            self._suffix_punct_mult[i] = self._suffix_punct_mult[i + 1] + punct
+            self._suffix_paced_mult[i] = self._suffix_paced_mult[i + 1] + paced
 
         self.wpm = wpm
         self.index = max(0, min(start_index, len(self.frames)))
@@ -83,6 +106,19 @@ class ReaderSession:
         # comes from the larger multiplier.
         length_delay = apply_length_multiplier(base, self._length_bands[self.index])
         return self._with_warm_up(max(punctuation_delay, length_delay))
+
+    def remaining_ms(self) -> int:
+        """Estimated time, in milliseconds, to read from the current word to
+        the end at the current WPM. Sums the paced per-word delays (the
+        sentence, clause and long-word pauses that would apply), so it
+        reflects what playback will actually do, but excludes the warm-up
+        ramp, which is a short start-of-session effect. Includes the word
+        currently on screen, and returns 0 once finished. O(1): the
+        multipliers are pre-summed at construction (see __init__) and only
+        the base delay depends on WPM."""
+        base = wpm_to_delay_ms(self.wpm)
+        suffix = self._suffix_paced_mult if self.length_pacing_enabled else self._suffix_punct_mult
+        return round(base * suffix[self.index])
 
     def _with_warm_up(self, delay_ms: int) -> int:
         """Apply the warm-up ramp to an already-paced delay, if warm-up is
