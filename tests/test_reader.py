@@ -432,6 +432,91 @@ def test_remaining_ms_empty_transcript_is_zero():
     assert session.remaining_ms() == 0
 
 
+# peripheral_context: the words around the current one for the context ribbon
+
+def test_peripheral_context_middle_window():
+    session = ReaderSession("one two three four five", start_index=2)
+    ctx = session.peripheral_context(before=1, after=2)
+    assert ctx.before == ["two"]
+    assert ctx.current == "three"
+    assert ctx.after == ["four", "five"]
+
+def test_peripheral_context_at_start_has_no_before():
+    session = ReaderSession("one two three four five")
+    ctx = session.peripheral_context(before=1, after=2)
+    assert ctx.before == []
+    assert ctx.current == "one"
+    assert ctx.after == ["two", "three"]
+
+def test_peripheral_context_near_end_truncates_after():
+    session = ReaderSession("one two three four five", start_index=4)
+    ctx = session.peripheral_context(before=1, after=2)
+    assert ctx.before == ["four"]
+    assert ctx.current == "five"
+    assert ctx.after == []
+
+def test_peripheral_context_clamps_counts_to_whats_available():
+    session = ReaderSession("one two three", start_index=1)
+    ctx = session.peripheral_context(before=5, after=5)
+    assert ctx.before == ["one"]
+    assert ctx.current == "two"
+    assert ctx.after == ["three"]
+
+def test_peripheral_context_zero_counts_gives_only_current():
+    session = ReaderSession("one two three", start_index=1)
+    ctx = session.peripheral_context(before=0, after=0)
+    assert ctx.before == []
+    assert ctx.current == "two"
+    assert ctx.after == []
+
+def test_peripheral_context_negative_counts_treated_as_zero():
+    session = ReaderSession("one two three", start_index=1)
+    ctx = session.peripheral_context(before=-3, after=-1)
+    assert ctx.before == []
+    assert ctx.current == "two"
+    assert ctx.after == []
+
+def test_peripheral_context_finished_session_is_all_empty():
+    session = ReaderSession("one two")
+    session.advance()
+    session.advance()
+    assert session.is_finished is True
+    ctx = session.peripheral_context(before=1, after=2)
+    assert ctx.before == []
+    assert ctx.current is None
+    assert ctx.after == []
+
+def test_peripheral_context_empty_transcript_is_all_empty():
+    session = ReaderSession("")
+    assert session.peripheral_context(before=1, after=2) == ([], None, [])
+
+def test_peripheral_context_keeps_punctuation_attached_to_words():
+    # Leading and trailing punctuation folds into a frame's word, so the
+    # ribbon shows it just as the reader does.
+    session = ReaderSession("Wait, go now.", start_index=1)
+    ctx = session.peripheral_context(before=1, after=1)
+    assert ctx.before == ["Wait,"]
+    assert ctx.current == "go"
+    assert ctx.after == ["now."]
+
+def test_peripheral_context_current_matches_current_frame_word():
+    session = ReaderSession("alpha beta gamma", start_index=1)
+    frame = session.current_frame()
+    ctx = session.peripheral_context(before=1, after=1)
+    assert ctx.current == frame.before + frame.focus + frame.after
+
+def test_peripheral_context_does_not_move_the_position():
+    session = ReaderSession("one two three four", start_index=2)
+    session.peripheral_context(before=2, after=2)
+    assert session.index == 2
+
+def test_peripheral_context_tracks_position_as_it_advances():
+    session = ReaderSession("one two three four five")
+    session.advance()  # now on "two"
+    ctx = session.peripheral_context(before=1, after=1)
+    assert (ctx.before, ctx.current, ctx.after) == (["one"], "two", ["three"])
+
+
 # reset
 
 def test_reset_returns_to_index_zero():

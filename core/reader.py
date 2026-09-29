@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 from core.parser import clean_transcript
 from core.tokenizer import tokenize
 from core.orp import split_at_orp, get_orp_index_for_length, ORPWord
@@ -6,6 +8,15 @@ from core.timing import (
     effective_pacing_length, apply_warm_up, pacing_multiplier, length_multiplier,
 )
 from core.punctuation import split_punctuation, classify_pacing
+
+
+class PeripheralContext(NamedTuple):
+    """The words around the current one, for the peripheral context ribbon:
+    `before` in reading order (left to right), the `current` word (None when
+    the session is finished or empty), and `after` in reading order."""
+    before: list[str]
+    current: str | None
+    after: list[str]
 
 
 class ReaderSession:
@@ -88,6 +99,33 @@ class ReaderSession:
         if self.is_finished:
             return None
         return self.frames[self.index]
+
+    def _word_at(self, i: int) -> str:
+        """The plain text of the word at index i, punctuation included,
+        reconstructed from its ORP frame the same way the reader shows it."""
+        frame = self.frames[i]
+        return frame.before + frame.focus + frame.after
+
+    def peripheral_context(self, before: int, after: int) -> PeripheralContext:
+        """The words immediately around the current one, for the peripheral
+        context ribbon: up to `before` words preceding it (in reading order,
+        left to right), the current word, and up to `after` words following
+        it. Near the start or end there are simply fewer, and a finished or
+        empty session has no current word, so it returns all-empty with
+        current None. Pure and read-only: it never moves the position, so
+        the ribbon can be recomputed freely after advancing, skipping or
+        seeking. Punctuation stays attached to its word (the reconstructed
+        word is the frame's before+focus+after), so a trailing comma or
+        period shows in the ribbon just as it plays."""
+        before = max(0, before)
+        after = max(0, after)
+        if self.is_finished or self.total_words == 0:
+            return PeripheralContext([], None, [])
+        start = max(0, self.index - before)
+        before_words = [self._word_at(j) for j in range(start, self.index)]
+        end = min(self.total_words, self.index + 1 + after)
+        after_words = [self._word_at(j) for j in range(self.index + 1, end)]
+        return PeripheralContext(before_words, self._word_at(self.index), after_words)
 
     def current_delay_ms(self) -> int:
         base = wpm_to_delay_ms(self.wpm)
