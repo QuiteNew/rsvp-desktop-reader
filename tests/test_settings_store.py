@@ -369,3 +369,35 @@ def test_warm_up_persists_and_reloads(tmp_path):
     first.set_warm_up_enabled(True)
     second = SettingsStore(settings_directory=directory)
     assert second.warm_up_enabled is True
+
+
+# scrub_pause_enabled (defaults to True, unlike the other behavior toggles)
+
+def test_fresh_store_scrub_pause_matches_defaults(store):
+    assert store.scrub_pause_enabled == AppSettings().scrub_pause_enabled
+
+def test_fresh_store_scrub_pause_defaults_to_true(store):
+    # Deliberately on by default: it preserves the original scrubber
+    # behavior, where releasing the bar pauses reading on the landed word.
+    assert store.scrub_pause_enabled is True
+
+def test_set_scrub_pause_enabled_false(store):
+    store.set_scrub_pause_enabled(False)
+    assert store.scrub_pause_enabled is False
+
+def test_set_scrub_pause_enabled_true(store):
+    store.set_scrub_pause_enabled(False)
+    store.set_scrub_pause_enabled(True)
+    assert store.scrub_pause_enabled is True
+
+def test_set_scrub_pause_does_not_affect_other_settings(store):
+    store.set_defaults(500, "#111111", "#222222", "#333333", 32)
+    store.set_scrub_pause_enabled(False)
+    assert store.default_wpm == 500
+
+def test_scrub_pause_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_scrub_pause_enabled(False)
+    second = SettingsStore(settings_directory=directory)
+    assert second.scrub_pause_enabled is False

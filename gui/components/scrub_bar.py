@@ -27,9 +27,10 @@ class ScrubBar(ctk.CTkFrame):
 
     SLIDER_WIDTH = 220
 
-    def __init__(self, master, on_scrub=None):
+    def __init__(self, master, on_scrub=None, on_scrub_release=None):
         super().__init__(master, fg_color="transparent")
         self.on_scrub = on_scrub
+        self.on_scrub_release = on_scrub_release
         self._total = 0
         # Raised only while set_position() drives the slider itself, so
         # _handle_slide() can tell a programmatic move from a real drag.
@@ -42,6 +43,11 @@ class ScrubBar(ctk.CTkFrame):
             command=self._handle_slide,
         )
         self.slider.pack(side="left")
+        # A real "let go" event, which the command callback alone can't
+        # give. CTkSlider.bind forwards to its inner canvas and preserves
+        # CTk's own <ButtonRelease-1> handling (add="+"). Used to decide,
+        # once per drag, whether to pause or resume (see on_scrub_release).
+        self.slider.bind("<ButtonRelease-1>", self._handle_release, add="+")
 
         self.readout = ctk.CTkLabel(
             self, text="", text_color=COCOA_INK,
@@ -100,6 +106,12 @@ class ScrubBar(ctk.CTkFrame):
         self._update_readout(index)
         if self.on_scrub:
             self.on_scrub(index)
+
+    def _handle_release(self, event=None) -> None:
+        if self._total < 2:
+            return
+        if self.on_scrub_release:
+            self.on_scrub_release()
 
     def _update_readout(self, index: int) -> None:
         if self._total <= 0:

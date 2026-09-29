@@ -22,6 +22,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         resume_rewind_enabled: bool = False,
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
+        scrub_pause_enabled: bool = True,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -49,6 +50,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.length_pacing_enabled = length_pacing_enabled
         self.split_long_paragraphs_enabled = split_long_paragraphs_enabled
         self.warm_up_enabled = warm_up_enabled
+        self.scrub_pause_enabled = scrub_pause_enabled
 
         self.title(transcript.title)
         apply_app_icon(self)
@@ -64,7 +66,9 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         # the left, the toolbar hugs the right. Packed as a unit in
         # _render_current_state()'s reader branch.
         self.control_row = ctk.CTkFrame(self, fg_color="transparent")
-        self.scrub_bar = ScrubBar(self.control_row, on_scrub=self._handle_scrub)
+        self.scrub_bar = ScrubBar(
+            self.control_row, on_scrub=self._handle_scrub, on_scrub_release=self._handle_scrub_release,
+        )
         self.scrub_bar.pack(side="left")
         self.toolbar = CanvasToolbar(
             self.control_row,
@@ -93,6 +97,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_length_percent(guide_mark_length_percent)
         self.reader_display.set_guide_mark_color(guide_mark_color)
         self.reader_display.set_resume_rewind(resume_rewind_enabled, resume_rewind_words)
+        self.reader_display.set_scrub_pause(scrub_pause_enabled)
 
         self._render_current_state()
         self._bind_shortcuts()
@@ -136,6 +141,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.warm_up_enabled = enabled
         self.reader_display.set_warm_up_enabled(enabled)
 
+    def set_scrub_pause(self, enabled: bool) -> None:
+        self.scrub_pause_enabled = enabled
+        self.reader_display.set_scrub_pause(enabled)
+
     def _render_current_state(self) -> None:
         self.control_row.pack_forget()
         self.input_view.pack_forget()
@@ -178,10 +187,16 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self.on_position_changed(self.transcript, index)
 
     def _handle_scrub(self, index: int) -> None:
-        """The user dragged the scrubber: seek there (lands paused), then
-        sync the toolbar and persist the paused state, the same shape as
-        this window's _handle_skip()."""
-        is_paused = self.reader_display.scrub_to(index)
+        """A live drag: playback is held, so just seek and sync the
+        toolbar. The paused state is persisted once on release."""
+        is_paused = self.reader_display.scrub_move(index)
+        self.toolbar.set_paused(is_paused)
+
+    def _handle_scrub_release(self) -> None:
+        """Release: scrub_end() applies the "pause after scrubbing"
+        setting (stay paused, or resume from the landed word), then sync
+        and persist the final state, the same shape as _handle_skip()."""
+        is_paused = self.reader_display.scrub_end()
         self.toolbar.set_paused(is_paused)
         self._handle_pause_changed(is_paused)
 

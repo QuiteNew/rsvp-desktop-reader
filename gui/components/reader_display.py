@@ -79,6 +79,13 @@ class ReaderDisplay(ctk.CTkFrame):
         self._is_paused = False
         self._resume_rewind_enabled = False
         self._resume_rewind_words = 3
+        self._scrub_pause_enabled = True
+        # Scrubber drag state (see scrub_move/scrub_end). _scrubbing is True
+        # between the first move of a drag and its release; _scrub_was_playing
+        # records whether reading was playing when that drag began, so
+        # scrub_end knows whether to resume.
+        self._scrubbing = False
+        self._scrub_was_playing = False
         self._highlight_offset_px = 0
         self._guide_mark_horizontal_enabled = False
         self._guide_mark_length_ratio = self.GUIDE_MARK_LENGTH_RATIO
@@ -150,6 +157,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._cancel_pending()
         self.session = session
         self._is_paused = start_paused
+        self._scrubbing = False
         self._session_words_read = 0
         self._session_active_seconds = 0.0
         self._active_span_start = None
@@ -164,6 +172,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._cancel_pending()
         self.session = None
         self._is_paused = False
+        self._scrubbing = False
         self._update_guide_marks()
 
     def finalize_session(self) -> None:
@@ -260,25 +269,47 @@ class ReaderDisplay(ctk.CTkFrame):
         self._update_guide_marks()
         return self._is_paused
 
-    def scrub_to(self, index: int) -> bool:
-        """Jump to an absolute word index from the progress scrubber and
-        hold there paused. Cancels any pending advance, lands on the
-        target word, and reports the new position so it's saved. Reading
-        always ends up paused on the scrubbed-to word (the user presses
-        play to continue): that both matches the "land paused at the spot"
-        behavior and makes this safe to call repeatedly during a live
-        drag, since the first call closes the active span and later ones
-        are a no-op on the pause state. Returns the paused state (always
-        True) so the caller can sync its toolbar's play/pause button."""
+    def scrub_move(self, index: int) -> bool:
+        """Live scrub to an absolute word index while the user drags the
+        progress bar. Playback is held for the whole drag: the first move
+        remembers whether reading was playing and closes the active span,
+        and every move cancels any pending advance and shows the landed
+        word, so the reader never advances under the moving thumb. The new
+        position is reported so it's saved. Always returns paused (True)
+        while dragging; scrub_end() decides the final state on release.
+        Safe to call many times per drag."""
         if self.session is None:
             return self._is_paused
+        if not self._scrubbing:
+            self._scrubbing = True
+            self._scrub_was_playing = not self._is_paused
+            if not self._is_paused:
+                self._is_paused = True
+                self._end_active_span()
         self._cancel_pending()
         self.session.seek_to(index)
-        if not self._is_paused:
-            self._is_paused = True
-            self._end_active_span()
         self._show_current_frame()
         self._report_position()
+        self._update_guide_marks()
+        return self._is_paused
+
+    def scrub_end(self) -> bool:
+        """Called when the user lets go of the progress bar. If the
+        "pause after scrubbing" setting is on, or reading wasn't playing
+        when the drag began, it stays paused on the landed word; otherwise
+        it resumes playing from there. A release with no preceding move
+        (self._scrubbing still False, e.g. a click that didn't change the
+        value) is a no-op. Returns the resulting paused state so the
+        caller can sync its toolbar's play/pause button."""
+        if self.session is None or not self._scrubbing:
+            return self._is_paused
+        self._scrubbing = False
+        if self._scrub_pause_enabled or not self._scrub_was_playing or self.session.is_finished:
+            self._is_paused = True
+        else:
+            self._is_paused = False
+            self._start_active_span()
+            self._schedule_next()
         self._update_guide_marks()
         return self._is_paused
 
@@ -301,6 +332,13 @@ class ReaderDisplay(ctk.CTkFrame):
         until the next resume."""
         self._resume_rewind_enabled = enabled
         self._resume_rewind_words = words
+
+    def set_scrub_pause(self, enabled: bool) -> None:
+        """Whether releasing the progress scrubber pauses reading (on) or
+        keeps its prior play state (off). Read at release time in
+        scrub_end(); nothing changes about the current word until the next
+        scrub is released."""
+        self._scrub_pause_enabled = enabled
 
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self.configure(fg_color=background_color)

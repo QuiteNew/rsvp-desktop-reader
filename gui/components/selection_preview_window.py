@@ -46,6 +46,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         resume_rewind_enabled: bool = False,
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
+        scrub_pause_enabled: bool = True,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -70,6 +71,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
         self.warm_up_enabled = warm_up_enabled
+        self.scrub_pause_enabled = scrub_pause_enabled
 
         self.title(title)
         apply_app_icon(self)
@@ -83,7 +85,9 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         # Control row mirroring the detached window: scrubber left,
         # toolbar right. Shown only over the reader (see _show_reader).
         self.control_row = ctk.CTkFrame(self, fg_color="transparent")
-        self.scrub_bar = ScrubBar(self.control_row, on_scrub=self._handle_scrub)
+        self.scrub_bar = ScrubBar(
+            self.control_row, on_scrub=self._handle_scrub, on_scrub_release=self._handle_scrub_release,
+        )
         self.scrub_bar.pack(side="left")
         self.toolbar = CanvasToolbar(
             self.control_row,
@@ -118,6 +122,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_length_percent(guide_mark_length_percent)
         self.reader_display.set_guide_mark_color(guide_mark_color)
         self.reader_display.set_resume_rewind(resume_rewind_enabled, resume_rewind_words)
+        self.reader_display.set_scrub_pause(scrub_pause_enabled)
 
         self._show_input()
         self._bind_shortcuts()
@@ -210,7 +215,14 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.scrub_bar.set_position(index)
 
     def _handle_scrub(self, index: int) -> None:
-        is_paused = self.reader_display.scrub_to(index)
+        # Live drag: playback is held, so just seek and sync the toolbar.
+        is_paused = self.reader_display.scrub_move(index)
+        self.toolbar.set_paused(is_paused)
+
+    def _handle_scrub_release(self) -> None:
+        # Release: apply the "pause after scrubbing" setting. Nothing is
+        # persisted here; this preview writes to no store.
+        is_paused = self.reader_display.scrub_end()
         self.toolbar.set_paused(is_paused)
 
     def _handle_pause_toggle(self) -> None:

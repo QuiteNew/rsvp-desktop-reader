@@ -31,6 +31,7 @@ class Canvas(ctk.CTkFrame):
         resume_rewind_enabled: bool = False,
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
+        scrub_pause_enabled: bool = True,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -53,6 +54,7 @@ class Canvas(ctk.CTkFrame):
         self._resume_rewind_enabled = resume_rewind_enabled
         self._resume_rewind_words = resume_rewind_words
         self._warm_up_enabled = warm_up_enabled
+        self._scrub_pause_enabled = scrub_pause_enabled
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -81,7 +83,9 @@ class Canvas(ctk.CTkFrame):
         self.stop_button = StopButton(self.button_row, on_stop=self.stop)
         self.stop_button.grid(row=0, column=0, sticky="w")
 
-        self.scrub_bar = ScrubBar(self.button_row, on_scrub=self._handle_scrub)
+        self.scrub_bar = ScrubBar(
+            self.button_row, on_scrub=self._handle_scrub, on_scrub_release=self._handle_scrub_release,
+        )
         self.scrub_bar.grid(row=0, column=1, sticky="w", padx=(12, 0))
 
         self.toolbar = CanvasToolbar(
@@ -113,6 +117,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_length_percent(self._guide_mark_length_percent)
         self.reader_display.set_guide_mark_color(self._guide_mark_color)
         self.reader_display.set_resume_rewind(self._resume_rewind_enabled, self._resume_rewind_words)
+        self.reader_display.set_scrub_pause(self._scrub_pause_enabled)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -268,6 +273,15 @@ class Canvas(ctk.CTkFrame):
         # their other styling (see open_selection_preview), so they aren't
         # updated here.
 
+    def set_scrub_pause(self, enabled: bool) -> None:
+        self._scrub_pause_enabled = enabled
+        self.reader_display.set_scrub_pause(enabled)
+        if self._detached_window:
+            self._detached_window.set_scrub_pause(enabled)
+        # Open selection previews snapshot the setting at open time, like
+        # their other styling (see open_selection_preview), so they aren't
+        # updated here.
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self._resume_rewind_enabled = enabled
         self._resume_rewind_words = words
@@ -362,6 +376,7 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_enabled=self._resume_rewind_enabled,
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
+            scrub_pause_enabled=self._scrub_pause_enabled,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
@@ -449,12 +464,21 @@ class Canvas(ctk.CTkFrame):
             self.on_position_changed(self.current_transcript, index)
 
     def _handle_scrub(self, index: int) -> None:
-        """The user dragged the progress scrubber. Seek there (which lands
-        paused), then sync the toolbar's play/pause button and the paused
-        state the same way a manual pause would. Position saving happens
+        """A live drag of the progress scrubber. Playback is held while
+        dragging (scrub_move always reports paused), so this just seeks and
+        syncs the toolbar; the paused state is persisted once on release in
+        _handle_scrub_release, not on every tick. Position saving happens
         through the reader's own on_position_changed path (guarded by
         _ephemeral for previews), same as skipping."""
-        is_paused = self.reader_display.scrub_to(index)
+        is_paused = self.reader_display.scrub_move(index)
+        self.toolbar.set_paused(is_paused)
+
+    def _handle_scrub_release(self) -> None:
+        """The user let go of the scrubber. scrub_end() applies the
+        "pause after scrubbing" setting: it stays paused, or resumes
+        playing from the landed word. Sync and persist the final state
+        once, the same shape as a manual pause."""
+        is_paused = self.reader_display.scrub_end()
         self.toolbar.set_paused(is_paused)
         self._handle_pause_changed(is_paused)
 
@@ -558,6 +582,7 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_enabled=self._resume_rewind_enabled,
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
+            scrub_pause_enabled=self._scrub_pause_enabled,
         )
         self._show_detached_placeholder()
 

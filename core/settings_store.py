@@ -62,6 +62,10 @@ class AppSettings:
     warm_up_enabled: bool = False  # global, not per-transcript: ease in at the start of a reading session,
                                     # ramping from half speed up to the target rate over the first words.
                                     # Off by default. See core/timing.py's warm_up_multiplier().
+    scrub_pause_enabled: bool = True  # global, not per-transcript: when on, releasing the progress scrubber
+                                       # pauses reading on the word it landed on. On by default. When off,
+                                       # reading keeps its prior play state after a scrub (resumes if it was
+                                       # playing, stays paused otherwise). See ReaderDisplay.scrub_end().
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -236,6 +240,10 @@ class SettingsStore:
     def warm_up_enabled(self) -> bool:
         return self._settings.warm_up_enabled
 
+    @property
+    def scrub_pause_enabled(self) -> bool:
+        return self._settings.scrub_pause_enabled
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -311,6 +319,10 @@ class SettingsStore:
 
     def set_warm_up_enabled(self, enabled: bool) -> None:
         self._settings.warm_up_enabled = enabled
+        self._save()
+
+    def set_scrub_pause_enabled(self, enabled: bool) -> None:
+        self._settings.scrub_pause_enabled = enabled
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:
