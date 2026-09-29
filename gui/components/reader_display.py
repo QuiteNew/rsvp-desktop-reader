@@ -2,7 +2,8 @@ import time
 
 import customtkinter as ctk
 from core.reader import ReaderSession
-from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW
+from core.colors import blend_colors
+from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, HEARTH_PAPER
 
 class ReaderDisplay(ctk.CTkFrame):
     """Displays the flashing word, with the ORP letter rendered in a
@@ -31,6 +32,12 @@ class ReaderDisplay(ctk.CTkFrame):
     fixed constants (GUIDE_MARK_HORIZONTAL_*), not user-configurable;
     only whether they're shown at all is, via
     set_guide_mark_horizontal_enabled().
+
+    An optional peripheral context ribbon can be shown below the focal
+    word: the current word centred under the same anchor x, dimmed, with
+    a few previous words to its left and upcoming words to its right, so
+    peripheral vision keeps the thread of the sentence. Off by default;
+    see set_peripheral_context() and _update_peripheral_context().
     """
 
     DEFAULT_FONT_COLOR = COCOA_INK
@@ -72,6 +79,11 @@ class ReaderDisplay(ctk.CTkFrame):
                                                 # colors, receding into the background rather
                                                 # than drawing attention.
 
+    PERIPHERAL_CONTEXT_SIZE_RATIO = 0.5    # ribbon font size as a fraction of the word font size
+    PERIPHERAL_CONTEXT_DIM = 0.55          # blend fraction toward the background (0 = full font colour, 1 = background)
+    PERIPHERAL_CONTEXT_WORD_GAP_PX = 10    # gap between the current word and each flanking side
+    PERIPHERAL_CONTEXT_TOP_MARGIN_PX = 8   # breathing space below the lowest guide-mark tip
+
     def __init__(self, master, on_position_changed=None, on_session_stats=None, on_progress=None):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
@@ -80,6 +92,13 @@ class ReaderDisplay(ctk.CTkFrame):
         self._resume_rewind_enabled = False
         self._resume_rewind_words = 3
         self._scrub_pause_enabled = True
+        # Peripheral context ribbon (dim words around the current one),
+        # off by default; the Commit-3 settings wiring flips it on. The
+        # counts are how many words show on each side. See
+        # set_peripheral_context() and _update_peripheral_context().
+        self._peripheral_context_enabled = False
+        self._peripheral_context_before = 1
+        self._peripheral_context_after = 2
         # Scrubber drag state (see scrub_move/scrub_end). _scrubbing is True
         # between the first move of a drag and its release; _scrub_was_playing
         # records whether reading was playing when that drag began, so
@@ -89,6 +108,11 @@ class ReaderDisplay(ctk.CTkFrame):
         self._highlight_offset_px = 0
         self._guide_mark_horizontal_enabled = False
         self._guide_mark_length_ratio = self.GUIDE_MARK_LENGTH_RATIO
+        # The current transcript's reading colours, kept so the context
+        # ribbon can dim the font toward the background. Updated by
+        # set_colors(); the defaults match the label defaults below.
+        self._font_color = self.DEFAULT_FONT_COLOR
+        self._background_color = HEARTH_PAPER
         self.on_position_changed = on_position_changed
         self.on_session_stats = on_session_stats
         self.on_progress = on_progress
@@ -154,6 +178,19 @@ class ReaderDisplay(ctk.CTkFrame):
             fg_color=self.GUIDE_MARK_HORIZONTAL_COLOR, corner_radius=0,
         )
 
+        # Peripheral context ribbon labels: the current word centred under
+        # the same anchor x as the focal word, flanked by dim previous and
+        # upcoming words. Placed (or hidden) by _update_peripheral_context();
+        # not shown at all until enabled. Uses a smaller font than the
+        # reading word, sized as a fraction of it at update time.
+        self.context_font = ctk.CTkFont(
+            family=FONT_HEADING,
+            size=max(8, round(self.DEFAULT_FONT_SIZE * self.PERIPHERAL_CONTEXT_SIZE_RATIO)),
+        )
+        self.context_before = ctk.CTkLabel(self.word_row, text="", font=self.context_font, text_color=self.DEFAULT_FONT_COLOR)
+        self.context_current = ctk.CTkLabel(self.word_row, text="", font=self.context_font, text_color=self.DEFAULT_FONT_COLOR)
+        self.context_after = ctk.CTkLabel(self.word_row, text="", font=self.context_font, text_color=self.DEFAULT_FONT_COLOR)
+
     def load_session(self, session: ReaderSession, start_paused: bool = False) -> None:
         self._cancel_pending()
         self.session = session
@@ -176,6 +213,8 @@ class ReaderDisplay(ctk.CTkFrame):
         self._is_paused = False
         self._scrubbing = False
         self._update_guide_marks()
+        # Session is gone, so the ribbon (if it was showing) must clear too.
+        self._update_peripheral_context()
 
     def finalize_session(self) -> None:
         """Report this session's accumulated words-read/active-time via
@@ -344,7 +383,19 @@ class ReaderDisplay(ctk.CTkFrame):
         scrub is released."""
         self._scrub_pause_enabled = enabled
 
+    def set_peripheral_context(self, enabled: bool, before: int = 1, after: int = 2) -> None:
+        """Show or hide the peripheral context ribbon and set how many
+        words flank the current one. Off by default. Read live: the ribbon
+        redraws immediately, so this can be called any time, whether or not
+        a session is loaded. Counts are clamped to >= 0."""
+        self._peripheral_context_enabled = enabled
+        self._peripheral_context_before = max(0, before)
+        self._peripheral_context_after = max(0, after)
+        self._update_peripheral_context()
+
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
+        self._font_color = font_color
+        self._background_color = background_color
         self.configure(fg_color=background_color)
         self.word_row.configure(fg_color=background_color)
         self.before_label.configure(text_color=font_color)
@@ -354,6 +405,8 @@ class ReaderDisplay(ctk.CTkFrame):
         # flat global value from Settings (see set_guide_mark_color()),
         # independent of the current transcript's font color, same as
         # the horizontal ticks are independent via a fixed constant.
+        # The ribbon does follow the reading colours, dimmed, so refresh it.
+        self._update_peripheral_context()
 
     def set_font_size(self, size: int) -> None:
         self.word_font.configure(size=size)
@@ -499,6 +552,9 @@ class ReaderDisplay(ctk.CTkFrame):
             self._focus_y = focus_y
             self._focus_half_height = 0
             self._row_width = row_width
+            # Finished: peripheral_context has no current word, so this
+            # clears the ribbon.
+            self._update_peripheral_context()
             return
 
         focus_width = self.focus_label.winfo_reqwidth()
@@ -512,6 +568,13 @@ class ReaderDisplay(ctk.CTkFrame):
         self._focus_y = focus_y
         self._focus_half_height = focus_height / 2
         self._row_width = row_width
+
+        # Redraw the context ribbon against the freshly placed word. This
+        # single call at the end of _position_word() covers every case
+        # that moves or re-renders the word (load, advance, skip, scrub,
+        # restart, resume-rewind, resize, font size, highlight offset),
+        # since they all route through here.
+        self._update_peripheral_context()
 
     def _update_guide_marks(self) -> None:
         if not self._is_running() or self._anchor_x is None:
@@ -560,6 +623,71 @@ class ReaderDisplay(ctk.CTkFrame):
         row is ever narrower than the two margins combined."""
         length = self._row_width - (2 * self.GUIDE_MARK_HORIZONTAL_EDGE_MARGIN_PX)
         return max(self.GUIDE_MARK_HORIZONTAL_MIN_LENGTH_PX, round(length))
+
+    def _update_peripheral_context(self) -> None:
+        """Draw the dim context ribbon below the focal word: the current
+        word centred under the same anchor x, with up to a few previous
+        words to its left and upcoming words to its right, all dimmed
+        toward the background. Off unless enabled, and hidden whenever
+        there's no word on screen (no session, not yet sized, or
+        finished). It sits below the farthest point a guide mark can reach,
+        plus its own half-height and a margin, so the two never overlap
+        whether or not the marks are currently shown."""
+        if (not self._peripheral_context_enabled
+                or self.session is None
+                or self._anchor_x is None):
+            self._hide_peripheral_context()
+            return
+        context = self.session.peripheral_context(
+            self._peripheral_context_before, self._peripheral_context_after
+        )
+        if context.current is None:
+            self._hide_peripheral_context()
+            return
+
+        dim_color = blend_colors(self._font_color, self._background_color, self.PERIPHERAL_CONTEXT_DIM)
+        size = max(8, round(self.word_font.cget("size") * self.PERIPHERAL_CONTEXT_SIZE_RATIO))
+        self.context_font.configure(size=size)
+
+        before_text = " ".join(context.before)
+        after_text = " ".join(context.after)
+        self.context_current.configure(text=context.current, text_color=dim_color)
+        self.context_before.configure(text=before_text, text_color=dim_color)
+        self.context_after.configure(text=after_text, text_color=dim_color)
+
+        # The lowest point a guide mark can reach (its outer tip),
+        # computed the same way _update_guide_marks() does, so the ribbon
+        # clears it even when the marks are hidden (paused).
+        gap = self.GUIDE_MARK_MIN_GAP_PX
+        outer_bottom_y = self._focus_y + self._focus_half_height + gap + self._guide_mark_length()
+
+        self.context_current.update_idletasks()
+        current_width = self.context_current.winfo_reqwidth()
+        current_height = self.context_current.winfo_reqheight()
+        ribbon_y = outer_bottom_y + current_height / 2 + self.PERIPHERAL_CONTEXT_TOP_MARGIN_PX
+
+        self._place_physical(self.context_current, x=self._anchor_x, y=ribbon_y, anchor="center")
+
+        word_gap = self.PERIPHERAL_CONTEXT_WORD_GAP_PX
+        if before_text:
+            self._place_physical(
+                self.context_before, x=self._anchor_x - current_width / 2 - word_gap,
+                y=ribbon_y, anchor="e",
+            )
+        else:
+            self.context_before.place_forget()
+        if after_text:
+            self._place_physical(
+                self.context_after, x=self._anchor_x + current_width / 2 + word_gap,
+                y=ribbon_y, anchor="w",
+            )
+        else:
+            self.context_after.place_forget()
+
+    def _hide_peripheral_context(self) -> None:
+        self.context_before.place_forget()
+        self.context_current.place_forget()
+        self.context_after.place_forget()
 
     def _is_running(self) -> bool:
         return self.session is not None and not self.session.is_finished and not self._is_paused
