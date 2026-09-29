@@ -103,6 +103,17 @@ class ReaderSession:
         before the first word or past the last."""
         self.index = max(0, min(self.total_words, self.index + delta))
 
+    def seek_to(self, index: int) -> None:
+        """Jump straight to an absolute word index, rather than by a
+        relative delta like seek(). Defined in terms of seek() so it
+        inherits exactly the same clamping (never before the first word
+        or past the last) and finished-state handling, including that
+        seeking back from a finished session un-finishes it. Used by the
+        progress scrubber, which knows the target position outright. Like
+        seek(), it deliberately leaves _words_shown untouched, so scrubbing
+        never restarts the warm-up ramp."""
+        self.seek(index - self.index)
+
     def reset(self) -> None:
         self.index = 0
         # Restart the warm-up ramp too: restart() is a deliberate "read this

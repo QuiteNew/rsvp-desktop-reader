@@ -5,6 +5,7 @@ from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
 from gui.components.stop_button import StopButton
+from gui.components.scrub_bar import ScrubBar
 from gui.components.detached_window import DetachedTranscriptWindow
 from gui.components.selection_preview_window import SelectionPreviewWindow
 from gui.theme import HEARTH_PAPER
@@ -67,12 +68,21 @@ class Canvas(ctk.CTkFrame):
         # open_selection_preview().
         self._selection_previews = []
 
+        # Three columns: Stop hugs the left, the scrubber sits just right
+        # of it (left-aligned, sticky "w"), and the stretch of column 1 to
+        # the scrubber's right stays open for future controls before the
+        # toolbar, which hugs the right. The scrubber is only gridded while
+        # the reader is showing (see _show_reader/_show_input).
         self.button_row = ctk.CTkFrame(self, fg_color="transparent")
-        self.button_row.grid_columnconfigure(0, weight=1)
-        self.button_row.grid_columnconfigure(1, weight=0)
+        self.button_row.grid_columnconfigure(0, weight=0)
+        self.button_row.grid_columnconfigure(1, weight=1)
+        self.button_row.grid_columnconfigure(2, weight=0)
 
         self.stop_button = StopButton(self.button_row, on_stop=self.stop)
         self.stop_button.grid(row=0, column=0, sticky="w")
+
+        self.scrub_bar = ScrubBar(self.button_row, on_scrub=self._handle_scrub)
+        self.scrub_bar.grid(row=0, column=1, sticky="w", padx=(12, 0))
 
         self.toolbar = CanvasToolbar(
             self.button_row,
@@ -81,7 +91,7 @@ class Canvas(ctk.CTkFrame):
             on_maximize_toggle=self._handle_maximize_toggle,
             on_detach=self._handle_detach,
         )
-        self.toolbar.grid(row=0, column=1, sticky="e")
+        self.toolbar.grid(row=0, column=2, sticky="e")
 
         self.content_area = ctk.CTkFrame(self, fg_color="transparent")
 
@@ -132,14 +142,14 @@ class Canvas(ctk.CTkFrame):
             self.toolbar.set_paused(transcript.is_paused)
             self.reader_display.set_colors(transcript.font_color, transcript.highlight_color, transcript.background_color)
             self.reader_display.set_font_size(transcript.font_size)
-            self.reader_display.load_session(
-                ReaderSession(
-                    transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position,
-                    length_pacing_enabled=self._length_pacing_enabled,
-                    warm_up_enabled=self._warm_up_enabled,
-                ),
-                start_paused=transcript.is_paused,
+            session = ReaderSession(
+                transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position,
+                length_pacing_enabled=self._length_pacing_enabled,
+                warm_up_enabled=self._warm_up_enabled,
             )
+            self.reader_display.load_session(session, start_paused=transcript.is_paused)
+            self.scrub_bar.set_total(session.total_words)
+            self.scrub_bar.set_position(session.index)
         else:
             self._fill_input(transcript.draft_text)
             self._show_input()
@@ -392,14 +402,14 @@ class Canvas(ctk.CTkFrame):
         self.toolbar.set_paused(False)
         self.reader_display.set_colors(transcript.font_color, transcript.highlight_color, transcript.background_color)
         self.reader_display.set_font_size(transcript.font_size)
-        self.reader_display.load_session(
-            ReaderSession(
-                text, wpm=transcript.wpm, start_index=0,
-                length_pacing_enabled=self._length_pacing_enabled,
-                warm_up_enabled=self._warm_up_enabled,
-            ),
-            start_paused=False,
+        session = ReaderSession(
+            text, wpm=transcript.wpm, start_index=0,
+            length_pacing_enabled=self._length_pacing_enabled,
+            warm_up_enabled=self._warm_up_enabled,
         )
+        self.reader_display.load_session(session, start_paused=False)
+        self.scrub_bar.set_total(session.total_words)
+        self.scrub_bar.set_position(session.index)
         # Move keyboard focus off the (now hidden) edit box so Space/arrows/
         # R drive the reader instead of typing into the draft. The reader
         # area isn't an Entry/Text, so the app's shortcut guard lets them
@@ -428,10 +438,25 @@ class Canvas(ctk.CTkFrame):
             self.on_text_submitted(self.current_transcript, raw_text)
 
     def _handle_position_changed(self, index: int) -> None:
+        # The scrubber tracks the reader in every state, including a
+        # right-click Play preview (_ephemeral), so its thumb is updated
+        # before the persistence guard below, which only governs saving
+        # the position to the transcript.
+        self.scrub_bar.set_position(index)
         if self._ephemeral:
             return
         if self.on_position_changed and self.current_transcript:
             self.on_position_changed(self.current_transcript, index)
+
+    def _handle_scrub(self, index: int) -> None:
+        """The user dragged the progress scrubber. Seek there (which lands
+        paused), then sync the toolbar's play/pause button and the paused
+        state the same way a manual pause would. Position saving happens
+        through the reader's own on_position_changed path (guarded by
+        _ephemeral for previews), same as skipping."""
+        is_paused = self.reader_display.scrub_to(index)
+        self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
 
     def _handle_session_stats(self, words_read: int, active_seconds: float) -> None:
         if self._ephemeral:
@@ -571,20 +596,31 @@ class Canvas(ctk.CTkFrame):
 
     def _show_empty(self) -> None:
         self._input_currently_shown = False
+        self._hide_scrub_bar()
         self._layout(show_buttons=False)
         self._show_content(self.empty_label)
 
     def _show_input(self) -> None:
         self._input_currently_shown = True
+        self._hide_scrub_bar()
         self._layout(show_buttons=True)
         self._show_content(self.input_view)
 
     def _show_reader(self) -> None:
         self._input_currently_shown = False
+        self.scrub_bar.grid()
         self._layout(show_buttons=True)
         self._show_content(self.reader_display)
 
     def _show_detached_placeholder(self) -> None:
         self._input_currently_shown = False
+        self._hide_scrub_bar()
         self._layout(show_buttons=False)
         self._show_content(self.detached_placeholder)
+
+    def _hide_scrub_bar(self) -> None:
+        """The scrubber only makes sense over the reader, so it's pulled
+        from the button row (and blanked) in every other state, even the
+        ones where the button row itself isn't shown."""
+        self.scrub_bar.clear()
+        self.scrub_bar.grid_remove()

@@ -310,6 +310,64 @@ def test_seek_zero_is_a_no_op():
     assert session.index == 1
 
 
+# seek_to: absolute positioning (used by the progress scrubber)
+
+def test_seek_to_moves_to_absolute_index():
+    session = ReaderSession("one two three four five", start_index=1)
+    session.seek_to(3)
+    assert session.index == 3
+
+
+def test_seek_to_zero_from_middle():
+    session = ReaderSession("one two three four", start_index=2)
+    session.seek_to(0)
+    assert session.index == 0
+
+
+def test_seek_to_clamps_past_the_end_to_finished():
+    session = ReaderSession("one two three")
+    session.seek_to(99)
+    assert session.index == session.total_words
+    assert session.is_finished is True
+
+
+def test_seek_to_clamps_negative_to_zero():
+    session = ReaderSession("one two three", start_index=2)
+    session.seek_to(-5)
+    assert session.index == 0
+
+
+def test_seek_to_current_index_is_a_no_op():
+    session = ReaderSession("one two three", start_index=1)
+    session.seek_to(1)
+    assert session.index == 1
+
+
+def test_seek_to_from_finished_unfinishes_session():
+    session = ReaderSession("one two three")
+    session.seek_to(99)  # jump to the end so the session is finished
+    assert session.is_finished is True
+    session.seek_to(1)
+    assert session.is_finished is False
+    assert session.index == 1
+
+
+def test_seek_to_does_not_restart_the_warm_up_ramp():
+    # The scrubber must leave the warm-up ramp alone, like the skip
+    # buttons: seeking changes the position, not how many words have been
+    # shown this session, so the pace after a seek is whatever the ramp
+    # had already reached. All words here are plain and unpunctuated with
+    # length pacing off, so warm-up is the only thing shaping the delay.
+    session = ReaderSession(
+        " ".join(f"word{i}" for i in range(30)), wpm=300, warm_up_enabled=True
+    )
+    session.advance()
+    session.advance()
+    delay_before = session.current_delay_ms()
+    session.seek_to(20)
+    assert session.current_delay_ms() == delay_before
+
+
 # reset
 
 def test_reset_returns_to_index_zero():

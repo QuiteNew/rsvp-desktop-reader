@@ -4,6 +4,7 @@ from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
+from gui.components.scrub_bar import ScrubBar
 from gui.theme import apply_app_icon, center_over_parent, HEARTH_PAPER
 
 
@@ -59,8 +60,14 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         # reader widgets below don't fully cover it.
         self.configure(fg_color=HEARTH_PAPER)
 
+        # The control row mirrors the main window: the scrubber sits on
+        # the left, the toolbar hugs the right. Packed as a unit in
+        # _render_current_state()'s reader branch.
+        self.control_row = ctk.CTkFrame(self, fg_color="transparent")
+        self.scrub_bar = ScrubBar(self.control_row, on_scrub=self._handle_scrub)
+        self.scrub_bar.pack(side="left")
         self.toolbar = CanvasToolbar(
-            self,
+            self.control_row,
             on_skip_back=self._handle_skip_back,
             on_skip_forward=self._handle_skip_forward,
             on_pause_toggle=self._handle_pause_toggle,
@@ -69,6 +76,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             show_maximize=False,
             show_detach=False,
         )
+        self.toolbar.pack(side="right")
 
         self.input_view = TranscriptInput(
             self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text,
@@ -129,7 +137,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_warm_up_enabled(enabled)
 
     def _render_current_state(self) -> None:
-        self.toolbar.pack_forget()
+        self.control_row.pack_forget()
         self.input_view.pack_forget()
         self.reader_display.pack_forget()
 
@@ -138,19 +146,19 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self.input_view.set_normalization(self.transcript.pre_normalize_text, self.transcript.normalized_text)
             self.input_view.pack(fill="both", expand=True)
         elif self.transcript.raw_text.strip():
-            self.toolbar.pack(anchor="ne", padx=10, pady=10)
+            self.control_row.pack(fill="x", padx=10, pady=10)
             self.toolbar.set_paused(self.transcript.is_paused)
             self.reader_display.set_colors(self.transcript.font_color, self.transcript.highlight_color, self.transcript.background_color)
             self.reader_display.set_font_size(self.transcript.font_size)
             self.reader_display.pack(fill="both", expand=True)
-            self.reader_display.load_session(
-                ReaderSession(
-                    self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position,
-                    length_pacing_enabled=self.length_pacing_enabled,
-                    warm_up_enabled=self.warm_up_enabled,
-                ),
-                start_paused=self.transcript.is_paused,
+            session = ReaderSession(
+                self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position,
+                length_pacing_enabled=self.length_pacing_enabled,
+                warm_up_enabled=self.warm_up_enabled,
             )
+            self.reader_display.load_session(session, start_paused=self.transcript.is_paused)
+            self.scrub_bar.set_total(session.total_words)
+            self.scrub_bar.set_position(session.index)
         else:
             self.input_view.set_normalization(self.transcript.pre_normalize_text, self.transcript.normalized_text)
             self.input_view.pack(fill="both", expand=True)
@@ -165,8 +173,17 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self._render_current_state()
 
     def _handle_position_changed(self, index: int) -> None:
+        self.scrub_bar.set_position(index)
         if self.on_position_changed:
             self.on_position_changed(self.transcript, index)
+
+    def _handle_scrub(self, index: int) -> None:
+        """The user dragged the scrubber: seek there (lands paused), then
+        sync the toolbar and persist the paused state, the same shape as
+        this window's _handle_skip()."""
+        is_paused = self.reader_display.scrub_to(index)
+        self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
 
     def _handle_session_stats(self, words_read: int, active_seconds: float) -> None:
         if self.on_session_stats:

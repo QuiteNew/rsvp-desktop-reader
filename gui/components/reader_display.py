@@ -260,6 +260,28 @@ class ReaderDisplay(ctk.CTkFrame):
         self._update_guide_marks()
         return self._is_paused
 
+    def scrub_to(self, index: int) -> bool:
+        """Jump to an absolute word index from the progress scrubber and
+        hold there paused. Cancels any pending advance, lands on the
+        target word, and reports the new position so it's saved. Reading
+        always ends up paused on the scrubbed-to word (the user presses
+        play to continue): that both matches the "land paused at the spot"
+        behavior and makes this safe to call repeatedly during a live
+        drag, since the first call closes the active span and later ones
+        are a no-op on the pause state. Returns the paused state (always
+        True) so the caller can sync its toolbar's play/pause button."""
+        if self.session is None:
+            return self._is_paused
+        self._cancel_pending()
+        self.session.seek_to(index)
+        if not self._is_paused:
+            self._is_paused = True
+            self._end_active_span()
+        self._show_current_frame()
+        self._report_position()
+        self._update_guide_marks()
+        return self._is_paused
+
     def set_wpm(self, wpm: int) -> None:
         if self.session:
             self.session.set_wpm(wpm)

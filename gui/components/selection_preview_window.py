@@ -4,6 +4,7 @@ from core.reader import ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
+from gui.components.scrub_bar import ScrubBar
 from gui.theme import apply_app_icon, center_over_parent, HEARTH_PAPER
 
 
@@ -79,8 +80,13 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         # background wherever the widgets below don't fully cover it.
         self.configure(fg_color=HEARTH_PAPER)
 
+        # Control row mirroring the detached window: scrubber left,
+        # toolbar right. Shown only over the reader (see _show_reader).
+        self.control_row = ctk.CTkFrame(self, fg_color="transparent")
+        self.scrub_bar = ScrubBar(self.control_row, on_scrub=self._handle_scrub)
+        self.scrub_bar.pack(side="left")
         self.toolbar = CanvasToolbar(
-            self,
+            self.control_row,
             on_skip_back=self._handle_skip_back,
             on_skip_forward=self._handle_skip_forward,
             on_pause_toggle=self._handle_pause_toggle,
@@ -89,6 +95,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
             show_maximize=False,
             show_detach=False,
         )
+        self.toolbar.pack(side="right")
 
         # Its own edit box, seeded with the selection. on_normalized is left
         # unset and no play/detach handlers are passed: Normalize works
@@ -102,7 +109,9 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         )
 
         # No persistence callbacks: this preview never writes to the store.
-        self.reader_display = ReaderDisplay(self)
+        # It does take a position callback, but only to drive the scrubber's
+        # thumb as reading advances; nothing here reaches the transcript.
+        self.reader_display = ReaderDisplay(self, on_position_changed=self._handle_position_changed)
         self.reader_display.set_highlight_offset(highlight_offset_px)
         self.reader_display.set_guide_mark_horizontal_enabled(guide_mark_horizontal_enabled)
         self.reader_display.set_guide_mark_thickness(guide_mark_thickness_px)
@@ -141,13 +150,13 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         """The edit view: just the seeded text box with its own Normalize
         and Start reading buttons, no toolbar. Mirrors the detached
         transcript window's paste screen."""
-        self.toolbar.pack_forget()
+        self.control_row.pack_forget()
         self.reader_display.pack_forget()
         self.input_view.pack(fill="both", expand=True)
 
     def _show_reader(self) -> None:
         self.input_view.pack_forget()
-        self.toolbar.pack(anchor="ne", padx=10, pady=10)
+        self.control_row.pack(fill="x", padx=10, pady=10)
         self.reader_display.pack(fill="both", expand=True)
 
     def _start_reading(self, text: str) -> None:
@@ -161,14 +170,14 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.toolbar.set_paused(False)
         self.reader_display.set_colors(self.font_color, self.highlight_color, self.background_color)
         self.reader_display.set_font_size(self.font_size)
-        self.reader_display.load_session(
-            ReaderSession(
-                text, wpm=self.wpm, start_index=0,
-                length_pacing_enabled=self.length_pacing_enabled,
-                warm_up_enabled=self.warm_up_enabled,
-            ),
-            start_paused=False,
+        session = ReaderSession(
+            text, wpm=self.wpm, start_index=0,
+            length_pacing_enabled=self.length_pacing_enabled,
+            warm_up_enabled=self.warm_up_enabled,
         )
+        self.reader_display.load_session(session, start_paused=False)
+        self.scrub_bar.set_total(session.total_words)
+        self.scrub_bar.set_position(session.index)
         # Move keyboard focus off the (now hidden) edit box so Space/arrows/
         # R drive the reader instead of typing into the text. The reader
         # area isn't an Entry/Text, so the shortcut guard lets them through.
@@ -192,6 +201,16 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
 
     def _handle_skip(self, delta: int) -> None:
         is_paused = self.reader_display.skip(delta, force_pause=self.pause_on_skip)
+        self.toolbar.set_paused(is_paused)
+
+    def _handle_position_changed(self, index: int) -> None:
+        """UI-only: keep the scrubber's thumb tracking the reader as it
+        advances. This preview persists nothing, so there's no store call
+        here, unlike the main and detached windows."""
+        self.scrub_bar.set_position(index)
+
+    def _handle_scrub(self, index: int) -> None:
+        is_paused = self.reader_display.scrub_to(index)
         self.toolbar.set_paused(is_paused)
 
     def _handle_pause_toggle(self) -> None:
