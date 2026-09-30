@@ -293,12 +293,15 @@ Settings are organized into four tabs:
 - ~~Selective running~~
 - Quality of life polish 2.0
 - ~~Settings additions~~
-- Peripheral context line
+- ~~Peripheral context line~~
 - Chunking (multi-word flash)
 - ~~Progress scrubber/seek bar~~
 - Bookmarks
-- Estimated read time and live progress %
-- Additional data insertion formats
+- ~~Estimated read time and live progress %~~
+- ~~Additional data insertion formats~~
+- Upgrading the test suite
+- Numorous bug fixes
+
 
 
 

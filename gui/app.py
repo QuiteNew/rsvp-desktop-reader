@@ -395,7 +395,9 @@ class RSVPApp(ctk.CTk):
         filetypes = [
             ("Supported documents", " ".join(f"*{ext}" for ext in sorted(importers.SUPPORTED_EXTENSIONS))),
             ("Text files", "*.txt"),
-            ("Subtitle files", "*.srt"),
+            ("Subtitle files", "*.srt *.vtt"),
+            ("Markdown files", "*.md *.markdown"),
+            ("HTML files", "*.html *.htm"),
             ("Word documents", "*.docx"),
             ("PDF files", "*.pdf"),
         ]
