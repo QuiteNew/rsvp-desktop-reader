@@ -7,6 +7,7 @@ from core.importers import (
     TranscriptImportError,
     import_docx,
     import_file,
+    import_md,
     import_pdf,
     import_srt,
     import_txt,
@@ -185,6 +186,85 @@ def test_import_file_dispatches_vtt(tmp_path):
     assert import_file(str(path)) == "Hello world."
 
 
+# .md files
+
+def test_import_md_strips_atx_headings(tmp_path):
+    path = tmp_path / "h.md"
+    path.write_text("# Title\n\n## Subtitle ##\n\nBody text.\n", encoding="utf-8")
+    result = import_md(str(path))
+    assert "#" not in result
+    assert "Title" in result
+    assert "Subtitle" in result
+    assert "Body text." in result
+
+def test_import_md_drops_setext_underlines_but_keeps_heading(tmp_path):
+    path = tmp_path / "setext.md"
+    path.write_text("Big Title\n=========\n\nSmall Title\n-----\n", encoding="utf-8")
+    result = import_md(str(path))
+    assert "Big Title" in result
+    assert "Small Title" in result
+    assert "=" not in result
+    assert "---" not in result
+
+def test_import_md_drops_thematic_breaks(tmp_path):
+    path = tmp_path / "hr.md"
+    path.write_text("Above.\n\n***\n\nBelow.\n", encoding="utf-8")
+    result = import_md(str(path))
+    assert "*" not in result
+    assert "Above." in result
+    assert "Below." in result
+
+def test_import_md_strips_emphasis_markers(tmp_path):
+    path = tmp_path / "em.md"
+    path.write_text("This is **bold**, *italic*, and ~~struck~~.\n", encoding="utf-8")
+    assert import_md(str(path)) == "This is bold, italic, and struck."
+
+def test_import_md_strips_inline_code(tmp_path):
+    path = tmp_path / "code.md"
+    path.write_text("Run `pip install` first.\n", encoding="utf-8")
+    assert import_md(str(path)) == "Run pip install first."
+
+def test_import_md_keeps_link_and_image_text(tmp_path):
+    path = tmp_path / "links.md"
+    path.write_text("See [the docs](https://example.com) and ![a logo](logo.png).\n", encoding="utf-8")
+    assert import_md(str(path)) == "See the docs and a logo."
+
+def test_import_md_strips_list_markers(tmp_path):
+    path = tmp_path / "lists.md"
+    path.write_text("- First\n- Second\n\n1. One\n2. Two\n", encoding="utf-8")
+    assert import_md(str(path)) == "First\nSecond\n\nOne\nTwo"
+
+def test_import_md_strips_blockquote_markers(tmp_path):
+    path = tmp_path / "quote.md"
+    path.write_text("> Quoted line.\n>> Nested quote.\n", encoding="utf-8")
+    assert import_md(str(path)) == "Quoted line.\nNested quote."
+
+def test_import_md_keeps_fenced_code_content_without_the_fences(tmp_path):
+    path = tmp_path / "fence.md"
+    path.write_text("Intro.\n\n```python\nx = 1\n```\n\nOutro.\n", encoding="utf-8")
+    result = import_md(str(path))
+    assert "```" not in result
+    assert "python" not in result
+    assert "x = 1" in result
+    assert "Intro." in result
+    assert "Outro." in result
+
+def test_import_md_leaves_snake_case_intact(tmp_path):
+    path = tmp_path / "snake.md"
+    path.write_text("Call the some_helper_function today.\n", encoding="utf-8")
+    assert import_md(str(path)) == "Call the some_helper_function today."
+
+def test_import_file_dispatches_md(tmp_path):
+    path = tmp_path / "doc.md"
+    path.write_text("# Heading\n\nSome **bold** prose.\n", encoding="utf-8")
+    assert import_file(str(path)) == "Heading\n\nSome bold prose."
+
+def test_import_file_dispatches_markdown_extension(tmp_path):
+    path = tmp_path / "doc.markdown"
+    path.write_text("Just text.\n", encoding="utf-8")
+    assert import_file(str(path)) == "Just text."
+
+
 # .docx files
 
 def test_import_docx_extracts_paragraphs_and_drops_blank_ones(tmp_path):
@@ -300,4 +380,4 @@ def test_import_file_rejects_unsupported_extension(tmp_path):
         import_file(str(path))
 
 def test_supported_extensions_contents():
-    assert SUPPORTED_EXTENSIONS == {".txt", ".srt", ".vtt", ".docx", ".pdf"}
+    assert SUPPORTED_EXTENSIONS == {".txt", ".srt", ".vtt", ".md", ".markdown", ".docx", ".pdf"}

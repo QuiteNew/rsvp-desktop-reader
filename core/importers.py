@@ -1,11 +1,11 @@
 """Turns a file the user picks into plain transcript text.
 
-One function per format (import_txt/import_srt/import_vtt/import_docx/
-import_pdf), a dispatcher (import_file) that picks one by extension, and
-a single exception (TranscriptImportError) that every failure collapses
-into, whether that's a corrupt file, bad encoding, a password-protected
-PDF, or no extractable text at all. That way gui/ only ever has to catch
-one thing and show its message as-is.
+One function per format (import_txt/import_srt/import_vtt/import_md/
+import_docx/import_pdf), a dispatcher (import_file) that picks one by
+extension, and a single exception (TranscriptImportError) that every
+failure collapses into, whether that's a corrupt file, bad encoding, a
+password-protected PDF, or no extractable text at all. That way gui/
+only ever has to catch one thing and show its message as-is.
 
 Every importer's output passes through clean_transcript_keep_lines()
 before being returned: timestamps and extra spaces are removed, but
@@ -29,7 +29,7 @@ from core.parser import clean_transcript_keep_lines
 
 # Also used by gui/app.py for its file-dialog filter list, so the two
 # lists can't drift apart.
-SUPPORTED_EXTENSIONS = {".txt", ".srt", ".vtt", ".docx", ".pdf"}
+SUPPORTED_EXTENSIONS = {".txt", ".srt", ".vtt", ".md", ".markdown", ".docx", ".pdf"}
 
 
 class TranscriptImportError(Exception):
@@ -132,6 +132,96 @@ def import_vtt(path: str) -> str:
     return "\n".join(kept_lines)
 
 
+def _strip_inline_md(text: str) -> str:
+    """Remove inline Markdown markup from a single line, keeping the text.
+    Pragmatic rather than a full CommonMark parser (which would need a
+    dependency): it handles the common cases: images and links (kept as
+    their text), inline code, and *, **, _, __, ~~ emphasis, plus any
+    stray inline HTML tags and backslash escapes. Emphasis is only
+    stripped when it hugs its text (no space just inside the markers) and,
+    for underscores, only when not intraword, so snake_case identifiers
+    survive."""
+    # Images first (![alt](url) -> alt), then links ([text](url) -> text,
+    # [text][ref] -> text), so an image's "!" doesn't strand a link match.
+    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"\[([^\]]*)\]\[[^\]]*\]", r"\1", text)
+    # Inline code: `code` (or ``co`de``) -> the code text, backticks gone.
+    text = re.sub(r"`+(.+?)`+", r"\1", text)
+    # Emphasis: strong before em, so ** isn't half-eaten by the * rule.
+    text = re.sub(r"\*\*(?!\s)(.+?)(?<!\s)\*\*", r"\1", text)
+    text = re.sub(r"\*(?!\s)(.+?)(?<!\s)\*", r"\1", text)
+    text = re.sub(r"~~(?!\s)(.+?)(?<!\s)~~", r"\1", text)
+    text = re.sub(r"(?<!\w)__(?!\s)(.+?)(?<!\s)__(?!\w)", r"\1", text)
+    text = re.sub(r"(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)", r"\1", text)
+    # Any leftover inline HTML tags, same as the subtitle importers.
+    text = re.sub(r"<[^>]+>", "", text)
+    # Backslash escapes: \* -> *, \_ -> _, etc.
+    text = re.sub(r"\\([\\`*_{}\[\]()#+.!>~-])", r"\1", text)
+    return text
+
+
+def import_md(path: str) -> str:
+    """A dependency-free Markdown (.md/.markdown) reader that strips the
+    markup and keeps the text, so a note or article reads as plain prose.
+    Not a full CommonMark parser (that would need a dependency); it's a
+    line-based pass that:
+      - drops fenced code blocks' ``` / ~~~ fence lines but keeps the code
+        inside as plain text (nothing is discarded),
+      - drops thematic breaks (---, ***, ___) and setext underlines
+        (=== / ---),
+      - strips ATX heading #'s, blockquote > markers, and unordered/
+        ordered list markers, keeping the text after them,
+      - strips inline markup via _strip_inline_md() (emphasis, code,
+        links/images, stray HTML).
+    Blank lines are kept as paragraph breaks; clean_transcript_keep_lines()
+    tidies the rest. Each source line stays on its own line, so Normalize
+    can rejoin sentences."""
+    text = _read_text_with_fallback(path)
+    kept_lines = []
+    in_fence = False
+    fence_marker = None
+    for line in text.splitlines():
+        fence_match = re.match(r"^\s*(```+|~~~+)", line)
+        if fence_match:
+            marker = fence_match.group(1)[0]  # ` or ~
+            if not in_fence:
+                in_fence = True
+                fence_marker = marker
+                continue
+            if marker == fence_marker:
+                in_fence = False
+                fence_marker = None
+                continue
+            # A different fence character inside a fence is just content.
+        if in_fence:
+            kept_lines.append(line.rstrip())
+            continue
+
+        stripped = line.strip()
+        if not stripped:
+            kept_lines.append("")  # paragraph break, tidied later
+            continue
+
+        compact = re.sub(r"\s", "", stripped)
+        if set(compact) == {"="}:
+            continue  # setext H1 underline (===)
+        if set(compact) == {"-"} and len(compact) >= 2:
+            continue  # setext H2 underline / thematic break (--- etc.)
+        if set(compact) <= {"*", "_"} and len(compact) >= 3:
+            continue  # * or _ thematic break
+
+        stripped = re.sub(r"^\s*(>\s?)+", "", stripped)          # blockquote markers
+        stripped = re.sub(r"^\s*[-*+]\s+", "", stripped)         # unordered list marker
+        stripped = re.sub(r"^\s*\d+[.)]\s+", "", stripped)       # ordered list marker
+        stripped = re.sub(r"^#{1,6}\s+", "", stripped)           # ATX heading opener
+        stripped = re.sub(r"\s+#+\s*$", "", stripped)            # ATX heading closer
+        stripped = _strip_inline_md(stripped)
+
+        kept_lines.append(stripped.strip())
+    return "\n".join(kept_lines)
+
+
 def import_docx(path: str) -> str:
     try:
         document = docx.Document(path)
@@ -189,6 +279,8 @@ def import_file(path: str) -> str:
         raw = import_srt(path)
     elif suffix == ".vtt":
         raw = import_vtt(path)
+    elif suffix in (".md", ".markdown"):
+        raw = import_md(path)
     elif suffix == ".docx":
         raw = import_docx(path)
     elif suffix == ".pdf":
