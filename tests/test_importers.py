@@ -10,6 +10,7 @@ from core.importers import (
     import_pdf,
     import_srt,
     import_txt,
+    import_vtt,
 )
 
 
@@ -95,6 +96,93 @@ def test_import_srt_puts_each_subtitle_line_on_its_own_line(tmp_path):
         encoding="utf-8",
     )
     assert import_srt(str(path)) == "Hello world.\nand then we went\nto the store."
+
+
+# .vtt files
+
+def test_import_vtt_drops_header_and_timing_lines(tmp_path):
+    path = tmp_path / "sample.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:04.000\nHello world.\n\n"
+        "00:00:04.500 --> 00:00:06.000\nSecond line.\n",
+        encoding="utf-8",
+    )
+    result = import_vtt(str(path))
+    assert "WEBVTT" not in result
+    assert "-->" not in result
+    assert result == "Hello world.\nSecond line."
+
+def test_import_vtt_drops_cue_identifier_lines(tmp_path):
+    path = tmp_path / "ids.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "intro\n00:00:01.000 --> 00:00:04.000\nHello world.\n\n"
+        "2\n00:00:04.500 --> 00:00:06.000\nSecond line.\n",
+        encoding="utf-8",
+    )
+    assert import_vtt(str(path)) == "Hello world.\nSecond line."
+
+def test_import_vtt_drops_note_blocks(tmp_path):
+    path = tmp_path / "notes.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "NOTE This is a comment\nthat spans two lines.\n\n"
+        "00:00:01.000 --> 00:00:04.000\nActual subtitle.\n",
+        encoding="utf-8",
+    )
+    result = import_vtt(str(path))
+    assert "comment" not in result
+    assert result == "Actual subtitle."
+
+def test_import_vtt_drops_style_and_region_blocks(tmp_path):
+    path = tmp_path / "style.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "STYLE\n::cue { color: yellow }\n\n"
+        "REGION\nid:fred width:40%\n\n"
+        "00:00:01.000 --> 00:00:04.000\nReadable text.\n",
+        encoding="utf-8",
+    )
+    result = import_vtt(str(path))
+    assert "cue" not in result
+    assert "width" not in result
+    assert result == "Readable text."
+
+def test_import_vtt_strips_inline_tags(tmp_path):
+    path = tmp_path / "tags.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:02.000\n<v Roger>Some <c.yellow>emphasized</c> text.\n",
+        encoding="utf-8",
+    )
+    assert import_vtt(str(path)) == "Some emphasized text."
+
+def test_import_vtt_ignores_cue_settings_on_the_timing_line(tmp_path):
+    path = tmp_path / "settings.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:04.000 align:middle line:90%\nCentered text.\n",
+        encoding="utf-8",
+    )
+    assert import_vtt(str(path)) == "Centered text."
+
+def test_import_vtt_keeps_multi_line_cues_on_separate_lines(tmp_path):
+    path = tmp_path / "multi.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "00:00:01.000 --> 00:00:04.000\nand then we went\nto the store.\n",
+        encoding="utf-8",
+    )
+    assert import_vtt(str(path)) == "and then we went\nto the store."
+
+def test_import_file_dispatches_vtt(tmp_path):
+    path = tmp_path / "dispatch.vtt"
+    path.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nHello world.\n",
+        encoding="utf-8",
+    )
+    assert import_file(str(path)) == "Hello world."
 
 
 # .docx files
@@ -212,4 +300,4 @@ def test_import_file_rejects_unsupported_extension(tmp_path):
         import_file(str(path))
 
 def test_supported_extensions_contents():
-    assert SUPPORTED_EXTENSIONS == {".txt", ".srt", ".docx", ".pdf"}
+    assert SUPPORTED_EXTENSIONS == {".txt", ".srt", ".vtt", ".docx", ".pdf"}

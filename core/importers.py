@@ -1,10 +1,10 @@
 """Turns a file the user picks into plain transcript text.
 
-One function per format (import_txt/import_srt/import_docx/import_pdf),
-a dispatcher (import_file) that picks one by extension, and a single
-exception (TranscriptImportError) that every failure collapses into,
-whether that's a corrupt file, bad encoding, a password-protected PDF,
-or no extractable text at all. That way gui/ only ever has to catch
+One function per format (import_txt/import_srt/import_vtt/import_docx/
+import_pdf), a dispatcher (import_file) that picks one by extension, and
+a single exception (TranscriptImportError) that every failure collapses
+into, whether that's a corrupt file, bad encoding, a password-protected
+PDF, or no extractable text at all. That way gui/ only ever has to catch
 one thing and show its message as-is.
 
 Every importer's output passes through clean_transcript_keep_lines()
@@ -29,7 +29,7 @@ from core.parser import clean_transcript_keep_lines
 
 # Also used by gui/app.py for its file-dialog filter list, so the two
 # lists can't drift apart.
-SUPPORTED_EXTENSIONS = {".txt", ".srt", ".docx", ".pdf"}
+SUPPORTED_EXTENSIONS = {".txt", ".srt", ".vtt", ".docx", ".pdf"}
 
 
 class TranscriptImportError(Exception):
@@ -90,6 +90,48 @@ def import_srt(path: str) -> str:
     return "\n".join(kept_lines)
 
 
+def import_vtt(path: str) -> str:
+    """A dependency-free WebVTT (.vtt) parser, the subtitle format that
+    largely superseded .srt. A file looks like:
+
+        WEBVTT
+
+        intro
+        00:00:01.000 --> 00:00:04.000 align:middle
+        Hello world.
+
+    Cues are separated by blank lines, so this is block-based rather than
+    line-based like import_srt(). For each block it drops:
+      - the WEBVTT header block (the file's first block),
+      - NOTE/STYLE/REGION blocks (comments and styling, not content),
+      - each cue's optional identifier line and its timing line (the one
+        with "-->", cue settings such as align:/line: and all),
+    and keeps only the cue's payload lines, stripping inline tags like
+    <i>, <c.yellow> and <v Speaker>. Each payload line stays on its own
+    line, same as import_srt(), so Normalize can rejoin sentences that
+    span several. A block with no timing line is malformed, so it's
+    skipped rather than emitted as junk. Timestamps here use "." for the
+    fractional second rather than the "," .srt uses, but that never
+    matters, since the whole timing line is dropped either way."""
+    text = _read_text_with_fallback(path)
+    kept_lines = []
+    for block in re.split(r"\r?\n[ \t]*\r?\n", text):
+        lines = block.strip().splitlines()
+        if not lines:
+            continue
+        first = lines[0].strip()
+        if first.startswith("WEBVTT") or first.startswith("NOTE") or first in ("STYLE", "REGION"):
+            continue
+        timing_idx = next((i for i, line in enumerate(lines) if "-->" in line), None)
+        if timing_idx is None:
+            continue
+        for payload in lines[timing_idx + 1:]:
+            cleaned = re.sub(r"<[^>]+>", "", payload).strip()
+            if cleaned:
+                kept_lines.append(cleaned)
+    return "\n".join(kept_lines)
+
+
 def import_docx(path: str) -> str:
     try:
         document = docx.Document(path)
@@ -145,6 +187,8 @@ def import_file(path: str) -> str:
         raw = import_txt(path)
     elif suffix == ".srt":
         raw = import_srt(path)
+    elif suffix == ".vtt":
+        raw = import_vtt(path)
     elif suffix == ".docx":
         raw = import_docx(path)
     elif suffix == ".pdf":
