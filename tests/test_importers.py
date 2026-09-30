@@ -7,6 +7,7 @@ from core.importers import (
     TranscriptImportError,
     import_docx,
     import_file,
+    import_html,
     import_md,
     import_pdf,
     import_srt,
@@ -265,6 +266,86 @@ def test_import_file_dispatches_markdown_extension(tmp_path):
     assert import_file(str(path)) == "Just text."
 
 
+# .html files
+
+def test_import_html_extracts_paragraph_text_and_drops_tags(tmp_path):
+    path = tmp_path / "page.html"
+    path.write_text("<html><body><p>Hello <b>world</b>.</p></body></html>", encoding="utf-8")
+    assert import_html(str(path)) == "Hello world."
+
+def test_import_html_drops_script_and_style(tmp_path):
+    path = tmp_path / "noisy.html"
+    path.write_text(
+        "<html><head><style>.x{color:red}</style></head>"
+        "<body><script>var a = 1;</script><p>Readable.</p></body></html>",
+        encoding="utf-8",
+    )
+    result = import_html(str(path))
+    assert "color" not in result
+    assert "var a" not in result
+    assert result == "Readable."
+
+def test_import_html_drops_head_metadata(tmp_path):
+    path = tmp_path / "titled.html"
+    path.write_text(
+        "<html><head><title>Page Title</title></head><body><p>Body text.</p></body></html>",
+        encoding="utf-8",
+    )
+    result = import_html(str(path))
+    assert "Page Title" not in result
+    assert result == "Body text."
+
+def test_import_html_separates_paragraphs_onto_their_own_lines(tmp_path):
+    path = tmp_path / "paras.html"
+    path.write_text(
+        "<html><body><p>First paragraph.</p><p>Second paragraph.</p></body></html>",
+        encoding="utf-8",
+    )
+    assert import_html(str(path)) == "First paragraph.\nSecond paragraph."
+
+def test_import_html_turns_br_into_line_breaks(tmp_path):
+    path = tmp_path / "br.html"
+    path.write_text("<html><body><p>Line one.<br>Line two.</p></body></html>", encoding="utf-8")
+    assert import_html(str(path)) == "Line one.\nLine two."
+
+def test_import_html_puts_list_items_on_separate_lines(tmp_path):
+    path = tmp_path / "list.html"
+    path.write_text(
+        "<html><body><ul><li>First</li><li>Second</li></ul></body></html>",
+        encoding="utf-8",
+    )
+    assert import_html(str(path)) == "First\nSecond"
+
+def test_import_html_collapses_internal_whitespace(tmp_path):
+    path = tmp_path / "ws.html"
+    path.write_text(
+        "<html><body><p>Wrapped\n    across   several\n    lines.</p></body></html>",
+        encoding="utf-8",
+    )
+    assert import_html(str(path)) == "Wrapped across several lines."
+
+def test_import_html_decodes_entities(tmp_path):
+    path = tmp_path / "entities.html"
+    path.write_text("<html><body><p>Tom &amp; Jerry &lt;3</p></body></html>", encoding="utf-8")
+    assert import_html(str(path)) == "Tom & Jerry <3"
+
+def test_import_file_dispatches_html(tmp_path):
+    path = tmp_path / "doc.html"
+    path.write_text("<html><body><p>Dispatched.</p></body></html>", encoding="utf-8")
+    assert import_file(str(path)) == "Dispatched."
+
+def test_import_file_dispatches_htm_extension(tmp_path):
+    path = tmp_path / "doc.htm"
+    path.write_text("<html><body><p>Short extension.</p></body></html>", encoding="utf-8")
+    assert import_file(str(path)) == "Short extension."
+
+def test_import_file_rejects_html_with_no_text(tmp_path):
+    path = tmp_path / "empty.html"
+    path.write_text("<html><head><title>Only a title</title></head><body></body></html>", encoding="utf-8")
+    with pytest.raises(TranscriptImportError, match="readable text"):
+        import_file(str(path))
+
+
 # .docx files
 
 def test_import_docx_extracts_paragraphs_and_drops_blank_ones(tmp_path):
@@ -380,4 +461,4 @@ def test_import_file_rejects_unsupported_extension(tmp_path):
         import_file(str(path))
 
 def test_supported_extensions_contents():
-    assert SUPPORTED_EXTENSIONS == {".txt", ".srt", ".vtt", ".md", ".markdown", ".docx", ".pdf"}
+    assert SUPPORTED_EXTENSIONS == {".txt", ".srt", ".vtt", ".md", ".markdown", ".html", ".htm", ".docx", ".pdf"}

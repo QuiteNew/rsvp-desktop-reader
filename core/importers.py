@@ -1,11 +1,11 @@
 """Turns a file the user picks into plain transcript text.
 
 One function per format (import_txt/import_srt/import_vtt/import_md/
-import_docx/import_pdf), a dispatcher (import_file) that picks one by
-extension, and a single exception (TranscriptImportError) that every
-failure collapses into, whether that's a corrupt file, bad encoding, a
-password-protected PDF, or no extractable text at all. That way gui/
-only ever has to catch one thing and show its message as-is.
+import_html/import_docx/import_pdf), a dispatcher (import_file) that picks
+one by extension, and a single exception (TranscriptImportError) that
+every failure collapses into, whether that's a corrupt file, bad
+encoding, a password-protected PDF, or no extractable text at all. That
+way gui/ only ever has to catch one thing and show its message as-is.
 
 Every importer's output passes through clean_transcript_keep_lines()
 before being returned: timestamps and extra spaces are removed, but
@@ -24,12 +24,13 @@ from pathlib import Path
 
 import docx
 import pypdf
+from lxml import html as lxml_html
 
 from core.parser import clean_transcript_keep_lines
 
 # Also used by gui/app.py for its file-dialog filter list, so the two
 # lists can't drift apart.
-SUPPORTED_EXTENSIONS = {".txt", ".srt", ".vtt", ".md", ".markdown", ".docx", ".pdf"}
+SUPPORTED_EXTENSIONS = {".txt", ".srt", ".vtt", ".md", ".markdown", ".html", ".htm", ".docx", ".pdf"}
 
 
 class TranscriptImportError(Exception):
@@ -222,6 +223,70 @@ def import_md(path: str) -> str:
     return "\n".join(kept_lines)
 
 
+# Block-level HTML elements that should each start on their own line when
+# import_html() flattens a page to text (see there). Inline elements
+# (<b>, <a>, <span>, ...) deliberately aren't here, so they don't split a
+# sentence mid-flow.
+_HTML_BLOCK_TAGS = {
+    "p", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6",
+    "blockquote", "pre", "section", "article", "header", "footer", "main",
+    "aside", "nav", "figure", "figcaption", "hr", "table", "tr", "td", "th",
+    "thead", "tbody", "tfoot", "dl", "dt", "dd",
+}
+
+
+def import_html(path: str) -> str:
+    """Extracts readable text from an HTML (.html/.htm) file using lxml,
+    which is already a dependency (python-docx pulls it in). Drops
+    <script>, <style>, <head>, <noscript> and <template> (code and
+    metadata, not reading content), turns <br> and block-level element
+    boundaries into line breaks so paragraphs and list items stay on their
+    own lines, and collapses each block's internal whitespace, including
+    the source file's own indentation and line wrapping, down to single
+    spaces. clean_transcript_keep_lines() tidies the rest; Normalize can
+    rejoin sentences.
+
+    Reads bytes and lets lxml's lenient HTML parser detect the document's
+    declared encoding (a <meta charset> or XML declaration), rather than
+    going through _read_text_with_fallback(), which would guess without
+    consulting the document. A private-use sentinel marks block boundaries
+    so a block break and the source file's own whitespace are never
+    confused when the text is flattened."""
+    raw_bytes = Path(path).read_bytes()
+    if not raw_bytes.strip():
+        return ""  # import_file() rejects empty output as "no readable text"
+    try:
+        tree = lxml_html.fromstring(raw_bytes)
+    except Exception as e:
+        raise TranscriptImportError(
+            f"Couldn't open {Path(path).name} as HTML:\n\n{e}"
+        ) from e
+
+    for bad in tree.xpath("//script | //style | //noscript | //head | //template"):
+        parent = bad.getparent()
+        if parent is not None:
+            parent.remove(bad)
+
+    sep = "\uE000"  # private-use sentinel marking block boundaries
+    for el in tree.iter():
+        tag = el.tag
+        if not isinstance(tag, str):
+            continue  # comments and processing instructions have no text
+        tag = tag.lower()
+        if tag == "br":
+            el.tail = sep + (el.tail or "")
+        elif tag in _HTML_BLOCK_TAGS:
+            el.text = sep + el.text if el.text else sep
+            el.tail = sep + (el.tail or "")
+
+    lines = []
+    for segment in tree.text_content().split(sep):
+        collapsed = " ".join(segment.split())  # collapse all internal whitespace
+        if collapsed:
+            lines.append(collapsed)
+    return "\n".join(lines)
+
+
 def import_docx(path: str) -> str:
     try:
         document = docx.Document(path)
@@ -281,6 +346,8 @@ def import_file(path: str) -> str:
         raw = import_vtt(path)
     elif suffix in (".md", ".markdown"):
         raw = import_md(path)
+    elif suffix in (".html", ".htm"):
+        raw = import_html(path)
     elif suffix == ".docx":
         raw = import_docx(path)
     elif suffix == ".pdf":
