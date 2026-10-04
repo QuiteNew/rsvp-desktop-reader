@@ -116,6 +116,8 @@ class RSVPApp(ctk.CTk):
             on_stopped_changed=self._handle_stopped_changed,
             on_session_stats=self._handle_session_stats,
             on_normalization_changed=self._handle_normalization_changed,
+            on_add_bookmark=self._handle_add_bookmark,
+            on_remove_bookmark=self._handle_remove_bookmark,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             highlight_offset_px=self.settings_store.highlight_offset_px,
@@ -129,7 +131,6 @@ class RSVPApp(ctk.CTk):
             resume_rewind_words=self.settings_store.resume_rewind_words,
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
-            peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -188,7 +189,7 @@ class RSVPApp(ctk.CTk):
     def _bind_shortcuts(self) -> None:
         """Reading-control keyboard shortcuts for the main window only.
         The detached transcript window has its own identical Space/Left/
-        Right/R/Esc bindings (added separately in DetachedTranscriptWindow
+        Right/R/B/Esc bindings (added separately in DetachedTranscriptWindow
         itself), since Tk's "falls through to its own toplevel" behavior
         only reaches as far as the window that owns the binding. F (Focus
         mode) is deliberately not mirrored there: the detached window has
@@ -200,21 +201,26 @@ class RSVPApp(ctk.CTk):
         child currently has keyboard focus, without reaching into every
         other open Tk window in the process the way bind_all() would.
 
-        Both case variants of R and F are bound, since Caps Lock or an
+        Both case variants of R, F and B are bound, since Caps Lock or an
         accidental Shift would otherwise land on a keysym this doesn't
         catch; Space, the arrow keys, and Escape have no such variant.
 
         Each handler checks _shortcut_should_fire() first, see that
         method's docstring for why. The underlying Canvas methods
-        (toggle_pause/restart/skip_backward/skip_forward/stop) are
-        already safe to call with nothing loaded or while the paste/edit
-        view is showing, so no separate "is something actually playing"
-        guard is needed here.
+        (toggle_pause/restart/skip_backward/skip_forward/stop/
+        toggle_bookmark_here) are already safe to call with nothing loaded
+        or while the paste/edit view is showing, so no separate "is
+        something actually playing" guard is needed here.
 
         Esc mirrors clicking the Stop button exactly, including that the
         button already overwrites whatever's typed in the paste/edit box
         with the transcript's last-saved text. That's pre-existing button
-        behavior; Esc just makes it reachable by keyboard too."""
+        behavior; Esc just makes it reachable by keyboard too.
+
+        B toggles a bookmark at the current word. Like the bookmark button
+        it routes through Canvas, which no-ops it over a preview or when no
+        live word exists, and delegates to the detached window when one is
+        open (the same routing _skip() uses)."""
         self.bind("<space>", self._handle_shortcut_pause_toggle)
         self.bind("<Left>", self._handle_shortcut_skip_backward)
         self.bind("<Right>", self._handle_shortcut_skip_forward)
@@ -222,6 +228,8 @@ class RSVPApp(ctk.CTk):
         self.bind("<R>", self._handle_shortcut_restart)
         self.bind("<f>", self._handle_shortcut_focus_mode)
         self.bind("<F>", self._handle_shortcut_focus_mode)
+        self.bind("<b>", self._handle_shortcut_bookmark)
+        self.bind("<B>", self._handle_shortcut_bookmark)
         self.bind("<Escape>", self._handle_shortcut_stop)
 
     def _shortcut_should_fire(self) -> bool:
@@ -262,6 +270,10 @@ class RSVPApp(ctk.CTk):
     def _handle_shortcut_focus_mode(self, event=None) -> None:
         if self._shortcut_should_fire():
             self._toggle_focus_mode()
+
+    def _handle_shortcut_bookmark(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.canvas.toggle_bookmark_here()
 
     def _handle_shortcut_stop(self, event=None) -> None:
         if self._shortcut_should_fire():
@@ -395,9 +407,7 @@ class RSVPApp(ctk.CTk):
         filetypes = [
             ("Supported documents", " ".join(f"*{ext}" for ext in sorted(importers.SUPPORTED_EXTENSIONS))),
             ("Text files", "*.txt"),
-            ("Subtitle files", "*.srt *.vtt"),
-            ("Markdown files", "*.md *.markdown"),
-            ("HTML files", "*.html *.htm"),
+            ("Subtitle files", "*.srt"),
             ("Word documents", "*.docx"),
             ("PDF files", "*.pdf"),
         ]
@@ -550,6 +560,17 @@ class RSVPApp(ctk.CTk):
     def _handle_session_stats(self, transcript, words_read: int, active_seconds: float) -> None:
         self.store.add_session_stats(transcript.id, words_read, active_seconds)
 
+    def _handle_add_bookmark(self, transcript, index: int, snippet: str) -> None:
+        """Persist a new bookmark at a word index for a transcript. The
+        store dedupes by index and keeps the list sorted, and mutates the
+        Transcript object in place, so the canvas/detached window reading
+        transcript.bookmarks right after sees the change without a reload.
+        Shared by both the main canvas and the detached window."""
+        self.store.add_bookmark(transcript.id, index, snippet)
+
+    def _handle_remove_bookmark(self, transcript, index: int) -> None:
+        self.store.remove_bookmark(transcript.id, index)
+
     def _handle_draft_changed(self, transcript, text: str) -> None:
         if transcript.is_stopped:
             self.store.set_transcript_text(transcript.id, text)
@@ -640,7 +661,6 @@ class RSVPApp(ctk.CTk):
             resume_rewind_words=self.settings_store.resume_rewind_words,
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
-            peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -717,9 +737,6 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_scrub_pause_enabled(values["scrub_pause_enabled"])
         self.canvas.set_scrub_pause(values["scrub_pause_enabled"])
-
-        self.settings_store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
-        self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 

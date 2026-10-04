@@ -8,6 +8,7 @@ from gui.components.stop_button import StopButton
 from gui.components.scrub_bar import ScrubBar
 from gui.components.detached_window import DetachedTranscriptWindow
 from gui.components.selection_preview_window import SelectionPreviewWindow
+from gui.components.bookmarks_popover import BookmarksPopover
 from gui.theme import HEARTH_PAPER
 
 
@@ -20,6 +21,7 @@ class Canvas(ctk.CTkFrame):
         on_text_submitted=None, on_maximize_toggle=None,
         on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
         on_stopped_changed=None, on_session_stats=None, on_normalization_changed=None,
+        on_add_bookmark=None, on_remove_bookmark=None,
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
@@ -32,7 +34,6 @@ class Canvas(ctk.CTkFrame):
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
-        peripheral_context_enabled: bool = False,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -43,6 +44,8 @@ class Canvas(ctk.CTkFrame):
         self.on_stopped_changed = on_stopped_changed
         self.on_session_stats = on_session_stats
         self.on_normalization_changed = on_normalization_changed
+        self.on_add_bookmark = on_add_bookmark
+        self.on_remove_bookmark = on_remove_bookmark
         self._skip_word_count = skip_word_count
         self._pause_on_skip = pause_on_skip
         self._highlight_offset_px = highlight_offset_px
@@ -56,7 +59,6 @@ class Canvas(ctk.CTkFrame):
         self._resume_rewind_words = resume_rewind_words
         self._warm_up_enabled = warm_up_enabled
         self._scrub_pause_enabled = scrub_pause_enabled
-        self._peripheral_context_enabled = peripheral_context_enabled
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -71,6 +73,9 @@ class Canvas(ctk.CTkFrame):
         # once; each is independent and persists nothing. See
         # open_selection_preview().
         self._selection_previews = []
+        # At most one bookmarks popover for the main reader at a time. See
+        # open_bookmarks() and _close_bookmarks_popover().
+        self._bookmarks_popover = None
 
         # Three columns: Stop hugs the left, the scrubber sits just right
         # of it (left-aligned, sticky "w"), and the stretch of column 1 to
@@ -94,8 +99,10 @@ class Canvas(ctk.CTkFrame):
             self.button_row,
             on_pause_toggle=self.toggle_pause,
             on_restart=self.restart,
+            on_bookmarks=self.open_bookmarks,
             on_maximize_toggle=self._handle_maximize_toggle,
             on_detach=self._handle_detach,
+            show_bookmarks=True,
             show_progress=True,
         )
         self.toolbar.grid(row=0, column=2, sticky="e")
@@ -122,7 +129,6 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_color(self._guide_mark_color)
         self.reader_display.set_resume_rewind(self._resume_rewind_enabled, self._resume_rewind_words)
         self.reader_display.set_scrub_pause(self._scrub_pause_enabled)
-        self.reader_display.set_peripheral_context(self._peripheral_context_enabled)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -136,6 +142,11 @@ class Canvas(ctk.CTkFrame):
 
     def load_transcript(self, transcript) -> None:
         self._capture_current_draft()
+        # Any open bookmarks popover belongs to the transcript (and the
+        # session) that's leaving the screen, so it's closed before the
+        # swap. Reattach also comes back through here, so this covers that
+        # transition too.
+        self._close_bookmarks_popover()
         self.reader_display.stop()
         # Loading a real transcript ends any selection preview. Cleared
         # after stop() above so that preview's finalize stays suppressed.
@@ -169,6 +180,7 @@ class Canvas(ctk.CTkFrame):
         was_detached = self._detached_transcript_id == transcript_id
 
         if was_current:
+            self._close_bookmarks_popover()
             self.current_transcript = None
             self.reader_display.stop()
             self._ephemeral = False
@@ -287,15 +299,6 @@ class Canvas(ctk.CTkFrame):
         # their other styling (see open_selection_preview), so they aren't
         # updated here.
 
-    def set_peripheral_context_enabled(self, enabled: bool) -> None:
-        self._peripheral_context_enabled = enabled
-        self.reader_display.set_peripheral_context(enabled)
-        if self._detached_window:
-            self._detached_window.set_peripheral_context_enabled(enabled)
-        # Open selection previews snapshot the setting at open time, like
-        # their other styling (see open_selection_preview), so they aren't
-        # updated here.
-
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self._resume_rewind_enabled = enabled
         self._resume_rewind_words = words
@@ -391,7 +394,6 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
-            peripheral_context_enabled=self._peripheral_context_enabled,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
@@ -522,6 +524,114 @@ class Canvas(ctk.CTkFrame):
         self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
 
+    def open_bookmarks(self) -> None:
+        """Open (or refocus) the bookmarks popover for the reader that's
+        actually live. While a transcript is detached, the main reader is
+        stopped and this delegates to the detached window, the same way
+        _skip() routes there. Otherwise it needs a real, non-preview
+        session on screen: a selection preview (_ephemeral) is a throwaway,
+        so it gets no bookmarks, and over the edit box there's no session,
+        so the button simply does nothing (as pause/restart already do
+        there)."""
+        if self._detached_window:
+            self._detached_window.open_bookmarks()
+            return
+        if self._ephemeral or self.current_transcript is None or self.reader_display.session is None:
+            return
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._refresh_bookmarks_popover()
+            self._bookmarks_popover.lift()
+            self._bookmarks_popover.focus_force()
+            return
+        self._bookmarks_popover = BookmarksPopover(
+            self,
+            on_toggle_here=self.toggle_bookmark_here,
+            on_jump=self._handle_bookmark_jump,
+            on_delete=self._handle_bookmark_delete,
+            on_closed=self._handle_bookmarks_popover_closed,
+            **self._bookmarks_popover_state(),
+        )
+
+    def toggle_bookmark_here(self) -> None:
+        """Add a bookmark at the current word, or remove the one that's
+        already there (the `B` shortcut and the popover's own toggle both
+        land here). Routes to the detached window when detached, like
+        _skip(); otherwise no-ops over a preview or when no live word
+        exists (current_bookmark_target() returns None). Persists through
+        the on_add_bookmark/on_remove_bookmark callbacks, then refreshes
+        the popover if it's open."""
+        if self._detached_window:
+            self._detached_window.toggle_bookmark_here()
+            return
+        if self._ephemeral or self.current_transcript is None:
+            return
+        target = self.reader_display.current_bookmark_target()
+        if target is None:
+            return
+        index, snippet = target
+        transcript = self.current_transcript
+        already = any(b.index == index for b in transcript.bookmarks)
+        if already:
+            if self.on_remove_bookmark:
+                self.on_remove_bookmark(transcript, index)
+        else:
+            if self.on_add_bookmark:
+                self.on_add_bookmark(transcript, index, snippet)
+        self._refresh_bookmarks_popover()
+
+    def _handle_bookmark_jump(self, index: int) -> None:
+        """A click on a bookmark row: seek there and land paused, sync and
+        persist the pause the same shape as a skip, then close the popover
+        (you've gone where you wanted). Position is persisted through the
+        reader's own on_position_changed path, as everywhere else."""
+        is_paused = self.reader_display.jump_to(index)
+        self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._bookmarks_popover.close()
+
+    def _handle_bookmark_delete(self, index: int) -> None:
+        if self.current_transcript is None:
+            return
+        if self.on_remove_bookmark:
+            self.on_remove_bookmark(self.current_transcript, index)
+        self._refresh_bookmarks_popover()
+
+    def _bookmarks_popover_state(self) -> dict:
+        """The data the popover renders from, read fresh from the live
+        transcript (which the store mutates in place) and the current
+        session. can_bookmark_here is False when there's no live word, so
+        the popover's toggle button shows disabled."""
+        transcript = self.current_transcript
+        bookmarks = list(transcript.bookmarks) if transcript else []
+        target = self.reader_display.current_bookmark_target()
+        can_here = target is not None
+        current_bookmarked = (
+            target is not None and transcript is not None
+            and any(b.index == target[0] for b in transcript.bookmarks)
+        )
+        session = self.reader_display.session
+        total_words = session.total_words if session else 0
+        return {
+            "bookmarks": bookmarks,
+            "total_words": total_words,
+            "can_bookmark_here": can_here,
+            "current_index_is_bookmarked": current_bookmarked,
+        }
+
+    def _refresh_bookmarks_popover(self) -> None:
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._bookmarks_popover.render(**self._bookmarks_popover_state())
+
+    def _handle_bookmarks_popover_closed(self, window) -> None:
+        if self._bookmarks_popover is window:
+            self._bookmarks_popover = None
+
+    def _close_bookmarks_popover(self) -> None:
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._bookmarks_popover.close()
+        self._bookmarks_popover = None
+
     def stop(self) -> None:
         """Ends the current reading session and drops back to the
         paste/edit view, showing whatever text that session was reading.
@@ -550,6 +660,7 @@ class Canvas(ctk.CTkFrame):
             return
         if self._input_currently_shown or self.current_transcript.id == self._detached_transcript_id:
             return
+        self._close_bookmarks_popover()
         self.reader_display.stop()
         self.toolbar.set_paused(False)
         self._handle_position_changed(0)
@@ -565,6 +676,7 @@ class Canvas(ctk.CTkFrame):
     def _handle_detach(self) -> None:
         if not self.current_transcript:
             return
+        self._close_bookmarks_popover()
         self.reader_display.stop()
         self._ephemeral = False
         self._detached_transcript_id = self.current_transcript.id
@@ -588,6 +700,8 @@ class Canvas(ctk.CTkFrame):
             on_stopped_changed=self.on_stopped_changed,
             on_session_stats=self.on_session_stats,
             on_normalization_changed=self.on_normalization_changed,
+            on_add_bookmark=self.on_add_bookmark,
+            on_remove_bookmark=self.on_remove_bookmark,
             skip_word_count=self._skip_word_count,
             pause_on_skip=self._pause_on_skip,
             highlight_offset_px=self._highlight_offset_px,
@@ -601,7 +715,6 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
-            peripheral_context_enabled=self._peripheral_context_enabled,
         )
         self._show_detached_placeholder()
 

@@ -5,6 +5,7 @@ from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
 from gui.components.scrub_bar import ScrubBar
+from gui.components.bookmarks_popover import BookmarksPopover
 from gui.theme import apply_app_icon, center_over_parent, HEARTH_PAPER
 
 
@@ -15,6 +16,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self, master, transcript, on_text_submitted, on_closed,
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
         on_session_stats=None, on_normalization_changed=None,
+        on_add_bookmark=None, on_remove_bookmark=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
@@ -23,7 +25,6 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
-        peripheral_context_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -46,13 +47,17 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.on_stopped_changed = on_stopped_changed
         self.on_normalization_changed = on_normalization_changed
         self.on_session_stats = on_session_stats
+        self.on_add_bookmark = on_add_bookmark
+        self.on_remove_bookmark = on_remove_bookmark
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
         self.split_long_paragraphs_enabled = split_long_paragraphs_enabled
         self.warm_up_enabled = warm_up_enabled
         self.scrub_pause_enabled = scrub_pause_enabled
-        self.peripheral_context_enabled = peripheral_context_enabled
+        # At most one bookmarks popover for this window at a time. See
+        # open_bookmarks() and _close_bookmarks_popover().
+        self._bookmarks_popover = None
 
         self.title(transcript.title)
         apply_app_icon(self)
@@ -78,7 +83,9 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             on_skip_forward=self._handle_skip_forward,
             on_pause_toggle=self._handle_pause_toggle,
             on_restart=self._handle_restart,
+            on_bookmarks=self.open_bookmarks,
             show_skip=True,
+            show_bookmarks=True,
             show_maximize=False,
             show_detach=False,
             show_progress=True,
@@ -102,7 +109,6 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_color(guide_mark_color)
         self.reader_display.set_resume_rewind(resume_rewind_enabled, resume_rewind_words)
         self.reader_display.set_scrub_pause(scrub_pause_enabled)
-        self.reader_display.set_peripheral_context(peripheral_context_enabled)
 
         self._render_current_state()
         self._bind_shortcuts()
@@ -149,10 +155,6 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_scrub_pause(self, enabled: bool) -> None:
         self.scrub_pause_enabled = enabled
         self.reader_display.set_scrub_pause(enabled)
-
-    def set_peripheral_context_enabled(self, enabled: bool) -> None:
-        self.peripheral_context_enabled = enabled
-        self.reader_display.set_peripheral_context(enabled)
 
     def _render_current_state(self) -> None:
         self.control_row.pack_forget()
@@ -245,6 +247,84 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
 
+    def open_bookmarks(self) -> None:
+        """Open (or refocus) this window's bookmarks popover. Needs a live
+        session; over its own edit box the toolbar isn't even shown, so in
+        practice this is only reachable while reading."""
+        if self.reader_display.session is None:
+            return
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._refresh_bookmarks_popover()
+            self._bookmarks_popover.lift()
+            self._bookmarks_popover.focus_force()
+            return
+        self._bookmarks_popover = BookmarksPopover(
+            self,
+            on_toggle_here=self.toggle_bookmark_here,
+            on_jump=self._handle_bookmark_jump,
+            on_delete=self._handle_bookmark_delete,
+            on_closed=self._handle_bookmarks_popover_closed,
+            **self._bookmarks_popover_state(),
+        )
+
+    def toggle_bookmark_here(self) -> None:
+        """Add or remove a bookmark at the current word of this window's
+        own transcript. The `B` shortcut and the popover's toggle both land
+        here. Persists through the on_add_bookmark/on_remove_bookmark
+        callbacks (the same app-level handlers the main window uses), then
+        refreshes the popover if open."""
+        target = self.reader_display.current_bookmark_target()
+        if target is None:
+            return
+        index, snippet = target
+        already = any(b.index == index for b in self.transcript.bookmarks)
+        if already:
+            if self.on_remove_bookmark:
+                self.on_remove_bookmark(self.transcript, index)
+        else:
+            if self.on_add_bookmark:
+                self.on_add_bookmark(self.transcript, index, snippet)
+        self._refresh_bookmarks_popover()
+
+    def _handle_bookmark_jump(self, index: int) -> None:
+        is_paused = self.reader_display.jump_to(index)
+        self.toolbar.set_paused(is_paused)
+        self._handle_pause_changed(is_paused)
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._bookmarks_popover.close()
+
+    def _handle_bookmark_delete(self, index: int) -> None:
+        if self.on_remove_bookmark:
+            self.on_remove_bookmark(self.transcript, index)
+        self._refresh_bookmarks_popover()
+
+    def _bookmarks_popover_state(self) -> dict:
+        target = self.reader_display.current_bookmark_target()
+        can_here = target is not None
+        current_bookmarked = (
+            target is not None and any(b.index == target[0] for b in self.transcript.bookmarks)
+        )
+        session = self.reader_display.session
+        return {
+            "bookmarks": list(self.transcript.bookmarks),
+            "total_words": session.total_words if session else 0,
+            "can_bookmark_here": can_here,
+            "current_index_is_bookmarked": current_bookmarked,
+        }
+
+    def _refresh_bookmarks_popover(self) -> None:
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._bookmarks_popover.render(**self._bookmarks_popover_state())
+
+    def _handle_bookmarks_popover_closed(self, window) -> None:
+        if self._bookmarks_popover is window:
+            self._bookmarks_popover = None
+
+    def _close_bookmarks_popover(self) -> None:
+        if self._bookmarks_popover is not None and self._bookmarks_popover.winfo_exists():
+            self._bookmarks_popover.close()
+        self._bookmarks_popover = None
+
     def _handle_stop(self) -> None:
         """Ends the reading session and drops back to the paste/edit
         view, right here in this window. Mirrors Canvas.stop() (see
@@ -281,6 +361,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         reflects the stop."""
         if self.transcript.is_stopped or not self.transcript.raw_text.strip():
             return
+        self._close_bookmarks_popover()
         self.reader_display.stop()
         self.toolbar.set_paused(False)
         self._handle_position_changed(0)
@@ -291,21 +372,27 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _bind_shortcuts(self) -> None:
         """Same reading-control shortcuts as the main window (see
         gui/app.py's _bind_shortcuts() for the full reasoning): Space,
-        Left/Right, R, Esc. Bound separately here since this is its own
+        Left/Right, R, B, Esc. Bound separately here since this is its own
         CTkToplevel and Tk's window-level binding only reaches the window
-        it's actually bound on. Space/Left/Right/R call straight into
+        it's actually bound on. Space/Left/Right/R/B call straight into
         this window's own existing handlers (_handle_pause_toggle,
-        _handle_skip_back, _handle_skip_forward, _handle_restart), which
-        only ever needed to be called from this class to begin with (by
-        the toolbar's own callback wiring), so nothing about their
-        visibility needs to change. Esc/_handle_stop had no existing
-        private handler to call into, since this window had no stop
-        capability before it (see that method's own docstring)."""
+        _handle_skip_back, _handle_skip_forward, _handle_restart,
+        toggle_bookmark_here), which only ever needed to be called from
+        this class to begin with (by the toolbar's own callback wiring),
+        so nothing about their visibility needs to change. Esc/_handle_stop
+        had no existing private handler to call into, since this window had
+        no stop capability before it (see that method's own docstring).
+
+        Both case variants of R and B are bound, since Caps Lock or an
+        accidental Shift would otherwise land on a keysym this doesn't
+        catch; Space, the arrow keys, and Escape have no such variant."""
         self.bind("<space>", self._handle_shortcut_pause_toggle)
         self.bind("<Left>", self._handle_shortcut_skip_backward)
         self.bind("<Right>", self._handle_shortcut_skip_forward)
         self.bind("<r>", self._handle_shortcut_restart)
         self.bind("<R>", self._handle_shortcut_restart)
+        self.bind("<b>", self._handle_shortcut_bookmark)
+        self.bind("<B>", self._handle_shortcut_bookmark)
         self.bind("<Escape>", self._handle_shortcut_stop)
 
     def _shortcut_should_fire(self) -> bool:
@@ -334,6 +421,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self._shortcut_should_fire():
             self._handle_restart()
 
+    def _handle_shortcut_bookmark(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.toggle_bookmark_here()
+
     def _handle_shortcut_stop(self, event=None) -> None:
         if self._shortcut_should_fire():
             self._handle_stop()
@@ -356,6 +447,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         state Esc/_handle_stop() leaves one in) needs draft_text
         captured here, since _handle_detached_closed() treats is_stopped
         as reason enough to report and persist it, empty or not."""
+        self._close_bookmarks_popover()
         self.reader_display.stop()
         draft_text = ""
         if self.transcript.is_stopped or not self.transcript.raw_text.strip():

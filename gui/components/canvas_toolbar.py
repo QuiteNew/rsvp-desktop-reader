@@ -7,7 +7,8 @@ from gui.theme import FONT_BODY
 class CanvasToolbar(ctk.CTkFrame):
     """Floating-style control row: optionally skip back/forward, an
     optional time-remaining and progress-% read-out, then pause/play,
-    restart, and optionally detach + maximize.
+    restart, an optional bookmarks button, and optionally detach +
+    maximize.
 
     True translucency isn't possible in Tkinter, so this approximates a
     'glass' look with a light, low-contrast fill and soft rounded corners.
@@ -23,9 +24,11 @@ class CanvasToolbar(ctk.CTkFrame):
         on_skip_forward=None,
         on_pause_toggle=None,
         on_restart=None,
+        on_bookmarks=None,
         on_maximize_toggle=None,
         on_detach=None,
         show_skip: bool = False,
+        show_bookmarks: bool = False,
         show_maximize: bool = True,
         show_detach: bool = True,
         show_progress: bool = False,
@@ -35,11 +38,13 @@ class CanvasToolbar(ctk.CTkFrame):
         self.on_skip_forward = on_skip_forward
         self.on_pause_toggle = on_pause_toggle
         self.on_restart = on_restart
+        self.on_bookmarks = on_bookmarks
         self.on_maximize_toggle = on_maximize_toggle
         self.on_detach = on_detach
         self.show_progress = show_progress
 
-        # Order, left to right: [Rewind, Forward,] [Time, %,] Pause, Restart, [Detach,] [Maximize]
+        # Order, left to right: [Rewind, Forward,] [Time, %,] Pause,
+        # Restart, [Bookmarks,] [Detach,] [Maximize]
         if show_skip:
             self.skip_back_button = self._make_button("<<", self._handle_skip_back)
             self.skip_back_button.pack(side="left", padx=(0, 6))
@@ -63,6 +68,13 @@ class CanvasToolbar(ctk.CTkFrame):
 
         self.restart_button = self._make_button("⟳", self._handle_restart)
         self.restart_button.pack(side="left", padx=(0, 6))
+
+        # Opens the bookmarks popover. Like pause/restart, it stays in the
+        # row even over the edit view (its owner no-ops the click when no
+        # session is live), so there's no show/hide plumbing for it.
+        if show_bookmarks:
+            self.bookmark_button = self._make_button("⚑", self._handle_bookmarks)
+            self.bookmark_button.pack(side="left", padx=(0, 6))
 
         if show_detach:
             self.detach_button = self._make_button("↗", self._handle_detach)
@@ -135,6 +147,10 @@ class CanvasToolbar(ctk.CTkFrame):
     def _handle_restart(self) -> None:
         if self.on_restart:
             self.on_restart()
+
+    def _handle_bookmarks(self) -> None:
+        if self.on_bookmarks:
+            self.on_bookmarks()
 
     def _handle_maximize(self) -> None:
         if self.on_maximize_toggle:

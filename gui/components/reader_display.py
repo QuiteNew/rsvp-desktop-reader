@@ -354,6 +354,39 @@ class ReaderDisplay(ctk.CTkFrame):
         self._update_guide_marks()
         return self._is_paused
 
+    def jump_to(self, index: int) -> bool:
+        """Jump the reader to an absolute word index and land paused there,
+        used by bookmarks. Mirrors how a scrub release that pauses behaves:
+        any pending advance is cancelled, the active-time span is closed if
+        reading was playing, and the landed word is shown and its position
+        reported. Returns the resulting paused state (always True) so the
+        caller can sync its toolbar and persist the pause, the same shape
+        as skip() and scrub_end()."""
+        if self.session is None:
+            return self._is_paused
+        self._cancel_pending()
+        if not self._is_paused:
+            self._is_paused = True
+            self._end_active_span()
+        self.session.seek_to(index)
+        self._show_current_frame()
+        self._report_position()
+        self._update_guide_marks()
+        return self._is_paused
+
+    def current_bookmark_target(self) -> tuple[int, str] | None:
+        """The current word's index and a short snippet of the words around
+        it, for creating a bookmark at the reader's current position.
+        Returns None when there's no live word to bookmark (no session
+        loaded, or the session has finished). The snippet reuses
+        ReaderSession.peripheral_context(), the same surrounding-words
+        helper the context ribbon uses."""
+        if self.session is None or self.session.is_finished:
+            return None
+        context = self.session.peripheral_context(3, 3)
+        snippet = " ".join([*context.before, context.current or "", *context.after]).strip()
+        return self.session.index, snippet
+
     def set_wpm(self, wpm: int) -> None:
         if self.session:
             self.session.set_wpm(wpm)
