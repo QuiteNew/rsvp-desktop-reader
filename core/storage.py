@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
-from dataclasses import asdict
+from dataclasses import asdict, fields as dataclass_fields
 
-from core.models import Transcript
+from core.models import Transcript, Bookmark
 
 DEFAULT_DATA_DIR = Path.home() / ".rsvp_reader"
 
@@ -14,6 +14,12 @@ DEFAULT_DATA_DIR = Path.home() / ".rsvp_reader"
 # transcript that already existed. See core/models.py's Transcript and
 # TranscriptStore.
 _COLOR_DEFAULT_FLAG_FIELDS = ("font_color_is_default", "highlight_color_is_default", "background_color_is_default")
+
+# The names of Bookmark's own fields. parse_data() rebuilds each stored
+# bookmark dict into a Bookmark using only these keys, so a bookmark field
+# added by a future version is dropped harmlessly instead of raising and
+# discarding the whole save. See parse_data().
+_BOOKMARK_FIELDS = {f.name for f in dataclass_fields(Bookmark)}
 
 # Shared by TranscriptStore and SettingsStore for any setter that gets
 # called from a live, high-frequency UI event, such as continuous
@@ -51,12 +57,27 @@ def parse_data(data: dict) -> dict | None:
 
     Split out of load_state() so both the normal startup load and a
     bundle import get the exact same backward-compatibility handling, the
-    color-flag migration below, from one place, instead of it being
-    duplicated, and potentially drifting, between the two."""
+    color-flag migration and bookmark reconstruction below, from one
+    place, instead of it being duplicated, and potentially drifting,
+    between the two."""
     try:
         for t in data["transcripts"]:
             for field_name in _COLOR_DEFAULT_FLAG_FIELDS:
                 t.setdefault(field_name, False)
+            # Bookmarks are written as plain dicts by asdict() in
+            # save_state()/export_state(); rebuild them into Bookmark
+            # objects so Transcript(**t) below gets real objects, not
+            # dicts. Unknown keys are filtered out rather than passed to
+            # Bookmark(), so a bookmark field added by a future version is
+            # dropped harmlessly instead of raising here and discarding
+            # the entire save. A file from before bookmarks existed has no
+            # "bookmarks" key, which Transcript's default_factory handles
+            # as an empty list, so only convert when the key is present.
+            if "bookmarks" in t:
+                t["bookmarks"] = [
+                    Bookmark(**{k: v for k, v in b.items() if k in _BOOKMARK_FIELDS})
+                    for b in t["bookmarks"]
+                ]
         transcripts = [Transcript(**t) for t in data["transcripts"]]
         return {
             "next_id": data["next_id"],

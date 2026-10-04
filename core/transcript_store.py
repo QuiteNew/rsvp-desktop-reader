@@ -1,7 +1,8 @@
 import time
 from dataclasses import asdict
+from datetime import datetime, timezone
 
-from core.models import Transcript
+from core.models import Transcript, Bookmark
 from core.storage import save_state, load_state, DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
 
 DEFAULT_SPACE = "General"
@@ -373,6 +374,35 @@ class TranscriptStore:
         if t:
             t.pre_normalize_text = pre_normalize_text
             t.normalized_text = normalized_text
+            self._save()
+
+    def add_bookmark(self, transcript_id: int, index: int, snippet: str = "") -> None:
+        """Add a bookmark at the given word index, with a short snippet of
+        the surrounding text for the list display. At most one bookmark per
+        index: adding at an index that's already bookmarked is a no-op, so
+        the original (and its snippet/timestamp) is kept rather than
+        silently replaced. The list is kept sorted by index. created_at is
+        stamped now, in UTC ISO-8601. A no-op if the transcript doesn't
+        exist."""
+        t = self._find_transcript(transcript_id)
+        if t is None:
+            return
+        if any(b.index == index for b in t.bookmarks):
+            return
+        t.bookmarks.append(Bookmark(index=index, snippet=snippet, created_at=datetime.now(timezone.utc).isoformat()))
+        t.bookmarks.sort(key=lambda b: b.index)
+        self._save()
+
+    def remove_bookmark(self, transcript_id: int, index: int) -> None:
+        """Remove the bookmark at the given word index, if there is one. A
+        no-op if the transcript doesn't exist or has no bookmark there, and
+        it only writes to disk when something actually changed."""
+        t = self._find_transcript(transcript_id)
+        if t is None:
+            return
+        remaining = [b for b in t.bookmarks if b.index != index]
+        if len(remaining) != len(t.bookmarks):
+            t.bookmarks = remaining
             self._save()
 
     def add_session_stats(self, transcript_id: int, words_read: int, active_seconds: float) -> None:
