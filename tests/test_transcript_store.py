@@ -1,6 +1,7 @@
 import json
 import pytest
 from core.transcript_store import TranscriptStore
+from core.models import Bookmark
 
 
 @pytest.fixture
@@ -450,3 +451,88 @@ def test_set_data_directory_does_not_delete_old_location(tmp_path):
     store.set_data_directory(str(new_dir))
 
     assert (old_dir / "data.json").exists()
+
+# Bookmarks tests below:
+
+def test_add_bookmark_stores_index_and_snippet(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 5, "the quick brown")
+    bms = store.transcripts[0].bookmarks
+    assert len(bms) == 1
+    assert isinstance(bms[0], Bookmark)
+    assert bms[0].index == 5
+    assert bms[0].snippet == "the quick brown"
+    assert bms[0].created_at  # a non-empty ISO-8601 timestamp string
+
+def test_add_bookmark_is_deduped_by_index(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 5, "first")
+    store.add_bookmark(t.id, 5, "second attempt")  # same index -> no-op
+    bms = store.transcripts[0].bookmarks
+    assert len(bms) == 1
+    assert bms[0].snippet == "first"  # the original is kept, not replaced
+
+def test_add_bookmark_keeps_list_sorted_by_index(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 10, "ten")
+    store.add_bookmark(t.id, 2, "two")
+    store.add_bookmark(t.id, 7, "seven")
+    assert [b.index for b in store.transcripts[0].bookmarks] == [2, 7, 10]
+
+def test_add_bookmark_on_nonexistent_transcript_is_a_safe_no_op(store):
+    store.add_transcript("Title", "General")
+    store.add_bookmark(999, 1, "nope")
+    assert store.transcripts[0].bookmarks == []
+
+def test_remove_bookmark_removes_by_index(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 2, "two")
+    store.add_bookmark(t.id, 5, "five")
+    store.remove_bookmark(t.id, 2)
+    assert [b.index for b in store.transcripts[0].bookmarks] == [5]
+
+def test_remove_bookmark_nonexistent_index_is_a_safe_no_op(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 2, "two")
+    store.remove_bookmark(t.id, 99)
+    assert [b.index for b in store.transcripts[0].bookmarks] == [2]
+
+def test_remove_bookmark_on_nonexistent_transcript_is_a_safe_no_op(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 2, "two")
+    store.remove_bookmark(999, 2)
+    assert len(store.transcripts[0].bookmarks) == 1
+
+def test_new_transcript_has_no_bookmarks(store):
+    store.add_transcript("Title", "General")
+    assert store.transcripts[0].bookmarks == []
+
+def test_bookmarks_persist_across_reload(tmp_path):
+    directory = str(tmp_path)
+    first = TranscriptStore(data_directory=directory)
+    t = first.add_transcript("Doc", "General")
+    first.add_bookmark(t.id, 3, "three")
+    first.add_bookmark(t.id, 8, "eight")
+
+    second = TranscriptStore(data_directory=directory)
+    reloaded = next(x for x in second.transcripts if x.id == t.id)
+    assert [b.index for b in reloaded.bookmarks] == [3, 8]
+    assert reloaded.bookmarks[0].snippet == "three"
+    # Rebuilt as real Bookmark objects, not plain dicts (see core/storage.py).
+    assert all(isinstance(b, Bookmark) for b in reloaded.bookmarks)
+
+def test_old_save_file_missing_bookmarks_field_defaults_to_empty_list(tmp_path):
+    """A save file from before bookmarks existed has no "bookmarks" key on
+    its transcripts. Transcript's field(default_factory=list) default means
+    it loads as an empty list, no explicit backfill needed, the same as the
+    stats and normalization fields."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text(json.dumps({
+        "next_id": 2,
+        "current_space_index": 0,
+        "spaces": ["General"],
+        "transcripts": [{"id": 1, "title": "Old Transcript", "space": "General"}],
+    }), encoding="utf-8")
+
+    store = TranscriptStore(data_directory=str(tmp_path))
+    assert store.transcripts[0].bookmarks == []
