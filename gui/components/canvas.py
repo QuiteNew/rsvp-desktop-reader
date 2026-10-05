@@ -21,7 +21,7 @@ class Canvas(ctk.CTkFrame):
         on_text_submitted=None, on_maximize_toggle=None,
         on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
         on_stopped_changed=None, on_session_stats=None, on_normalization_changed=None,
-        on_add_bookmark=None, on_remove_bookmark=None,
+        on_add_bookmark=None, on_remove_bookmark=None, on_rename_bookmark=None,
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
@@ -34,6 +34,7 @@ class Canvas(ctk.CTkFrame):
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
+        peripheral_context_enabled: bool = False,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -46,6 +47,7 @@ class Canvas(ctk.CTkFrame):
         self.on_normalization_changed = on_normalization_changed
         self.on_add_bookmark = on_add_bookmark
         self.on_remove_bookmark = on_remove_bookmark
+        self.on_rename_bookmark = on_rename_bookmark
         self._skip_word_count = skip_word_count
         self._pause_on_skip = pause_on_skip
         self._highlight_offset_px = highlight_offset_px
@@ -59,6 +61,7 @@ class Canvas(ctk.CTkFrame):
         self._resume_rewind_words = resume_rewind_words
         self._warm_up_enabled = warm_up_enabled
         self._scrub_pause_enabled = scrub_pause_enabled
+        self._peripheral_context_enabled = peripheral_context_enabled
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -129,6 +132,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_guide_mark_color(self._guide_mark_color)
         self.reader_display.set_resume_rewind(self._resume_rewind_enabled, self._resume_rewind_words)
         self.reader_display.set_scrub_pause(self._scrub_pause_enabled)
+        self.reader_display.set_peripheral_context(self._peripheral_context_enabled)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -300,6 +304,15 @@ class Canvas(ctk.CTkFrame):
         # their other styling (see open_selection_preview), so they aren't
         # updated here.
 
+    def set_peripheral_context_enabled(self, enabled: bool) -> None:
+        self._peripheral_context_enabled = enabled
+        self.reader_display.set_peripheral_context(enabled)
+        if self._detached_window:
+            self._detached_window.set_peripheral_context_enabled(enabled)
+        # Open selection previews snapshot the setting at open time, like
+        # their other styling (see open_selection_preview), so they aren't
+        # updated here.
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self._resume_rewind_enabled = enabled
         self._resume_rewind_words = words
@@ -395,6 +408,7 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
+            peripheral_context_enabled=self._peripheral_context_enabled,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
@@ -441,9 +455,9 @@ class Canvas(ctk.CTkFrame):
             warm_up_enabled=self._warm_up_enabled,
         )
         self.reader_display.load_session(session, start_paused=False)
-        # set_total() above (inside the scrubber) resets its ticks, and a
-        # preview is throwaway text with no bookmarks of its own, so none
-        # are pushed here.
+        # set_total() inside the scrubber resets its bookmark ticks, and a
+        # selection preview is throwaway text with no bookmarks of its own,
+        # so none are pushed here.
         self.scrub_bar.set_total(session.total_words)
         self.scrub_bar.set_position(session.index)
         # Move keyboard focus off the (now hidden) edit box so Space/arrows/
@@ -552,6 +566,7 @@ class Canvas(ctk.CTkFrame):
             on_toggle_here=self.toggle_bookmark_here,
             on_jump=self._handle_bookmark_jump,
             on_delete=self._handle_bookmark_delete,
+            on_rename=self._handle_bookmark_rename,
             on_closed=self._handle_bookmarks_popover_closed,
             **self._bookmarks_popover_state(),
         )
@@ -600,6 +615,16 @@ class Canvas(ctk.CTkFrame):
         if self.on_remove_bookmark:
             self.on_remove_bookmark(self.current_transcript, index)
         self._after_bookmarks_changed()
+
+    def _handle_bookmark_rename(self, index: int, label: str) -> None:
+        """Rename (or clear the label of) a bookmark from the popover. Only
+        the popover needs refreshing, since a label doesn't move the
+        scrubber ticks."""
+        if self.current_transcript is None:
+            return
+        if self.on_rename_bookmark:
+            self.on_rename_bookmark(self.current_transcript, index, label)
+        self._refresh_bookmarks_popover()
 
     def _after_bookmarks_changed(self) -> None:
         """Refresh everything that mirrors the current transcript's
@@ -718,6 +743,7 @@ class Canvas(ctk.CTkFrame):
             on_normalization_changed=self.on_normalization_changed,
             on_add_bookmark=self.on_add_bookmark,
             on_remove_bookmark=self.on_remove_bookmark,
+            on_rename_bookmark=self.on_rename_bookmark,
             skip_word_count=self._skip_word_count,
             pause_on_skip=self._pause_on_skip,
             highlight_offset_px=self._highlight_offset_px,
@@ -731,6 +757,7 @@ class Canvas(ctk.CTkFrame):
             resume_rewind_words=self._resume_rewind_words,
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
+            peripheral_context_enabled=self._peripheral_context_enabled,
         )
         self._show_detached_placeholder()
 

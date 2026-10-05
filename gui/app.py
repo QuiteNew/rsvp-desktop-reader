@@ -118,6 +118,7 @@ class RSVPApp(ctk.CTk):
             on_normalization_changed=self._handle_normalization_changed,
             on_add_bookmark=self._handle_add_bookmark,
             on_remove_bookmark=self._handle_remove_bookmark,
+            on_rename_bookmark=self._handle_rename_bookmark,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             highlight_offset_px=self.settings_store.highlight_offset_px,
@@ -131,6 +132,7 @@ class RSVPApp(ctk.CTk):
             resume_rewind_words=self.settings_store.resume_rewind_words,
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
+            peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -407,7 +409,9 @@ class RSVPApp(ctk.CTk):
         filetypes = [
             ("Supported documents", " ".join(f"*{ext}" for ext in sorted(importers.SUPPORTED_EXTENSIONS))),
             ("Text files", "*.txt"),
-            ("Subtitle files", "*.srt"),
+            ("Subtitle files", "*.srt *.vtt"),
+            ("Markdown files", "*.md *.markdown"),
+            ("HTML files", "*.html *.htm"),
             ("Word documents", "*.docx"),
             ("PDF files", "*.pdf"),
         ]
@@ -571,6 +575,13 @@ class RSVPApp(ctk.CTk):
     def _handle_remove_bookmark(self, transcript, index: int) -> None:
         self.store.remove_bookmark(transcript.id, index)
 
+    def _handle_rename_bookmark(self, transcript, index: int, label: str) -> None:
+        """Set (or clear) a bookmark's label. Like the add/remove handlers
+        it mutates the Transcript in place, so the popover reading
+        transcript.bookmarks right after sees the new label. Shared by both
+        windows."""
+        self.store.set_bookmark_label(transcript.id, index, label)
+
     def _handle_draft_changed(self, transcript, text: str) -> None:
         if transcript.is_stopped:
             self.store.set_transcript_text(transcript.id, text)
@@ -661,6 +672,7 @@ class RSVPApp(ctk.CTk):
             resume_rewind_words=self.settings_store.resume_rewind_words,
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
+            peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -737,6 +749,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_scrub_pause_enabled(values["scrub_pause_enabled"])
         self.canvas.set_scrub_pause(values["scrub_pause_enabled"])
+
+        self.settings_store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
+        self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 

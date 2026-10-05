@@ -16,7 +16,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self, master, transcript, on_text_submitted, on_closed,
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
         on_session_stats=None, on_normalization_changed=None,
-        on_add_bookmark=None, on_remove_bookmark=None,
+        on_add_bookmark=None, on_remove_bookmark=None, on_rename_bookmark=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
@@ -25,6 +25,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         resume_rewind_words: int = 3,
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
+        peripheral_context_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -49,12 +50,14 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.on_session_stats = on_session_stats
         self.on_add_bookmark = on_add_bookmark
         self.on_remove_bookmark = on_remove_bookmark
+        self.on_rename_bookmark = on_rename_bookmark
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
         self.split_long_paragraphs_enabled = split_long_paragraphs_enabled
         self.warm_up_enabled = warm_up_enabled
         self.scrub_pause_enabled = scrub_pause_enabled
+        self.peripheral_context_enabled = peripheral_context_enabled
         # At most one bookmarks popover for this window at a time. See
         # open_bookmarks() and _close_bookmarks_popover().
         self._bookmarks_popover = None
@@ -109,6 +112,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_guide_mark_color(guide_mark_color)
         self.reader_display.set_resume_rewind(resume_rewind_enabled, resume_rewind_words)
         self.reader_display.set_scrub_pause(scrub_pause_enabled)
+        self.reader_display.set_peripheral_context(peripheral_context_enabled)
 
         self._render_current_state()
         self._bind_shortcuts()
@@ -155,6 +159,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_scrub_pause(self, enabled: bool) -> None:
         self.scrub_pause_enabled = enabled
         self.reader_display.set_scrub_pause(enabled)
+
+    def set_peripheral_context_enabled(self, enabled: bool) -> None:
+        self.peripheral_context_enabled = enabled
+        self.reader_display.set_peripheral_context(enabled)
 
     def _render_current_state(self) -> None:
         self.control_row.pack_forget()
@@ -264,6 +272,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             on_toggle_here=self.toggle_bookmark_here,
             on_jump=self._handle_bookmark_jump,
             on_delete=self._handle_bookmark_delete,
+            on_rename=self._handle_bookmark_rename,
             on_closed=self._handle_bookmarks_popover_closed,
             **self._bookmarks_popover_state(),
         )
@@ -298,6 +307,14 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         if self.on_remove_bookmark:
             self.on_remove_bookmark(self.transcript, index)
         self._after_bookmarks_changed()
+
+    def _handle_bookmark_rename(self, index: int, label: str) -> None:
+        """Rename (or clear the label of) a bookmark from this window's
+        popover. Only the popover needs refreshing; a label doesn't move
+        the scrubber ticks."""
+        if self.on_rename_bookmark:
+            self.on_rename_bookmark(self.transcript, index, label)
+        self._refresh_bookmarks_popover()
 
     def _after_bookmarks_changed(self) -> None:
         """Refresh the scrubber ticks and, if open, the popover after an
