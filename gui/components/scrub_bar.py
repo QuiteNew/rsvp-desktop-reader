@@ -15,6 +15,14 @@ class ScrubBar(ctk.CTkFrame):
     reclaims that width. See gui/components/canvas.py's three-column
     control row for the layout this feeds into.
 
+    Below the slider is a thin strip of bookmark ticks: one short mark per
+    saved bookmark, placed under the exact spot the thumb comes to rest at
+    that word. The strip is a separate row beneath the slider rather than
+    an overlay on top of it, specifically so the tick widgets can never sit
+    over the slider and swallow a drag. Owners push the index list in with
+    set_bookmarks(); this widget stays otherwise unaware of what a bookmark
+    is. See _redraw_ticks()/_thumb_inset() for the alignment math.
+
     It plays two roles at once, which is the whole reason for the guard
     flag below. As reading advances, its owner calls set_position() to
     walk the thumb along on its own; when the user drags the thumb, the
@@ -34,6 +42,10 @@ class ScrubBar(ctk.CTkFrame):
     slider is disabled and only the read-out is shown."""
 
     SLIDER_WIDTH = 220
+    TICK_STRIP_HEIGHT = 6     # px, logical. Always present so the bar's height
+                              # doesn't jump as bookmarks come and go.
+    BOOKMARK_TICK_WIDTH = 2   # px, logical
+    BOOKMARK_TICK_HEIGHT = 5  # px, logical
 
     def __init__(self, master, on_scrub=None, on_scrub_release=None):
         super().__init__(master, fg_color="transparent")
@@ -43,6 +55,10 @@ class ScrubBar(ctk.CTkFrame):
         # Raised only while set_position() drives the slider itself, so
         # _handle_slide() can tell a programmatic move from a real drag.
         self._syncing = False
+        # Current bookmark word indices, and the live tick widgets drawn
+        # for them. See set_bookmarks()/_redraw_ticks().
+        self._bookmark_indices = []
+        self._tick_widgets = []
 
         self.slider = ctk.CTkSlider(
             self, from_=0, to=1, width=self.SLIDER_WIDTH,
@@ -62,22 +78,38 @@ class ScrubBar(ctk.CTkFrame):
             anchor="center",
         )
 
-        # Read-out on top, centred over the slider; slider beneath it.
-        # Packing order sets the vertical order for side="top", so the
-        # label is packed first even though the slider is created first.
-        # fill="x" lets the label span the bar's width so anchor="center"
-        # centres the word count over the slider rather than parking it at
-        # one end. The small gap keeps the taller, two-line bar from
-        # feeling cramped against the control row above and below.
+        # Fixed-size strip for bookmark ticks, sitting directly under the
+        # slider with its left edge aligned to the slider's (both anchor
+        # "w", same width). pack_propagate(False) keeps the strip at its
+        # set height even while it holds only place()'d children, so an
+        # empty strip (no bookmarks) still reserves the same space and the
+        # bar's overall height stays constant.
+        self.tick_strip = ctk.CTkFrame(
+            self, fg_color="transparent",
+            width=self.SLIDER_WIDTH, height=self.TICK_STRIP_HEIGHT,
+        )
+        self.tick_strip.pack_propagate(False)
+
+        # Read-out on top, centred over the slider; slider beneath it, then
+        # the tick strip. Packing order sets the vertical order for
+        # side="top", so the label is packed first even though the slider
+        # is created first. fill="x" lets the label span the bar's width so
+        # anchor="center" centres the word count over the slider rather
+        # than parking it at one end. The small gap keeps the taller,
+        # multi-line bar from feeling cramped against the control row above.
         self.readout.pack(side="top", fill="x", pady=(0, 3))
         self.slider.pack(side="top", anchor="w")
+        self.tick_strip.pack(side="top", anchor="w")
 
         self.clear()
 
     def set_total(self, total: int) -> None:
         """Set how many words this session has, sizing the slider's range
         and resetting the thumb to the first word. Call this each time a
-        new reading session is loaded, before set_position()."""
+        new reading session is loaded, before set_position(). Bookmark
+        ticks are cleared here too, since they belong to whatever session
+        is leaving; the owner re-supplies them with set_bookmarks() right
+        after."""
         self._total = max(0, total)
         if self._total < 2:
             # Nothing to scrub: a single word (or none). Park the slider
@@ -87,6 +119,8 @@ class ScrubBar(ctk.CTkFrame):
             self.slider.configure(from_=0, to=self._total - 1, state="normal")
         self._set_slider_value(0)
         self._update_readout(0)
+        self._bookmark_indices = []
+        self._redraw_ticks()
 
     def set_position(self, index: int) -> None:
         """Move the thumb to an absolute word index without firing
@@ -100,6 +134,14 @@ class ScrubBar(ctk.CTkFrame):
         self._set_slider_value(clamped)
         self._update_readout(index)
 
+    def set_bookmarks(self, indices) -> None:
+        """Set which word indices show a bookmark tick. Deduped, sorted,
+        and clamped to >= 0; indices past the last word are simply drawn at
+        the end by _redraw_ticks()'s own clamp. Call after set_total(), and
+        again whenever bookmarks are added or removed."""
+        self._bookmark_indices = sorted({max(0, int(i)) for i in indices})
+        self._redraw_ticks()
+
     def clear(self) -> None:
         """Blank, disabled state for when no session is loaded (e.g. the
         edit box is showing instead of the reader)."""
@@ -107,6 +149,8 @@ class ScrubBar(ctk.CTkFrame):
         self.slider.configure(from_=0, to=1, state="disabled")
         self._set_slider_value(0)
         self.readout.configure(text="")
+        self._bookmark_indices = []
+        self._redraw_ticks()
 
     def _set_slider_value(self, value) -> None:
         self._syncing = True
@@ -135,3 +179,48 @@ class ScrubBar(ctk.CTkFrame):
             return
         shown = max(1, min(index + 1, self._total))
         self.readout.configure(text=f"word {shown:,} of {self._total:,}")
+
+    def _thumb_inset(self) -> float:
+        """How far the thumb's center sits from each end of the slider: on
+        a default round-knob CTkSlider the center travels between this inset
+        and width - inset, never reaching the literal edges. It's the knob
+        radius, which for the default styling is half the slider's height.
+        Read from the slider itself so it tracks the theme's height rather
+        than hardcoding a number that could drift."""
+        try:
+            height = float(self.slider.cget("height"))
+        except (ValueError, TypeError):
+            height = 16.0
+        return height / 2 if height else 8.0
+
+    def _redraw_ticks(self) -> None:
+        """Rebuild the bookmark tick marks. Every coordinate here is in
+        logical units (the SLIDER_WIDTH constant and the height-derived
+        inset), so plain place() scales them once to physical pixels and
+        the ticks line up on any DPI, unlike geometry computed from
+        winfo_width() which would be pre-scaled and double up. Nothing is
+        drawn when there's nothing to scrub (fewer than two words) or no
+        bookmarks."""
+        for tick in self._tick_widgets:
+            tick.destroy()
+        self._tick_widgets = []
+
+        if self._total < 2 or not self._bookmark_indices:
+            return
+
+        inset = self._thumb_inset()
+        usable = self.SLIDER_WIDTH - 2 * inset
+        if usable <= 0:
+            return
+
+        for index in self._bookmark_indices:
+            clamped = max(0, min(index, self._total - 1))
+            fraction = clamped / (self._total - 1)
+            x = inset + fraction * usable
+            tick = ctk.CTkFrame(
+                self.tick_strip,
+                width=self.BOOKMARK_TICK_WIDTH, height=self.BOOKMARK_TICK_HEIGHT,
+                fg_color=EMBER_GLOW, corner_radius=0,
+            )
+            tick.place(x=x, y=0, anchor="n")
+            self._tick_widgets.append(tick)

@@ -179,6 +179,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
             self.reader_display.load_session(session, start_paused=self.transcript.is_paused)
             self.scrub_bar.set_total(session.total_words)
             self.scrub_bar.set_position(session.index)
+            self.scrub_bar.set_bookmarks([b.index for b in self.transcript.bookmarks])
         else:
             self.input_view.set_normalization(self.transcript.pre_normalize_text, self.transcript.normalized_text)
             self.input_view.pack(fill="both", expand=True)
@@ -272,7 +273,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         own transcript. The `B` shortcut and the popover's toggle both land
         here. Persists through the on_add_bookmark/on_remove_bookmark
         callbacks (the same app-level handlers the main window uses), then
-        refreshes the popover if open."""
+        refreshes the popover and the scrubber ticks."""
         target = self.reader_display.current_bookmark_target()
         if target is None:
             return
@@ -284,7 +285,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         else:
             if self.on_add_bookmark:
                 self.on_add_bookmark(self.transcript, index, snippet)
-        self._refresh_bookmarks_popover()
+        self._after_bookmarks_changed()
 
     def _handle_bookmark_jump(self, index: int) -> None:
         is_paused = self.reader_display.jump_to(index)
@@ -296,7 +297,16 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _handle_bookmark_delete(self, index: int) -> None:
         if self.on_remove_bookmark:
             self.on_remove_bookmark(self.transcript, index)
+        self._after_bookmarks_changed()
+
+    def _after_bookmarks_changed(self) -> None:
+        """Refresh the scrubber ticks and, if open, the popover after an
+        add or remove, mirroring Canvas._after_bookmarks_changed()."""
+        self._refresh_bookmark_ticks()
         self._refresh_bookmarks_popover()
+
+    def _refresh_bookmark_ticks(self) -> None:
+        self.scrub_bar.set_bookmarks([b.index for b in self.transcript.bookmarks])
 
     def _bookmarks_popover_state(self) -> dict:
         target = self.reader_display.current_bookmark_target()

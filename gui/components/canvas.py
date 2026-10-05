@@ -171,6 +171,7 @@ class Canvas(ctk.CTkFrame):
             self.reader_display.load_session(session, start_paused=transcript.is_paused)
             self.scrub_bar.set_total(session.total_words)
             self.scrub_bar.set_position(session.index)
+            self.scrub_bar.set_bookmarks([b.index for b in transcript.bookmarks])
         else:
             self._fill_input(transcript.draft_text)
             self._show_input()
@@ -440,6 +441,9 @@ class Canvas(ctk.CTkFrame):
             warm_up_enabled=self._warm_up_enabled,
         )
         self.reader_display.load_session(session, start_paused=False)
+        # set_total() above (inside the scrubber) resets its ticks, and a
+        # preview is throwaway text with no bookmarks of its own, so none
+        # are pushed here.
         self.scrub_bar.set_total(session.total_words)
         self.scrub_bar.set_position(session.index)
         # Move keyboard focus off the (now hidden) edit box so Space/arrows/
@@ -559,7 +563,7 @@ class Canvas(ctk.CTkFrame):
         _skip(); otherwise no-ops over a preview or when no live word
         exists (current_bookmark_target() returns None). Persists through
         the on_add_bookmark/on_remove_bookmark callbacks, then refreshes
-        the popover if it's open."""
+        the popover and the scrubber ticks."""
         if self._detached_window:
             self._detached_window.toggle_bookmark_here()
             return
@@ -577,7 +581,7 @@ class Canvas(ctk.CTkFrame):
         else:
             if self.on_add_bookmark:
                 self.on_add_bookmark(transcript, index, snippet)
-        self._refresh_bookmarks_popover()
+        self._after_bookmarks_changed()
 
     def _handle_bookmark_jump(self, index: int) -> None:
         """A click on a bookmark row: seek there and land paused, sync and
@@ -595,7 +599,19 @@ class Canvas(ctk.CTkFrame):
             return
         if self.on_remove_bookmark:
             self.on_remove_bookmark(self.current_transcript, index)
+        self._after_bookmarks_changed()
+
+    def _after_bookmarks_changed(self) -> None:
+        """Refresh everything that mirrors the current transcript's
+        bookmark list after an add or remove: the scrubber ticks (even when
+        no popover is open, e.g. the `B` shortcut) and the popover if it's
+        up."""
+        self._refresh_bookmark_ticks()
         self._refresh_bookmarks_popover()
+
+    def _refresh_bookmark_ticks(self) -> None:
+        if self.current_transcript is not None:
+            self.scrub_bar.set_bookmarks([b.index for b in self.current_transcript.bookmarks])
 
     def _bookmarks_popover_state(self) -> dict:
         """The data the popover renders from, read fresh from the live
