@@ -303,7 +303,7 @@ Settings are organized into four tabs:
 - ~~Estimated read time and live progress %~~
 - ~~Additional data insertion formats~~
 - Upgrading the test suite
-- Numoro    us bug fixes
+- Numorous bug fixes
 
 
 
