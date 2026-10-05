@@ -12,12 +12,17 @@ class Bookmark:
     index is the word index it points at. snippet is a short piece of the
     surrounding text, captured when the bookmark is created, so it's
     recognizable in a list without re-reading the transcript. created_at is
-    an ISO-8601 timestamp, kept for later display/sorting. Bookmarks are
-    identified by their index: a transcript holds at most one per word
-    position (see TranscriptStore.add_bookmark / remove_bookmark)."""
+    an ISO-8601 timestamp, kept for later display/sorting. label is an
+    optional name the user gives the bookmark (see
+    TranscriptStore.set_bookmark_label); when it's empty the list falls
+    back to showing the snippet, so old bookmarks and never-renamed ones
+    keep working unchanged. Bookmarks are identified by their index: a
+    transcript holds at most one per word position (see
+    TranscriptStore.add_bookmark / remove_bookmark)."""
     index: int
     snippet: str = ""
     created_at: str = ""
+    label: str = ""
 
 
 @dataclass

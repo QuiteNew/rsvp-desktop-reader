@@ -536,3 +536,89 @@ def test_old_save_file_missing_bookmarks_field_defaults_to_empty_list(tmp_path):
 
     store = TranscriptStore(data_directory=str(tmp_path))
     assert store.transcripts[0].bookmarks == []
+
+
+# Bookmark labels
+
+def test_new_bookmark_has_empty_label(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 5, "the quick brown")
+    assert store.transcripts[0].bookmarks[0].label == ""
+
+def test_set_bookmark_label_sets_the_label(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 5, "the quick brown")
+    store.set_bookmark_label(t.id, 5, "Chapter 2 start")
+    assert store.transcripts[0].bookmarks[0].label == "Chapter 2 start"
+
+def test_set_bookmark_label_overwrites_an_existing_label(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 5, "snippet")
+    store.set_bookmark_label(t.id, 5, "First name")
+    store.set_bookmark_label(t.id, 5, "Second name")
+    assert store.transcripts[0].bookmarks[0].label == "Second name"
+
+def test_set_bookmark_label_empty_string_clears_it(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 5, "snippet")
+    store.set_bookmark_label(t.id, 5, "A name")
+    store.set_bookmark_label(t.id, 5, "")
+    assert store.transcripts[0].bookmarks[0].label == ""
+
+def test_set_bookmark_label_does_not_touch_snippet_or_index(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 5, "the quick brown")
+    store.set_bookmark_label(t.id, 5, "My label")
+    b = store.transcripts[0].bookmarks[0]
+    assert b.index == 5
+    assert b.snippet == "the quick brown"
+
+def test_set_bookmark_label_only_affects_the_matching_index(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 2, "two")
+    store.add_bookmark(t.id, 5, "five")
+    store.set_bookmark_label(t.id, 5, "Only five")
+    by_index = {b.index: b.label for b in store.transcripts[0].bookmarks}
+    assert by_index == {2: "", 5: "Only five"}
+
+def test_set_bookmark_label_nonexistent_index_is_a_safe_no_op(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 2, "two")
+    store.set_bookmark_label(t.id, 99, "nope")
+    assert store.transcripts[0].bookmarks[0].label == ""
+
+def test_set_bookmark_label_on_nonexistent_transcript_is_a_safe_no_op(store):
+    t = store.add_transcript("Title", "General")
+    store.add_bookmark(t.id, 2, "two")
+    store.set_bookmark_label(999, 2, "nope")  # should not crash or change anything
+    assert store.transcripts[0].bookmarks[0].label == ""
+
+def test_bookmark_label_persists_across_reload(tmp_path):
+    directory = str(tmp_path)
+    first = TranscriptStore(data_directory=directory)
+    t = first.add_transcript("Doc", "General")
+    first.add_bookmark(t.id, 3, "three")
+    first.set_bookmark_label(t.id, 3, "The good part")
+
+    second = TranscriptStore(data_directory=directory)
+    reloaded = next(x for x in second.transcripts if x.id == t.id)
+    assert reloaded.bookmarks[0].label == "The good part"
+
+def test_old_save_file_bookmark_missing_label_defaults_to_empty(tmp_path):
+    """A bookmark saved before labels existed has no "label" key. parse_data()
+    in core/storage.py filters to the Bookmark dataclass fields and rebuilds,
+    so the missing key falls back to the field default of "", the same way a
+    missing stats or normalization field does on a Transcript."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text(json.dumps({
+        "next_id": 2,
+        "current_space_index": 0,
+        "spaces": ["General"],
+        "transcripts": [{
+            "id": 1, "title": "Doc", "space": "General",
+            "bookmarks": [{"index": 3, "snippet": "three", "created_at": "2020-01-01T00:00:00+00:00"}],
+        }],
+    }), encoding="utf-8")
+
+    store = TranscriptStore(data_directory=str(tmp_path))
+    assert store.transcripts[0].bookmarks[0].label == ""

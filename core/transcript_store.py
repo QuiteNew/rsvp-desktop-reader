@@ -405,6 +405,23 @@ class TranscriptStore:
             t.bookmarks = remaining
             self._save()
 
+    def set_bookmark_label(self, transcript_id: int, index: int, label: str) -> None:
+        """Set (or clear) the user-given label on the bookmark at the given
+        word index. An empty string clears it, which makes the bookmarks
+        list fall back to showing the snippet. A no-op if the transcript
+        doesn't exist or has no bookmark at that index, and it only writes
+        to disk when the label actually changed, the same convention the
+        color setters and remove_bookmark() above already use."""
+        t = self._find_transcript(transcript_id)
+        if t is None:
+            return
+        for b in t.bookmarks:
+            if b.index == index:
+                if b.label != label:
+                    b.label = label
+                    self._save()
+                return
+
     def add_session_stats(self, transcript_id: int, words_read: int, active_seconds: float) -> None:
         """Roll one finished reading session's numbers into this
         transcript's running totals. Called once a session actually ends
