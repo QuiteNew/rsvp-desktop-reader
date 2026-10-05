@@ -219,6 +219,7 @@ rsvp-desktop-reader/
 │   ├── tokenizer.py            # Splits cleaned text into words
 │   ├── punctuation.py          # Splits punctuation off each word and classifies the pause that should follow it
 │   ├── orp.py                  # Calculates each word's Optimal Recognition Point
+│   ├── colors.py               # Color helpers (hex parsing, blending one color toward another)
 │   ├── timing.py               # Converts WPM into a per-word delay
 │   ├── reader.py               # ReaderSession — ties the above together
 │   ├── transcript_store.py     # In-memory store + persistence for transcripts/spaces
@@ -231,7 +232,9 @@ rsvp-desktop-reader/
 │   ├── icons.py                # Hand-drawn icons (avoids font-glyph rendering issues)
 │   └── components/             # Every individual UI piece — header, canvas, dialogs, etc.
 ├── tests/                      # Automated test suite covering core engine modules
+│   ├── test_data_bundle.py
 │   ├── test_importers.py
+│   ├── test_normalizer.py
 │   ├── test_orp.py
 │   ├── test_parser.py
 │   ├── test_punctuation.py
@@ -296,11 +299,11 @@ Settings are organized into four tabs:
 - ~~Peripheral context line~~
 - Chunking (multi-word flash)
 - ~~Progress scrubber/seek bar~~
-- Bookmarks
+- ~~Bookmarks~~
 - ~~Estimated read time and live progress %~~
 - ~~Additional data insertion formats~~
 - Upgrading the test suite
-- Numorous bug fixes
+- Numoro    us bug fixes
 
 
 
