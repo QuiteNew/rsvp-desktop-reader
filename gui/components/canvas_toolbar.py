@@ -1,7 +1,50 @@
 import customtkinter as ctk
+from PIL import Image, ImageDraw
 
 from core.timing import format_duration
 from gui.theme import FONT_BODY
+
+
+# Tk 8.6 on Windows renders astral-plane emoji (the actual bookmark
+# character, U+1F516) inconsistently, often as a blank box, so the
+# bookmark button draws its own glyph instead of relying on a font. The
+# shape is the classic bookmark: a vertical rectangle with an upward
+# triangular notch cut into its bottom edge. Light and dark variants match
+# the other toolbar glyphs' text_color (gray20 / gray90). Built once,
+# lazily, and shared across every toolbar instance.
+_BOOKMARK_IMAGE = None
+
+
+def _render_bookmark(color) -> Image.Image:
+    """A filled bookmark glyph in `color` (an RGBA tuple), drawn at 4x and
+    handed to CTkImage at its logical size for crisp downscaling."""
+    scale = 4
+    width, height = 10 * scale, 16 * scale
+    notch = 5 * scale
+    image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.polygon(
+        [
+            (0, 0),
+            (width - 1, 0),
+            (width - 1, height - 1),
+            (width // 2, height - 1 - notch),
+            (0, height - 1),
+        ],
+        fill=color,
+    )
+    return image
+
+
+def _bookmark_image() -> ctk.CTkImage:
+    global _BOOKMARK_IMAGE
+    if _BOOKMARK_IMAGE is None:
+        _BOOKMARK_IMAGE = ctk.CTkImage(
+            light_image=_render_bookmark((51, 51, 51, 255)),    # gray20
+            dark_image=_render_bookmark((229, 229, 229, 255)),  # gray90
+            size=(10, 16),
+        )
+    return _BOOKMARK_IMAGE
 
 
 class CanvasToolbar(ctk.CTkFrame):
@@ -71,9 +114,14 @@ class CanvasToolbar(ctk.CTkFrame):
 
         # Opens the bookmarks popover. Like pause/restart, it stays in the
         # row even over the edit view (its owner no-ops the click when no
-        # session is live), so there's no show/hide plumbing for it.
+        # session is live), so there's no show/hide plumbing for it. Uses a
+        # drawn image rather than a text glyph (see _bookmark_image()).
         if show_bookmarks:
-            self.bookmark_button = self._make_button("⚑", self._handle_bookmarks)
+            self.bookmark_button = ctk.CTkButton(
+                self, text="", image=_bookmark_image(), width=36, corner_radius=14,
+                fg_color=self.GLASS_COLOR, hover_color=self.GLASS_HOVER,
+                command=self._handle_bookmarks,
+            )
             self.bookmark_button.pack(side="left", padx=(0, 6))
 
         if show_detach:
