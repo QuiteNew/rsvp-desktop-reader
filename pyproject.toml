@@ -1,3 +1,10 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+xfail_strict = true
+
+[tool.coverage.report]
+exclude_also = [
+    "if __name__ == .__main__.:",
+]

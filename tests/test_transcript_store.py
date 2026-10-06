@@ -622,3 +622,227 @@ def test_old_save_file_bookmark_missing_label_defaults_to_empty(tmp_path):
 
     store = TranscriptStore(data_directory=str(tmp_path))
     assert store.transcripts[0].bookmarks[0].label == ""
+
+
+# rename_space
+
+def test_rename_space_renames_and_returns_true(store):
+    store.add_space("Work")
+    assert store.rename_space("Work", "Office") is True
+    assert "Office" in store.spaces
+    assert "Work" not in store.spaces
+
+def test_rename_space_reassigns_transcripts_in_that_space(store):
+    store.add_space("Work")
+    store.add_transcript("Doc", "Work")
+    store.rename_space("Work", "Office")
+    assert store.transcripts[0].space == "Office"
+
+def test_rename_space_leaves_other_spaces_transcripts_untouched(store):
+    store.add_space("Work")
+    store.add_transcript("Keep", "General")
+    store.add_transcript("Move", "Work")
+    store.rename_space("Work", "Office")
+    by_title = {t.title: t.space for t in store.transcripts}
+    assert by_title["Keep"] == "General"  # a transcript in another space is not touched
+    assert by_title["Move"] == "Office"
+
+def test_rename_space_unknown_name_returns_false(store):
+    assert store.rename_space("Nope", "Whatever") is False
+    assert store.spaces == ["General"]
+
+def test_rename_space_blank_new_name_returns_false(store):
+    store.add_space("Work")
+    assert store.rename_space("Work", "   ") is False
+    assert store.spaces == ["General", "Work"]
+
+def test_rename_space_same_name_returns_false(store):
+    store.add_space("Work")
+    assert store.rename_space("Work", "Work") is False
+    assert store.spaces == ["General", "Work"]
+
+def test_rename_space_to_an_existing_name_returns_false(store):
+    # Renaming "Work" to "General" would collide with the space that already exists.
+    store.add_space("Work")
+    assert store.rename_space("Work", "General") is False
+    assert store.spaces == ["General", "Work"]
+
+def test_rename_space_strips_whitespace_from_new_name(store):
+    store.add_space("Work")
+    store.rename_space("Work", "  Office  ")
+    assert "Office" in store.spaces
+    assert "  Office  " not in store.spaces
+
+def test_rename_current_space_keeps_it_current(store):
+    store.add_space("Work")  # add_space switches current to the new space
+    assert store.current_space == "Work"
+    store.rename_space("Work", "Office")
+    # Renamed in place at the same index, so current_space reads the new name.
+    assert store.current_space == "Office"
+
+def test_rename_space_persists_across_reload(tmp_path):
+    directory = str(tmp_path)
+    first = TranscriptStore(data_directory=directory)
+    first.add_space("Work")
+    t = first.add_transcript("Doc", "Work")
+    first.rename_space("Work", "Office")
+
+    second = TranscriptStore(data_directory=directory)
+    assert "Office" in second.spaces
+    assert "Work" not in second.spaces
+    reloaded = next(x for x in second.transcripts if x.id == t.id)
+    assert reloaded.space == "Office"
+
+
+# delete_space
+
+def test_delete_space_removes_an_empty_space_and_returns_true(store):
+    store.add_space("Work")           # current is now "Work", and it has no transcripts
+    store.switch_to_space("General")  # so "Work" isn't the current space when we delete it
+    assert store.delete_space("Work") is True
+    assert store.spaces == ["General"]
+
+def test_delete_space_unknown_name_returns_false(store):
+    store.add_space("Work")
+    assert store.delete_space("Nope") is False
+    assert store.spaces == ["General", "Work"]
+
+def test_delete_space_refuses_the_last_remaining_space(store):
+    # A fresh store has only "General", and there always has to be at least one.
+    assert store.delete_space("General") is False
+    assert store.spaces == ["General"]
+
+def test_delete_space_refuses_a_space_that_still_has_transcripts(store):
+    store.add_space("Work")
+    store.add_transcript("Doc", "General")
+    assert store.delete_space("General") is False
+    assert store.spaces == ["General", "Work"]
+
+def test_delete_current_space_falls_back_to_the_first_space(store):
+    store.add_space("Work")  # current is "Work", empty
+    assert store.current_space == "Work"
+    assert store.delete_space("Work") is True
+    assert store.current_space == "General"  # fell back to index 0
+
+def test_delete_a_space_before_the_current_one_keeps_current_correct(store):
+    # End state before the delete: ["General", "Work", "Reading"] with "Reading" current.
+    store.add_space("Work")
+    store.add_space("Reading")
+    assert store.current_space == "Reading"
+    store.delete_space("Work")  # deleting a space that sits before the current one
+    assert store.spaces == ["General", "Reading"]
+    # current is re-derived from the name, so it still points at "Reading", not a stale index.
+    assert store.current_space == "Reading"
+
+def test_delete_space_persists_across_reload(tmp_path):
+    directory = str(tmp_path)
+    first = TranscriptStore(data_directory=directory)
+    first.add_space("Work")
+    first.switch_to_space("General")
+    first.delete_space("Work")
+
+    second = TranscriptStore(data_directory=directory)
+    assert second.spaces == ["General"]
+
+
+# set_transcript_space
+
+def test_set_transcript_space_moves_to_another_space(store):
+    store.add_space("Work")
+    t = store.add_transcript("Doc", "General")
+    store.set_transcript_space(t.id, "Work")
+    assert store.transcripts[0].space == "Work"
+
+def test_set_transcript_space_unknown_space_is_a_safe_no_op(store):
+    # The UI only ever offers real spaces, so this guard is a defensive
+    # backstop: an unknown destination leaves the transcript where it was.
+    t = store.add_transcript("Doc", "General")
+    store.set_transcript_space(t.id, "Does Not Exist")
+    assert store.transcripts[0].space == "General"
+
+def test_set_transcript_space_on_nonexistent_id_is_a_safe_no_op(store):
+    store.add_space("Work")
+    store.add_transcript("Doc", "General")
+    store.set_transcript_space(999, "Work")  # should not crash or change anything
+    assert store.transcripts[0].space == "General"
+
+
+# set_transcript_title
+
+def test_set_transcript_title_updates_title(store):
+    t = store.add_transcript("Old Title", "General")
+    store.set_transcript_title(t.id, "New Title")
+    assert store.transcripts[0].title == "New Title"
+
+def test_set_transcript_title_on_nonexistent_id_is_a_safe_no_op(store):
+    store.add_transcript("Old Title", "General")
+    store.set_transcript_title(999, "Should Not Apply")
+    assert store.transcripts[0].title == "Old Title"
+
+
+# set_transcript_font_size
+
+def test_set_transcript_font_size_updates_font_size(store):
+    t = store.add_transcript("Title", "General")
+    store.set_transcript_font_size(t.id, 48)
+    assert store.transcripts[0].font_size == 48
+
+def test_set_transcript_font_size_on_nonexistent_id_is_a_safe_no_op(store):
+    store.add_transcript("Title", "General")
+    store.set_transcript_font_size(999, 48)
+    assert store.transcripts[0].font_size == 32  # the default, unchanged
+
+
+# resync_default_reading_colors
+
+def test_resync_updates_a_transcript_still_tracking_the_defaults(store):
+    # A freshly added transcript keeps the dataclass default flags, so all
+    # three colors are still tracking the theme default.
+    store.add_transcript("Title", "General")
+    store.resync_default_reading_colors("#000000", "#111111", "#222222")
+    updated = store.transcripts[0]
+    assert updated.font_color == "#000000"
+    assert updated.highlight_color == "#111111"
+    assert updated.background_color == "#222222"
+
+def test_resync_leaves_a_hand_picked_color_but_updates_the_still_default_ones(store):
+    t = store.add_transcript("Title", "General")
+    store.set_transcript_font_color(t.id, "#AAAAAA")  # retires the font color from theme-tracking
+    store.resync_default_reading_colors("#000000", "#111111", "#222222")
+    updated = store.transcripts[0]
+    assert updated.font_color == "#AAAAAA"        # hand-picked, left alone
+    assert updated.highlight_color == "#111111"   # still default, updated
+    assert updated.background_color == "#222222"  # still default, updated
+
+def test_resync_leaves_a_fully_hand_picked_transcript_untouched(store):
+    t = store.add_transcript("Title", "General")
+    store.set_transcript_font_color(t.id, "#AAAAAA")
+    store.set_transcript_highlight_color(t.id, "#BBBBBB")
+    store.set_transcript_background_color(t.id, "#CCCCCC")
+    store.resync_default_reading_colors("#000000", "#111111", "#222222")
+    updated = store.transcripts[0]
+    assert updated.font_color == "#AAAAAA"
+    assert updated.highlight_color == "#BBBBBB"
+    assert updated.background_color == "#CCCCCC"
+
+def test_resync_to_the_colors_already_in_place_changes_nothing(store):
+    # The transcript already holds the default colors, so every != guard
+    # fails and nothing is changed (internally, nothing is saved either).
+    store.add_transcript("Title", "General")
+    store.resync_default_reading_colors("#FFFFFF", "#E74C3C", "#1E1E1E")
+    updated = store.transcripts[0]
+    assert updated.font_color == "#FFFFFF"
+    assert updated.highlight_color == "#E74C3C"
+    assert updated.background_color == "#1E1E1E"
+
+def test_resync_persists_updated_colors_across_reload(tmp_path):
+    directory = str(tmp_path)
+    first = TranscriptStore(data_directory=directory)
+    t = first.add_transcript("Title", "General")
+    first.resync_default_reading_colors("#000000", "#111111", "#222222")
+
+    second = TranscriptStore(data_directory=directory)
+    reloaded = next(x for x in second.transcripts if x.id == t.id)
+    assert reloaded.font_color == "#000000"
+    assert reloaded.highlight_color == "#111111"
+    assert reloaded.background_color == "#222222"
