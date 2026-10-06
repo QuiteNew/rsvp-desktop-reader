@@ -384,6 +384,25 @@ def test_never_splits_at_a_decimal_or_an_ellipsis():
         assert not stripped.endswith("...")
 
 
+def test_never_splits_at_an_ellipsis_before_a_capital():
+    # The decimal/ellipsis test above puts a lowercase word after the "...",
+    # which the sentence-end pattern never matches, so it doesn't reach the
+    # explicit "this is an ellipsis, skip it" guard in _split_sentences. An
+    # ellipsis followed by a capital DOES match the pattern, so it reaches
+    # that guard and must still be rejected as a sentence end. The wall splits
+    # into paragraphs, but never right at the ellipsis.
+    part = ("The speaker paused for a long moment ... Then carried on with the "
+            "very same point for a good while longer before stopping here. ")
+    wall = (part * 5).strip()
+    out = normalize_transcript(wall, split_long_paragraphs=True)
+    paragraphs = out.split("\n\n")
+    assert len(paragraphs) > 1  # it really did split somewhere
+    for paragraph in paragraphs:
+        assert not paragraph.rstrip().endswith("...")  # never at the ellipsis
+    # no word is lost, added or reordered by the regrouping
+    assert " ".join(paragraphs).split() == wall.split()
+
+
 def test_splitting_runs_alongside_the_other_steps():
     # A wall that also carries a timestamp and a trailing numbered list.
     wall = "[00:00:05] " + (_SENTENCE * 10) + "Steps: 1. First 2. Second 3. Third"

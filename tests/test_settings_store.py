@@ -401,3 +401,180 @@ def test_scrub_pause_persists_and_reloads(tmp_path):
     first.set_scrub_pause_enabled(False)
     second = SettingsStore(settings_directory=directory)
     assert second.scrub_pause_enabled is False
+
+
+# length_pacing_enabled
+
+def test_fresh_store_length_pacing_matches_defaults(store):
+    assert store.length_pacing_enabled == AppSettings().length_pacing_enabled
+
+def test_set_length_pacing_enabled_true(store):
+    store.set_length_pacing_enabled(True)
+    assert store.length_pacing_enabled is True
+
+def test_set_length_pacing_enabled_false(store):
+    store.set_length_pacing_enabled(True)
+    store.set_length_pacing_enabled(False)
+    assert store.length_pacing_enabled is False
+
+def test_length_pacing_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_length_pacing_enabled(True)
+    second = SettingsStore(settings_directory=directory)
+    assert second.length_pacing_enabled is True
+
+
+# peripheral_context_enabled
+
+def test_fresh_store_peripheral_context_matches_defaults(store):
+    assert store.peripheral_context_enabled == AppSettings().peripheral_context_enabled
+
+def test_set_peripheral_context_enabled_true(store):
+    store.set_peripheral_context_enabled(True)
+    assert store.peripheral_context_enabled is True
+
+def test_set_peripheral_context_enabled_false(store):
+    store.set_peripheral_context_enabled(True)
+    store.set_peripheral_context_enabled(False)
+    assert store.peripheral_context_enabled is False
+
+def test_peripheral_context_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_peripheral_context_enabled(True)
+    second = SettingsStore(settings_directory=directory)
+    assert second.peripheral_context_enabled is True
+
+
+# guide_mark_horizontal_enabled
+
+def test_fresh_store_guide_mark_horizontal_matches_defaults(store):
+    assert store.guide_mark_horizontal_enabled == AppSettings().guide_mark_horizontal_enabled
+
+def test_set_guide_mark_horizontal_enabled_true(store):
+    store.set_guide_mark_horizontal_enabled(True)
+    assert store.guide_mark_horizontal_enabled is True
+
+def test_set_guide_mark_horizontal_enabled_false(store):
+    store.set_guide_mark_horizontal_enabled(True)
+    store.set_guide_mark_horizontal_enabled(False)
+    assert store.guide_mark_horizontal_enabled is False
+
+def test_guide_mark_horizontal_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_guide_mark_horizontal_enabled(True)
+    second = SettingsStore(settings_directory=directory)
+    assert second.guide_mark_horizontal_enabled is True
+
+
+# guide_mark_thickness_px and guide_mark_length_percent
+
+def test_fresh_store_guide_mark_thickness_matches_defaults(store):
+    assert store.guide_mark_thickness_px == AppSettings().guide_mark_thickness_px
+
+def test_set_guide_mark_thickness_px_updates_value(store):
+    store.set_guide_mark_thickness_px(5)
+    assert store.guide_mark_thickness_px == 5
+
+def test_fresh_store_guide_mark_length_percent_matches_defaults(store):
+    assert store.guide_mark_length_percent == AppSettings().guide_mark_length_percent
+
+def test_set_guide_mark_length_percent_updates_value(store):
+    store.set_guide_mark_length_percent(50)
+    assert store.guide_mark_length_percent == 50
+
+def test_guide_mark_thickness_and_length_persist_and_reload(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_guide_mark_thickness_px(4)
+    first.set_guide_mark_length_percent(60)
+    second = SettingsStore(settings_directory=directory)
+    assert second.guide_mark_thickness_px == 4
+    assert second.guide_mark_length_percent == 60
+
+
+# guide_mark_color and its theme-tracking flag
+
+def test_fresh_store_guide_mark_color_matches_defaults(store):
+    assert store.guide_mark_color == AppSettings().guide_mark_color
+
+def test_set_guide_mark_color_updates_the_color(store):
+    store.set_guide_mark_color("#123456")
+    assert store.guide_mark_color == "#123456"
+
+def test_set_guide_mark_color_persists_and_reloads(tmp_path):
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_guide_mark_color("#123456")
+    second = SettingsStore(settings_directory=directory)
+    assert second.guide_mark_color == "#123456"
+
+def test_set_guide_mark_color_to_a_new_color_retires_theme_tracking(store):
+    # Picking a different color clears the is_default flag. There's no getter
+    # for that flag, so we observe it through resync: once retired, a later
+    # resync must leave the manual pick alone.
+    store.set_guide_mark_color("#123456")
+    store.resync_guide_mark_color_default("#999999")
+    assert store.guide_mark_color == "#123456"
+
+def test_set_guide_mark_color_to_the_same_color_keeps_theme_tracking(store):
+    # Re-applying the current color must not freeze it: the flag stays set,
+    # so a later resync can still move it.
+    default_color = AppSettings().guide_mark_color
+    store.set_guide_mark_color(default_color)  # same as current, flag unchanged
+    store.resync_guide_mark_color_default("#999999")
+    assert store.guide_mark_color == "#999999"
+
+
+# resync_guide_mark_color_default
+
+def test_resync_guide_mark_color_updates_while_tracking_default(store):
+    # A fresh store is still tracking the theme default, so resync applies.
+    store.resync_guide_mark_color_default("#654321")
+    assert store.guide_mark_color == "#654321"
+
+def test_resync_guide_mark_color_noop_when_already_equal(store):
+    default_color = AppSettings().guide_mark_color
+    store.resync_guide_mark_color_default(default_color)
+    assert store.guide_mark_color == default_color
+
+def test_resync_guide_mark_color_does_not_override_a_manual_pick(store):
+    store.set_guide_mark_color("#ABCDEF")  # manual pick retires theme-tracking
+    store.resync_guide_mark_color_default("#000000")
+    assert store.guide_mark_color == "#ABCDEF"
+
+
+# set_skip_word_count_live and flush (the live-save throttle)
+
+def test_set_skip_word_count_live_updates_the_value(store):
+    store.set_skip_word_count_live(20)
+    assert store.skip_word_count == 20
+
+def test_set_skip_word_count_live_first_write_persists(tmp_path):
+    # On a fresh store the throttle has never fired, so the first live write
+    # goes straight to disk.
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_skip_word_count_live(20)
+    second = SettingsStore(settings_directory=directory)
+    assert second.skip_word_count == 20
+
+def test_flush_forces_a_throttled_change_to_disk(tmp_path):
+    # The first live write saves; a second one moments later is throttled and
+    # stays in memory only (the two calls are microseconds apart, far inside
+    # the throttle window). flush() then forces it out, which is what app
+    # close relies on.
+    directory = str(tmp_path)
+    first = SettingsStore(settings_directory=directory)
+    first.set_skip_word_count_live(20)  # saved: the throttle has never fired
+    first.set_skip_word_count_live(25)  # throttled: in memory only
+    assert first.skip_word_count == 25
+
+    before_flush = SettingsStore(settings_directory=directory)
+    assert before_flush.skip_word_count == 20  # the throttled change hasn't hit disk yet
+
+    first.flush()
+    after_flush = SettingsStore(settings_directory=directory)
+    assert after_flush.skip_word_count == 25  # flush forced it out
