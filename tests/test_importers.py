@@ -99,6 +99,14 @@ def test_import_srt_puts_each_subtitle_line_on_its_own_line(tmp_path):
     )
     assert import_srt(str(path)) == "Hello world.\nand then we went\nto the store."
 
+def test_import_file_dispatches_srt(tmp_path):
+    path = tmp_path / "dispatch.srt"
+    path.write_text(
+        "1\n00:00:01,000 --> 00:00:04,000\nHello world.\n",
+        encoding="utf-8",
+    )
+    assert import_file(str(path)) == "Hello world."
+
 
 # .vtt files
 
@@ -177,6 +185,30 @@ def test_import_vtt_keeps_multi_line_cues_on_separate_lines(tmp_path):
         encoding="utf-8",
     )
     assert import_vtt(str(path)) == "and then we went\nto the store."
+
+def test_import_vtt_skips_empty_blocks_from_extra_blank_lines(tmp_path):
+    # A run of several blank lines makes re.split produce an empty block.
+    # It must be skipped before anything reads lines[0], or it would raise
+    # an IndexError.
+    path = tmp_path / "blanks.vtt"
+    path.write_text(
+        "WEBVTT\n\n\n\n00:00:01.000 --> 00:00:04.000\nHello world.\n",
+        encoding="utf-8",
+    )
+    assert import_vtt(str(path)) == "Hello world."
+
+def test_import_vtt_skips_a_block_with_no_timing_line(tmp_path):
+    # A block that isn't a header, note, style or region and carries no
+    # "-->" timing line is malformed, so it's dropped rather than emitted
+    # as junk.
+    path = tmp_path / "malformed.vtt"
+    path.write_text(
+        "WEBVTT\n\n"
+        "This stray block has no timing line at all.\n\n"
+        "00:00:01.000 --> 00:00:04.000\nReal subtitle.\n",
+        encoding="utf-8",
+    )
+    assert import_vtt(str(path)) == "Real subtitle."
 
 def test_import_file_dispatches_vtt(tmp_path):
     path = tmp_path / "dispatch.vtt"
@@ -328,6 +360,25 @@ def test_import_html_decodes_entities(tmp_path):
     path = tmp_path / "entities.html"
     path.write_text("<html><body><p>Tom &amp; Jerry &lt;3</p></body></html>", encoding="utf-8")
     assert import_html(str(path)) == "Tom & Jerry <3"
+
+def test_import_html_empty_file_returns_empty_string(tmp_path):
+    # Whitespace-only bytes short-circuit before parsing. import_html()
+    # itself just returns ""; import_file() is what rejects that as "no
+    # readable text" (covered separately below).
+    path = tmp_path / "blank.html"
+    path.write_text("   \n\t\n  ", encoding="utf-8")
+    assert import_html(str(path)) == ""
+
+def test_import_html_skips_comment_nodes(tmp_path):
+    # Comment and processing-instruction nodes have a non-string tag, so the
+    # extractor skips them rather than choking on tag.lower(), and their
+    # text never reaches the output.
+    path = tmp_path / "commented.html"
+    path.write_text(
+        "<html><body><!-- hidden note --><p>Visible text.</p></body></html>",
+        encoding="utf-8",
+    )
+    assert import_html(str(path)) == "Visible text."
 
 def test_import_file_dispatches_html(tmp_path):
     path = tmp_path / "doc.html"

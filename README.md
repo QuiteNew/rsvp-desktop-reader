@@ -302,7 +302,7 @@ Settings are organized into four tabs:
 - ~~Bookmarks~~
 - ~~Estimated read time and live progress %~~
 - ~~Additional data insertion formats~~
-- Upgrading the test suite
+- ~~Upgrading the test suite~~
 - Numorous bug fixes
 
 
