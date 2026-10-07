@@ -282,7 +282,14 @@ class RSVPApp(ctk.CTk):
             self.canvas.stop()
 
     def _handle_sidebar_drag_start(self) -> None:
+        # Seed _pending_value with the current size, not just
+        # _drag_start_value. A press with no drag still fires on_drag_end
+        # (see divider.py), which commits _pending_value, so without this a
+        # plain click would commit a stale value left over from an earlier
+        # drag of either divider, or None on the very first interaction
+        # (which writes null to settings.json and fails to load next launch).
         self._drag_start_value = self.settings_store.sidebar_width
+        self._pending_value = self._drag_start_value
 
     def _handle_sidebar_drag(self, delta: int) -> None:
         low, high = SIDEBAR_WIDTH_RANGE
@@ -295,6 +302,7 @@ class RSVPApp(ctk.CTk):
 
     def _handle_bottom_band_drag_start(self) -> None:
         self._drag_start_value = self.settings_store.bottom_band_height
+        self._pending_value = self._drag_start_value
 
     def _handle_bottom_band_drag(self, delta: int) -> None:
         low, high = BOTTOM_BAND_HEIGHT_RANGE

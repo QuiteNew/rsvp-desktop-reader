@@ -125,3 +125,35 @@ def test_detached_window_opens_and_closes(app):
 
     app.canvas._handle_reattach()  # closes the detached window and reattaches
     assert app.canvas._detached_window is None
+
+
+def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
+    """Regression for the still-click layout bug. A press and release with no
+    drag in between still fires on_drag_end, which commits _pending_value, so
+    drag-start has to seed _pending_value with the divider's current size.
+    Without that, a click with no movement commits either a stale value left
+    over from an earlier drag of the other divider, or None on the very first
+    interaction (which writes null to settings.json and fails to load next
+    launch). Runs last in the module, since it nudges the saved sidebar width."""
+    store = app.settings_store
+
+    # First-interaction case: force _pending_value back to its initial None,
+    # then click the sidebar divider with no drag. drag-start must reseed it,
+    # so the saved width stays put and is never written as None.
+    app._pending_value = None
+    sidebar_before = store.sidebar_width
+    app._handle_sidebar_drag_start()
+    app._handle_sidebar_drag_end()
+    assert store.sidebar_width == sidebar_before
+    assert isinstance(store.sidebar_width, int)  # never None
+
+    # Cross-divider case: a real sidebar drag parks a width in _pending_value,
+    # then a click on the bottom divider with no drag must not commit that
+    # sidebar width as the band height.
+    app._handle_sidebar_drag_start()
+    app._handle_sidebar_drag(40)
+    app._handle_sidebar_drag_end()
+    band_before = store.bottom_band_height
+    app._handle_bottom_band_drag_start()
+    app._handle_bottom_band_drag_end()
+    assert store.bottom_band_height == band_before
