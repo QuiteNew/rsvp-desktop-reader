@@ -129,6 +129,14 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.after(80, self._reveal_now)
 
     def _reveal_now(self) -> None:
+        # Guard against the window being torn down inside the 80 ms before
+        # this fires (e.g. the detached transcript being deleted, which
+        # destroys this window directly via Canvas.handle_transcript_deleted).
+        # The timer isn't cancelled on destroy, so without this it would run
+        # on a dead widget and raise. Mirrors the same guard that
+        # bookmarks_popover and selection_preview_window already have.
+        if not self.winfo_exists():
+            return
         self.update_idletasks()
         self.attributes("-alpha", 1)
 

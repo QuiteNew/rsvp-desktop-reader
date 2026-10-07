@@ -63,6 +63,13 @@ class BookmarksPopover(ctk.CTkToplevel):
         self.on_rename = on_rename
         self.on_closed = on_closed
 
+        # Scheduled single-click jump timers, by after() id. Destroying a Tk
+        # widget does not cancel its pending after() callbacks, so these are
+        # tracked here and cancelled on close/re-render (see
+        # _cancel_pending_clicks); otherwise a jump scheduled just before the
+        # window closes would still fire and seek the reader.
+        self._pending_click_ids = set()
+
         self.title("Bookmarks")
         apply_app_icon(self)
         center_over_parent(self, self.WIDTH, self.HEIGHT)
@@ -107,11 +114,24 @@ class BookmarksPopover(ctk.CTkToplevel):
         self.attributes("-alpha", 1)
         self.focus_force()
 
+    def _cancel_pending_clicks(self) -> None:
+        """Cancel every scheduled single-click jump timer. Called when the
+        window closes and at the start of each re-render, since the rows a
+        timer was tied to are about to be destroyed. after_cancel on an id
+        that already fired or was cancelled is harmless."""
+        for timer_id in self._pending_click_ids:
+            self.after_cancel(timer_id)
+        self._pending_click_ids.clear()
+
     def render(self, bookmarks, total_words, can_bookmark_here, current_index_is_bookmarked) -> None:
         """Rebuild the toggle button's label/state and the list of rows from
         the owner's current data. Called on open and after every mutation."""
         if not self.winfo_exists():
             return
+
+        # The rows about to be destroyed below may each hold a pending jump
+        # timer; drop them so none fires against a rebuilt list.
+        self._cancel_pending_clicks()
 
         if not can_bookmark_here:
             # No live word right now (edit view, or a finished session).
@@ -223,17 +243,21 @@ class BookmarksPopover(ctk.CTkToplevel):
         rename_entry.bind("<Escape>", cancel_rename)
 
         def fire_jump():
+            self._pending_click_ids.discard(click_state["pending"])
             click_state["pending"] = None
             self._handle_jump(bookmark.index)
 
         def on_single_click(event=None):
             if rename_state["editing"] or click_state["pending"] is not None:
                 return
-            click_state["pending"] = self.after(self.CLICK_DELAY_MS, fire_jump)
+            timer_id = self.after(self.CLICK_DELAY_MS, fire_jump)
+            click_state["pending"] = timer_id
+            self._pending_click_ids.add(timer_id)
 
         def on_double_click(event=None):
             if click_state["pending"] is not None:
                 self.after_cancel(click_state["pending"])
+                self._pending_click_ids.discard(click_state["pending"])
                 click_state["pending"] = None
             start_rename()
 
@@ -264,6 +288,7 @@ class BookmarksPopover(ctk.CTkToplevel):
 
     def close(self) -> None:
         """Close the window and let the owner drop its reference."""
+        self._cancel_pending_clicks()
         if self.on_closed:
             self.on_closed(self)
         self.destroy()
