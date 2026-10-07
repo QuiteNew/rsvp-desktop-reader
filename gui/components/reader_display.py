@@ -108,6 +108,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._highlight_offset_px = 0
         self._guide_mark_horizontal_enabled = False
         self._guide_mark_length_ratio = self.GUIDE_MARK_LENGTH_RATIO
+        self._guide_mark_thickness_px = self.GUIDE_MARK_THICKNESS
         # The current transcript's reading colours, kept so the context
         # ribbon can dim the font toward the background. Updated by
         # set_colors(); the defaults match the label defaults below.
@@ -470,11 +471,11 @@ class ReaderDisplay(ctk.CTkFrame):
 
     def set_guide_mark_thickness(self, thickness_px: int) -> None:
         """Width of the two vertical guide marks (above/below the
-        highlighted letter) which is a plain logical-pixel value, see the
-        GUIDE_MARK_THICKNESS comment above for why this is configured
-        directly rather than through _configure_physical_width()."""
-        self.guide_mark_above.configure(width=thickness_px)
-        self.guide_mark_below.configure(width=thickness_px)
+        highlighted letter). Stored and applied in _update_guide_marks()
+        as an even physical-pixel width, rather than configured directly
+        here, because a thin logical width scales to a fragile ~2px value
+        that Tk fails to paint at fractional DPI such as 125%."""
+        self._guide_mark_thickness_px = thickness_px
         self._update_guide_marks()
 
     def set_guide_mark_length_percent(self, percent: int) -> None:
@@ -533,6 +534,7 @@ class ReaderDisplay(ctk.CTkFrame):
         position we actually computed. Every place() call in this file
         must go through this method: calling .place(x=, y=) directly on
         a child of word_row will reintroduce this bug on any
+        a child of word_row will reintroduce this bug on any
         non-100%-scaled display.
         """
         widget.place(
@@ -540,6 +542,14 @@ class ReaderDisplay(ctk.CTkFrame):
             y=self._reverse_widget_scaling(y),
             anchor=anchor,
         )
+
+    def _configure_physical_height(self, widget, height) -> None:
+        """Height counterpart to _configure_physical_width: sets a CTk
+        widget's height in real physical pixels, cancelling CTk's DPI
+        auto-scaling the same way. Used for the horizontal ticks' thickness,
+        which otherwise scales to a fragile ~2px value that Tk fails to paint
+        at fractional DPI such as 125%."""
+        widget.configure(height=self._reverse_widget_scaling(height))
 
     def _configure_physical_width(self, widget, width) -> None:
         """configure(width=...) on a CTk widget applies the exact same
@@ -619,6 +629,17 @@ class ReaderDisplay(ctk.CTkFrame):
 
         length = self._guide_mark_length()
         gap = self.GUIDE_MARK_MIN_GAP_PX
+        # Width is set as an even physical-pixel value with a floor, not a
+        # plain logical configure(width=). The default thickness of 2 scales
+        # to about 2 physical px at 125% DPI, which Tk's canvas fails to paint
+        # (the marks vanish), while 150% lands on ~3px and shows. The draw
+        # engine also floors width to an even number, so the floor is kept
+        # even. The horizontal ticks already size themselves physically for
+        # the same reason.
+        scale = self._get_widget_scaling()
+        mark_width = max(4, round(self._guide_mark_thickness_px * scale / 2) * 2)
+        self._configure_physical_width(self.guide_mark_above, mark_width)
+        self._configure_physical_width(self.guide_mark_below, mark_width)
         self.guide_mark_above.configure(height=length)
         self.guide_mark_below.configure(height=length)
 
@@ -627,16 +648,27 @@ class ReaderDisplay(ctk.CTkFrame):
         # horizontal tick sits, forming a crosshair.
         inner_top_y = self._focus_y - self._focus_half_height - gap
         inner_bottom_y = self._focus_y + self._focus_half_height + gap
-        outer_top_y = inner_top_y - length
-        outer_bottom_y = inner_bottom_y + length
+        # The vertical marks render at length * scale physical px tall (their
+        # height is a logical value CTk scales up), so the tick that caps each
+        # one must sit length * scale away, not an unscaled length, or on a
+        # scaled display it lands partway down the mark instead of at the tip.
+        outer_top_y = inner_top_y - length * scale
+        outer_bottom_y = inner_bottom_y + length * scale
 
         self._place_physical(self.guide_mark_above, x=self._anchor_x, y=inner_top_y, anchor="s")
         self._place_physical(self.guide_mark_below, x=self._anchor_x, y=inner_bottom_y, anchor="n")
 
         if self._guide_mark_horizontal_enabled:
             horizontal_length = self._guide_mark_horizontal_length()
+            # Thickness gets the same even physical-pixel floor the vertical
+            # marks' width does: a 2px-tall tick scales to a fragile value that
+            # Tk fails to paint at 125% DPI (the ticks vanish into the
+            # background), so it's forced to an even physical height of 4.
+            tick_thickness = max(4, round(self.GUIDE_MARK_HORIZONTAL_THICKNESS_PX * scale / 2) * 2)
             self._configure_physical_width(self.guide_line_above, horizontal_length)
             self._configure_physical_width(self.guide_line_below, horizontal_length)
+            self._configure_physical_height(self.guide_line_above, tick_thickness)
+            self._configure_physical_height(self.guide_line_below, tick_thickness)
             self._place_physical(self.guide_line_above, x=self._anchor_x, y=outer_top_y, anchor="center")
             self._place_physical(self.guide_line_below, x=self._anchor_x, y=outer_bottom_y, anchor="center")
         else:
