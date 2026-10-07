@@ -57,6 +57,13 @@ class TranscriptInput(ctk.CTkFrame):
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
         if initial_text:
             self.textbox.insert("1.0", initial_text)
+        # Clear Tk's modified flag that the insert above just set. Tk only
+        # raises <<Modified>> on a False->True transition, so if the flag is
+        # left True from construction, the binding below never fires again
+        # and the Normalize/Revert icon stops tracking live edits (see
+        # _handle_text_modified, the only thing that resets it). A no-op when
+        # initial_text is empty.
+        self.textbox.edit_modified(False)
 
         # Tk raises <<Modified>> for typing, deleting, pasting and for
         # changes made in code, so it keeps the button's icon in step
@@ -116,6 +123,10 @@ class TranscriptInput(ctk.CTkFrame):
         self.textbox.delete("1.0", "end")
         if text:
             self.textbox.insert("1.0", text)
+        # Reset the modified flag after a programmatic replace, for the same
+        # reason as in __init__: keep the <<Modified>> handler live for the
+        # next real edit. The icon itself is refreshed directly just below.
+        self.textbox.edit_modified(False)
         self._refresh_normalize_button()
 
     def set_normalization(self, pre_normalize_text: str, normalized_text: str) -> None:
