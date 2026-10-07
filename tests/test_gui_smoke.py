@@ -127,6 +127,31 @@ def test_detached_window_opens_and_closes(app):
     assert app.canvas._detached_window is None
 
 
+def test_pause_and_restart_route_to_the_detached_reader(app):
+    """Regression for the detached-routing bug: while a transcript is
+    detached, the main window's toggle_pause()/restart() must drive the
+    detached reader (like skip and the bookmark controls already do), not the
+    stopped main reader. Reattaches at the end so the shared app is left clean
+    for the test that runs after it."""
+    _load_reading_transcript(app)
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+
+    detached_reader = detached.reader_display
+    paused_before = detached_reader._is_paused
+    app.canvas.toggle_pause()
+    # The detached reader toggled, and the stopped main reader stayed stopped.
+    assert detached_reader._is_paused != paused_before
+    assert app.canvas.reader_display.session is None
+
+    app.canvas.restart()
+    assert detached_reader._is_paused is False  # restart always resumes
+
+    app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+
+
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
     drag in between still fires on_drag_end, which commits _pending_value, so

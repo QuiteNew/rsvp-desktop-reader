@@ -533,13 +533,27 @@ class Canvas(ctk.CTkFrame):
             self.on_pause_changed(self.current_transcript, is_paused)
 
     def toggle_pause(self) -> None:
-        is_paused = self.reader_display.toggle_pause()
-        self.toolbar.set_paused(is_paused)
+        # Route to the detached reader while a transcript is detached, the
+        # same way _skip() and the bookmark controls do. Without this, Space
+        # from the main window toggled the stopped main reader instead, and
+        # still persisted is_paused=False onto the detached transcript (whose
+        # current_transcript reference the main canvas keeps) through
+        # _handle_pause_changed below.
+        if self._detached_window:
+            is_paused = self._detached_window.reader_display.toggle_pause()
+            self._detached_window.toolbar.set_paused(is_paused)
+        else:
+            is_paused = self.reader_display.toggle_pause()
+            self.toolbar.set_paused(is_paused)
         self._handle_pause_changed(is_paused)
 
     def restart(self) -> None:
-        self.reader_display.restart()
-        self.toolbar.set_paused(False)
+        if self._detached_window:
+            self._detached_window.reader_display.restart()
+            self._detached_window.toolbar.set_paused(False)
+        else:
+            self.reader_display.restart()
+            self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
 
     def open_bookmarks(self) -> None:
