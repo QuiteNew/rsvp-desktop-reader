@@ -47,6 +47,7 @@ research behind the highlighted letter, and what the studies actually say about
 reading this way (including where it helps and where it does not), see
 [The science behind RSVP](docs/technique.md).
 
+
 ## Contents
 
 - [Features](#features)
@@ -101,8 +102,7 @@ word, so your eye never has to search for where to look next.
 ## Installation
 
 Full setup instructions for Windows, macOS, and Linux, including the
-per-platform Tkinter look at
-[docs/installation.md](docs/installation.md).
+per-platform Tkinter look at [docs/installation.md](docs/installation.md) or at the project documentation.
 
 ## Usage
 
@@ -118,6 +118,7 @@ per-platform Tkinter look at
 5. Open **Settings** (top-right) for new-transcript defaults, layout
    sizing, where your data is stored, and theme.
 
+<br>
 For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs/usage.md).
 
 
@@ -168,6 +169,10 @@ rsvp-desktop-reader/
 ├── main.py                     # Entry point
 └── requirements.txt            # Python dependencies
 ````
+<br>
+
+For how these pieces fit together, the reading pipeline, the stores, and the  strict split between the pure-logic `core/` 
+and the CustomTkinter `gui/`, see [docs/architecture.md](docs/architecture.md) *or the project documentation*
 
 ## Built With
 

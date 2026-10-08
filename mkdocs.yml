@@ -30,3 +30,5 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Usage: usage.md
+  - Architecture: architecture.md
+  - The technique: technique.md
