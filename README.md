@@ -210,7 +210,8 @@ python main.py
 ````
 rsvp-desktop-reader/
 ├── assets/
-│   └── fonts/                  # Bundled Fredoka & Quicksand font files
+│   ├── fonts/                  # Bundled Fredoka & Quicksand font files
+│   └── icons/                  # Custom made icon 
 ├── core/                       # Pure reading engine — no GUI dependencies
 │   ├── models.py               # The Transcript data model
 │   ├── importers.py            # Turns a picked file (.txt/.srt/.docx/.pdf) into plain transcript text
@@ -232,14 +233,19 @@ rsvp-desktop-reader/
 │   ├── icons.py                # Hand-drawn icons (avoids font-glyph rendering issues)
 │   └── components/             # Every individual UI piece — header, canvas, dialogs, etc.
 ├── tests/                      # Automated test suite covering core engine modules
+│   ├── conftest.py
+│   ├── test_colors.py   
 │   ├── test_data_bundle.py
+│   ├── test_gui_smoke.py
 │   ├── test_importers.py
+│   ├── test_models.py
 │   ├── test_normalizer.py
 │   ├── test_orp.py
 │   ├── test_parser.py
 │   ├── test_punctuation.py
 │   ├── test_reader.py
 │   ├── test_settings_store.py
+│   ├── test_storage.py
 │   ├── test_timing.py
 │   ├── test_tokenizer.py
 │   └── test_transcript_store.py
@@ -303,10 +309,8 @@ Settings are organized into four tabs:
 - ~~Estimated read time and live progress %~~
 - ~~Additional data insertion formats~~
 - ~~Upgrading the test suite~~
-- Numorous bug fixes
-
-
-
+- ~~Numorous bug fixes~~
+- README reformatting 
 
 
 ## License

@@ -92,6 +92,24 @@ def test_opens_settings_window(app):
     app._settings_window.destroy()
 
 
+def test_settings_font_size_seeds_from_the_saved_default(app):
+    """Regression for the Settings default-font-size fix: the slider must seed
+    from the saved default like the other defaults, not from the open
+    transcript's own size. Loads a transcript at a non-default size and
+    confirms Settings still shows the saved default."""
+    store = app.store
+    transcript = store.add_transcript("Big font", store.current_space)
+    store.set_transcript_text(transcript.id, "one two three four five")
+    store.set_transcript_font_size(transcript.id, 60)  # a size that isn't the saved default
+    app._handle_open_transcript(transcript)
+
+    app._open_settings_window()
+    try:
+        assert app._settings_window.default_font_size == app.settings_store.default_font_size
+    finally:
+        app._settings_window.destroy()
+
+
 def test_reader_actions_run(app):
     _load_reading_transcript(app)
     # A representative sweep of the reader controls; none should raise.

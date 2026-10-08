@@ -846,3 +846,29 @@ def test_resync_persists_updated_colors_across_reload(tmp_path):
     assert reloaded.font_color == "#000000"
     assert reloaded.highlight_color == "#111111"
     assert reloaded.background_color == "#222222"
+
+
+
+
+# flush
+
+def test_flush_forces_a_throttled_wpm_change_to_disk(tmp_path):
+    # set_transcript_wpm() is throttled (it's the footer's live WPM drag), so
+    # a change can sit in memory unsaved. flush() forces it out, which is what
+    # gui/app.py relies on at app close. The first throttled write saves (the
+    # throttle has never fired), a second one moments later is held back (the
+    # two calls are microseconds apart, well inside the throttle window), and
+    # flush() then persists it.
+    directory = str(tmp_path)
+    first = TranscriptStore(data_directory=directory)
+    t = first.add_transcript("Doc", "General")
+    first.set_transcript_wpm(t.id, 500)  # saved: the throttle has never fired
+    first.set_transcript_wpm(t.id, 600)  # throttled: in memory only
+    assert first.transcripts[0].wpm == 600
+
+    before_flush = TranscriptStore(data_directory=directory)
+    assert next(x for x in before_flush.transcripts if x.id == t.id).wpm == 500
+
+    first.flush()
+    after_flush = TranscriptStore(data_directory=directory)
+    assert next(x for x in after_flush.transcripts if x.id == t.id).wpm == 600
