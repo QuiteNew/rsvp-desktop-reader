@@ -1,0 +1,30 @@
+site_name: RSVP Desktop Reader
+site_description: A lightweight, fully offline RSVP speed-reading desktop app
+site_url: https://quitenew.github.io/rsvp-desktop-reader/
+repo_url: https://github.com/QuiteNew/rsvp-desktop-reader
+repo_name: QuiteNew/rsvp-desktop-reader
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
