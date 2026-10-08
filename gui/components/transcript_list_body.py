@@ -356,6 +356,11 @@ class TranscriptListBody(ctk.CTkFrame):
         ellipsis = "…"
 
         def apply_truncation(event=None) -> None:
+            if not label.winfo_exists():
+                # A re-render can destroy this row's label before the
+                # scheduled after(10) or a late <Configure> fires; without
+                # this guard winfo_width() below raises on the dead widget.
+                return
             available_px = label.winfo_width()
             if available_px <= 1:
                 return  # not laid out yet; a later <Configure> will fire once it is
