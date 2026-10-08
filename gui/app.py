@@ -666,10 +666,7 @@ class RSVPApp(ctk.CTk):
             default_font_color=self.settings_store.default_font_color,
             default_highlight_color=self.settings_store.default_highlight_color,
             default_background_color=self.settings_store.default_background_color,
-            default_font_size=(
-                self._current_transcript.font_size if self._current_transcript
-                else self.settings_store.default_font_size
-            ),
+            default_font_size=self.settings_store.default_font_size,
             font_size_step=self.settings_store.font_size_step,
             highlight_offset_px=self.settings_store.highlight_offset_px,
             skip_word_count=self.settings_store.skip_word_count,
@@ -713,11 +710,6 @@ class RSVPApp(ctk.CTk):
             values["default_highlight_color"], values["default_background_color"],
             values["default_font_size"],
         )
-
-        if self._current_transcript:
-            self.store.set_transcript_font_size(self._current_transcript.id, values["default_font_size"])
-            self.canvas.set_font_size(values["default_font_size"])
-            self.footer.set_font_size(values["default_font_size"])
 
         self.settings_store.set_font_size_step(values["font_size_step"])
         self.footer.set_font_size_step(values["font_size_step"])
