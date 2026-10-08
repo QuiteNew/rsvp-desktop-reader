@@ -1,5 +1,17 @@
 # Rapid Serial Visualization Presentation Desktop Reader
 
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![CustomTkinter](https://img.shields.io/badge/CustomTkinter-6.0.0-2B2B2B?style=for-the-badge)
+![Pillow](https://img.shields.io/badge/Pillow-11557C?style=for-the-badge)
+![pypdf](https://img.shields.io/badge/pypdf-A50E0E?style=for-the-badge)
+![lxml](https://img.shields.io/badge/lxml-2E6DB4?style=for-the-badge)
+![python-docx](https://img.shields.io/badge/python--docx-2B579A?style=for-the-badge)
+![darkdetect](https://img.shields.io/badge/darkdetect-222222?style=for-the-badge)
+![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-4C4C4C?style=for-the-badge)
+![Offline](https://img.shields.io/badge/100%25%20offline-2E7D32?style=for-the-badge)
+  [![Build & Release](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml)
+  [![Docs](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml)
+
 A lightweight, fully offline speed-reading app that flashes transcript text
 one word at a time - eliminating eye movement so you can read faster without
 losing comprehension.
@@ -83,7 +95,7 @@ word, so your eye never has to search for where to look next.
 ## Installation
 
 Full setup instructions for Windows, macOS, and Linux, including the
-per-platform Tkinter steps, live in
+per-platform Tkinter look at
 [docs/installation.md](docs/installation.md).
 
 ## Usage
@@ -99,6 +111,9 @@ per-platform Tkinter steps, live in
    band at the bottom of the window.
 5. Open **Settings** (top-right) for new-transcript defaults, layout
    sizing, where your data is stored, and theme.
+
+For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs/usage.md).
+
 
 ## Project Structure
 
