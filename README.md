@@ -41,6 +41,12 @@ real architecture underneath it: a clean split between the pure reading
 logic in `core/` and everything GUI-related in `gui/`, so the two never
 depend on each other.
 
+<br>
+For the background, the eye-movement physiology, the Optimal Viewing Position
+research behind the highlighted letter, and what the studies actually say about
+reading this way (including where it helps and where it does not), see
+[The science behind RSVP](docs/technique.md).
+
 ## Contents
 
 - [Features](#features)
