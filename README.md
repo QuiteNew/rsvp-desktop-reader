@@ -44,8 +44,7 @@ depend on each other.
 <br>
 For the background, the eye-movement physiology, the Optimal Viewing Position
 research behind the highlighted letter, and what the studies actually say about
-reading this way (including where it helps and where it does not), see
-[The science behind RSVP](docs/technique.md).
+reading this way (including where it helps and where it does not), see [The science behind RSVP](docs/technique.md)
 
 
 ## Contents
@@ -101,8 +100,9 @@ word, so your eye never has to search for where to look next.
 
 ## Installation
 
-Full setup instructions for Windows, macOS, and Linux, including the
-per-platform Tkinter look at [docs/installation.md](docs/installation.md) or at the project documentation.
+Please install the app from the releases section, if you want the full manual setup instructions for Windows, macOS, and Linux, 
+including the per-platform Tkinter look at [docs/installation.md](docs/installation.md) or at the project documentation.
+
 
 ## Usage
 
@@ -193,7 +193,7 @@ Settings are organized into four tabs:
 - **Layout** - window size, sidebar width, bottom control-band height, and
   a free-form drag-to-resize toggle
 - **Storage** - where your transcript data is saved on disk, changeable at
-  any time; also where you can export everything (transcripts, spaces, and
+  any time. Also where you can export everything (transcripts, spaces, and
   settings) to a file, or import one from another machine, choosing whether
   to replace what's here or add to it
 - **Appearance** - Light / Dark / System theme (takes effect on next
