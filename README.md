@@ -179,9 +179,7 @@ and the CustomTkinter `gui/`, see [docs/architecture.md](docs/architecture.md) *
 - [Python](https://www.python.org/)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) - the GUI framework
 - [Pillow](https://python-pillow.org/) - used to hand-draw a couple of icons
-- [Fredoka](https://fonts.google.com/specimen/Fredoka) &
-  [Quicksand](https://fonts.google.com/specimen/Quicksand) - bundled fonts,
-  both released under the SIL Open Font License
+- [Fredoka](https://fonts.google.com/specimen/Fredoka) & [Quicksand](https://fonts.google.com/specimen/Quicksand) - bundled fonts
 
 ## Settings and Configuration
 
@@ -236,7 +234,10 @@ Settings are organized into four tabs:
 
 ## License
 
-*Not yet chosen*
+Released under the MIT License. See [LICENSE](LICENSE) for the full text.
+
+The bundled Fredoka and Quicksand fonts have their own SIL Open Font License
+(see Acknowledgments); the MIT license covers the project's own code.
 
 ## Acknowledgments
 
@@ -244,5 +245,4 @@ Settings are organized into four tabs:
   [Quicksand](https://fonts.google.com/specimen/Quicksand), by their
   respective creators, licensed under the
   [SIL Open Font License](https://openfontlicense.org/)
-- [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom
-  Schimansky
+- [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom Schimansky
