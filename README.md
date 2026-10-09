@@ -183,7 +183,7 @@ and the CustomTkinter `gui/`, see [docs/architecture.md](docs/architecture.md) *
 
 ## Settings and Configuration
 
-Settings are organized into four tabs:
+Settings are organized into five tabs:
 
 - **Defaults** - speed, colors, and skip behavior applied to newly created
   transcripts (skip settings apply live to whatever you're currently
@@ -196,6 +196,9 @@ Settings are organized into four tabs:
   to replace what's here or add to it
 - **Appearance** - Light / Dark / System theme (takes effect on next
   launch, not live)
+- **Stats** - read-only reading totals for each transcript (how many times
+  it's been read, words read, and time spent), updated when a session ends
+  rather than while you're paused
 
 ## Roadmap
 
@@ -229,7 +232,7 @@ Settings are organized into four tabs:
 - ~~Additional data insertion formats~~
 - ~~Upgrading the test suite~~
 - ~~Numorous bug fixes~~
-- Documentation and README reformatting 
+- ~~Documentation and README reformatting~~ 
 
 
 ## License
