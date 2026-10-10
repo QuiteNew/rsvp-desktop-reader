@@ -3,8 +3,9 @@
 Step 1 covers the data layer: the new Transcript and AppSettings fields,
 their defaults, that they persist, and that save files written before the
 feature load with the right defaults. Step 2 covers the grouping and
-chunk-aware navigation in ReaderSession. The reader display and settings UI
-are tested as later steps add them. See claude/chunking-v1-design.md."""
+chunk-aware navigation in ReaderSession. Step 3 adds the chunk-aware
+peripheral context the ribbon uses. The reader display and settings UI are
+tested as later steps add them. See claude/chunking-v1-design.md."""
 
 import json
 
@@ -46,8 +47,6 @@ def test_transcript_chunking_fields_round_trip(tmp_path):
 
 
 def test_old_transcript_without_chunking_keys_loads_defaults():
-    # A transcript dict as an older version would have written it: all the
-    # fields the model had then, but no chunking_enabled / chunk_size.
     old_transcript = {
         "id": 1, "title": "Doc", "space": "General", "raw_text": "hello world",
         "wpm": 300, "position": 0,
@@ -81,11 +80,10 @@ def test_set_chunking_defaults_persists(tmp_path):
 
 def test_old_settings_without_chunking_keys_loads_defaults(tmp_path):
     settings_file = tmp_path / "settings.json"
-    # A minimal, valid settings.json from before chunking existed.
     settings_file.write_text(json.dumps({"default_wpm": 450}), encoding="utf-8")
     store = SettingsStore(settings_directory=str(tmp_path))
-    assert store.default_wpm == 450  # the old value is respected
-    assert store.default_chunking_enabled is False  # new keys fall back to defaults
+    assert store.default_wpm == 450
+    assert store.default_chunking_enabled is False
     assert store.default_chunk_size == 2
 
 
@@ -118,14 +116,11 @@ def test_grouping_splits_by_size_with_short_final_chunk():
 
 
 def test_grouping_breaks_at_a_sentence_end():
-    # "two." ends a sentence, so the chunk closes there despite size 3.
     s = ReaderSession("one two. three four five six", chunk_enabled=True, chunk_size=3)
     assert s.chunk_ranges() == [(0, 2), (2, 5), (5, 6)]
 
 
 def test_grouping_respects_the_character_cap():
-    # Three ten-character words, cap 30. Adding the third would make the chunk
-    # 10 + 1 + 10 + 1 + 10 = 32 chars, so it starts a new chunk.
     assert CHUNK_CHAR_CAP == 30
     word = "a" * 10
     text = " ".join([word, word, word])
@@ -134,7 +129,7 @@ def test_grouping_respects_the_character_cap():
 
 
 def test_grouping_never_makes_an_empty_chunk_for_an_overlong_word():
-    long_word = "x" * 40  # longer than the cap on its own
+    long_word = "x" * 40
     s = ReaderSession(long_word + " short", chunk_enabled=True, chunk_size=3)
     assert s.chunk_ranges() == [(0, 1), (1, 2)]
 
@@ -158,18 +153,18 @@ def test_advance_moves_by_whole_chunks():
 
 def test_advance_ages_warmup_by_the_chunk_word_count():
     s = ReaderSession("one two three four five", chunk_enabled=True, chunk_size=2)
-    s.advance()                       # passed a 2-word chunk
+    s.advance()
     assert s._words_shown == 2
-    s.advance()                       # another 2-word chunk
+    s.advance()
     assert s._words_shown == 4
-    s.advance()                       # final 1-word chunk
+    s.advance()
     assert s._words_shown == 5
 
 
 def test_seek_snaps_to_the_enclosing_chunk_start():
-    s = ReaderSession("w0 w1 w2 w3 w4 w5", chunk_enabled=True, chunk_size=2)  # (0,2)(2,4)(4,6)
+    s = ReaderSession("w0 w1 w2 w3 w4 w5", chunk_enabled=True, chunk_size=2)
     s.seek_to(3)
-    assert s.index == 2               # word 3 lives in chunk (2, 4)
+    assert s.index == 2
     s.seek_to(5)
     assert s.index == 4
     s.seek_to(0)
@@ -178,7 +173,7 @@ def test_seek_snaps_to_the_enclosing_chunk_start():
 
 def test_start_index_snaps_to_a_chunk_boundary():
     s = ReaderSession("w0 w1 w2 w3", start_index=3, chunk_enabled=True, chunk_size=2)
-    assert s.index == 2               # starts at the chunk containing word 3
+    assert s.index == 2
 
 
 def test_current_chunk_returns_the_member_frames():
@@ -191,9 +186,6 @@ def test_current_chunk_returns_the_member_frames():
 
 
 def test_current_chunk_delay_equals_the_sum_of_its_words_with_warmup():
-    # The chunk's dwell must equal what the same words would take read singly,
-    # including the warm-up ramp ageing word by word. Compare a chunked
-    # session against a single-word one over the same text.
     text = "alpha beta gamma delta"
     chunked = ReaderSession(text, wpm=300, chunk_enabled=True, chunk_size=2, warm_up_enabled=True)
     single = ReaderSession(text, wpm=300, warm_up_enabled=True)
@@ -222,7 +214,6 @@ def test_remaining_ms_is_unaffected_by_chunking():
 def test_disabled_session_matches_single_word_stepping():
     text = "one two three four"
     s = ReaderSession(text, chunk_enabled=False)
-    # current_chunk collapses to one word, and advancing steps by one.
     for expected_index in range(4):
         assert s.index == expected_index
         chunk = s.current_chunk()
@@ -230,3 +221,31 @@ def test_disabled_session_matches_single_word_stepping():
         assert s.current_chunk_delay_ms() == s.current_delay_ms()
         s.advance()
     assert s.is_finished
+
+
+# ---------------------------------------------------------------------------
+# Step 3: chunk-aware peripheral context for the reader's ribbon.
+# ---------------------------------------------------------------------------
+
+def test_chunk_peripheral_context_surrounds_the_whole_chunk():
+    s = ReaderSession("w0 w1 w2 w3 w4 w5", chunk_enabled=True, chunk_size=2)
+    s.advance()  # now on chunk (2, 4)
+    ctx = s.chunk_peripheral_context(2, 2)
+    assert ctx.current == "w2"
+    assert ctx.before == ["w0", "w1"]
+    assert ctx.after == ["w4", "w5"]
+
+
+def test_chunk_peripheral_context_clamps_at_the_ends():
+    s = ReaderSession("w0 w1 w2 w3", chunk_enabled=True, chunk_size=2)  # (0,2)(2,4)
+    ctx = s.chunk_peripheral_context(3, 3)
+    assert ctx.before == []
+    assert ctx.current == "w0"
+    assert ctx.after == ["w2", "w3"]
+
+
+def test_chunk_peripheral_context_matches_plain_when_disabled():
+    text = "one two three four five"
+    s = ReaderSession(text, chunk_enabled=False)
+    s.seek_to(2)
+    assert s.chunk_peripheral_context(2, 2) == s.peripheral_context(2, 2)

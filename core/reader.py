@@ -228,6 +228,24 @@ class ReaderSession:
         after_words = [self._word_at(j) for j in range(self.index + 1, end)]
         return PeripheralContext(before_words, self._word_at(self.index), after_words)
 
+    def chunk_peripheral_context(self, before: int, after: int) -> PeripheralContext:
+        """Peripheral context for the ribbon when chunking is on: `before`
+        words precede the chunk's FIRST word and `after` words follow its
+        LAST word, so the ribbon shows what is around the whole chunk rather
+        than repeating words already on screen in it. `current` is the chunk's
+        first word, the one under the anchor. With chunking off a chunk is a
+        single word, so this is identical to peripheral_context()."""
+        before = max(0, before)
+        after = max(0, after)
+        if self.is_finished or self.total_words == 0:
+            return PeripheralContext([], None, [])
+        start, end = self._chunk_bounds_of_word[self.index]
+        before_start = max(0, start - before)
+        before_words = [self._word_at(j) for j in range(before_start, start)]
+        after_end = min(self.total_words, end + after)
+        after_words = [self._word_at(j) for j in range(end, after_end)]
+        return PeripheralContext(before_words, self._word_at(start), after_words)
+
     def _paced_delay_at(self, i: int) -> int:
         """The per-word delay for word i from WPM and pacing, before the
         warm-up ramp. With length pacing off it is the base delay with

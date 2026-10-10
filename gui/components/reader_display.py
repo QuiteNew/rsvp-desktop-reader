@@ -506,10 +506,20 @@ class ReaderDisplay(ctk.CTkFrame):
             self.focus_label.configure(text="")
             self.after_label.configure(text="")
         else:
-            frame = self.session.current_frame()
-            self.before_label.configure(text=frame.before)
-            self.focus_label.configure(text=frame.focus)
-            self.after_label.configure(text=frame.after)
+            # The chunk currently on screen. With chunking off this is a
+            # single-word list, so this path is identical to showing one word.
+            # Only the first word of a chunk keeps its ORP split and anchored
+            # highlight; the rest of the chunk trails to its right in the normal
+            # font color, appended to the after-label after a separating space.
+            chunk = self.session.current_chunk()
+            first = chunk[0]
+            after_text = first.after
+            if len(chunk) > 1:
+                trailing = " ".join(f.before + f.focus + f.after for f in chunk[1:])
+                after_text = f"{first.after} {trailing}"
+            self.before_label.configure(text=first.before)
+            self.focus_label.configure(text=first.focus)
+            self.after_label.configure(text=after_text)
         self._position_word()
 
     def _place_physical(self, widget, *, x, y, anchor) -> None:
@@ -703,7 +713,10 @@ class ReaderDisplay(ctk.CTkFrame):
                 or self._anchor_x is None):
             self._hide_peripheral_context()
             return
-        context = self.session.peripheral_context(
+        # Context around the whole current chunk (before its first word, after
+        # its last). With chunking off a chunk is one word, so this matches the
+        # plain word-centered context.
+        context = self.session.chunk_peripheral_context(
             self._peripheral_context_before, self._peripheral_context_after
         )
         if context.current is None:
@@ -765,14 +778,20 @@ class ReaderDisplay(ctk.CTkFrame):
         if self.session is None or self.session.is_finished or self._is_paused:
             self._after_id = None
             return
-        delay = self.session.current_delay_ms()
+        # Schedule by the current chunk's dwell: the sum of its words' delays.
+        # With chunking off a chunk is one word, so this equals the single
+        # word's delay and the timing is unchanged.
+        delay = self.session.current_chunk_delay_ms()
         self._after_id = self.after(delay, self._advance)
 
     def _advance(self) -> None:
         if self.session is None:
             return
+        # advance() steps a whole chunk (one word with chunking off). Count the
+        # words actually passed, the move in the index, so stats stay word-based.
+        before_index = self.session.index
         self.session.advance()
-        self._session_words_read += 1
+        self._session_words_read += self.session.index - before_index
         if self.session.is_finished:
             # Reading has genuinely stopped here, even though nothing
             # set _is_paused. Close the active span now rather than
