@@ -23,6 +23,9 @@ GUIDE_MARK_THICKNESS_RANGE = (2, 6)  # 1px is deliberately excluded: a 1px-thick
                                       # vertical marks disappear too.
 GUIDE_MARK_LENGTH_PERCENT_RANGE = (15, 60)
 RESUME_REWIND_WORDS_RANGE = (1, 5)
+CHUNK_SIZE_RANGE = (2, 5)  # words flashed together when chunking is on. 1 is excluded because
+                            # "off" is the chunking toggle's job, not size 1. See
+                            # claude/chunking-v1-design.md.
 
 @dataclass
 class AppSettings:
@@ -35,6 +38,11 @@ class AppSettings:
     default_highlight_color: str = "#D98A3D"
     default_background_color: str = "#F6EFE3"
     default_font_size: int = 32
+    default_chunking_enabled: bool = False  # new-transcript default for multi-word chunking (see
+                                             # claude/chunking-v1-design.md); seeded onto
+                                             # Transcript.chunking_enabled at creation.
+    default_chunk_size: int = 2  # new-transcript default for Transcript.chunk_size, the number of words
+                                  # flashed together when chunking is on. See CHUNK_SIZE_RANGE (2 to 5).
     font_size_step: int = 1
     highlight_offset_px: int = 0  # global, not per-transcript: positive is up, negative is down
     data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
@@ -182,6 +190,14 @@ class SettingsStore:
         return self._settings.default_font_size
 
     @property
+    def default_chunking_enabled(self) -> bool:
+        return self._settings.default_chunking_enabled
+
+    @property
+    def default_chunk_size(self) -> int:
+        return self._settings.default_chunk_size
+
+    @property
     def font_size_step(self) -> int:
         return self._settings.font_size_step
 
@@ -269,6 +285,16 @@ class SettingsStore:
         self._settings.default_highlight_color = highlight_color
         self._settings.default_background_color = background_color
         self._settings.default_font_size = font_size
+        self._save()
+
+    def set_chunking_defaults(self, enabled: bool, size: int) -> None:
+        """Set both chunking defaults together, since Settings' Apply submits
+        them as a pair (the toggle plus its size). These are the new-transcript
+        defaults seeded onto Transcript.chunking_enabled / chunk_size at
+        creation; changing them does not touch transcripts that already exist.
+        See claude/chunking-v1-design.md."""
+        self._settings.default_chunking_enabled = enabled
+        self._settings.default_chunk_size = size
         self._save()
 
     def set_font_size_step(self, step: int) -> None:

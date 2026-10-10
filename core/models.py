@@ -72,6 +72,20 @@ class Transcript:
     pre_normalize_text: str = ""
     normalized_text: str = ""
 
+    # Multi-word chunking (see claude/chunking-v1-design.md). When
+    # chunking_enabled is True, the reader flashes chunk_size words at a
+    # time instead of one, with only the first word of each chunk keeping
+    # the ORP highlight. This is per-transcript: it's seeded at creation
+    # from the app-wide defaults (default_chunking_enabled and
+    # default_chunk_size in core/settings_store.py) and can be toggled per
+    # transcript, including on one that's already open. "Off" is the
+    # toggle's job, so chunk_size stays in the 2 to 5 range
+    # (CHUNK_SIZE_RANGE) and never drops to 1. The defaults here (disabled,
+    # size 2) are also the right values for old save files that predate the
+    # feature, so no backfill is needed, the same as the stats fields above.
+    chunking_enabled: bool = False
+    chunk_size: int = 2
+
     # Deliberately saved reading positions within this transcript (see the
     # Bookmark dataclass above and TranscriptStore.add_bookmark). Kept
     # sorted by index. Written to disk as plain dicts by asdict() and
