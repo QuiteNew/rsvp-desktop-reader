@@ -231,9 +231,9 @@ def test_chunk_peripheral_context_surrounds_the_whole_chunk():
     s = ReaderSession("w0 w1 w2 w3 w4 w5", chunk_enabled=True, chunk_size=2)
     s.advance()  # now on chunk (2, 4)
     ctx = s.chunk_peripheral_context(2, 2)
-    assert ctx.current == "w2"
-    assert ctx.before == ["w0", "w1"]
-    assert ctx.after == ["w4", "w5"]
+    assert ctx.current == "w2"             # the chunk's first word
+    assert ctx.before == ["w0", "w1"]      # the words before the chunk
+    assert ctx.after == ["w4", "w5"]       # the words after the chunk, skipping w3 (in the chunk)
 
 
 def test_chunk_peripheral_context_clamps_at_the_ends():
@@ -249,3 +249,35 @@ def test_chunk_peripheral_context_matches_plain_when_disabled():
     s = ReaderSession(text, chunk_enabled=False)
     s.seek_to(2)
     assert s.chunk_peripheral_context(2, 2) == s.peripheral_context(2, 2)
+
+
+# ---------------------------------------------------------------------------
+# Step 5a: the store seeds chunking onto new transcripts and can set it.
+# ---------------------------------------------------------------------------
+
+from core.transcript_store import TranscriptStore
+
+
+def test_add_transcript_defaults_chunking_off(tmp_path):
+    store = TranscriptStore(data_directory=str(tmp_path))
+    t = store.add_transcript("Doc", store.current_space)
+    assert t.chunking_enabled is False
+    assert t.chunk_size == 2
+
+
+def test_add_transcript_seeds_chunking_from_args(tmp_path):
+    store = TranscriptStore(data_directory=str(tmp_path))
+    t = store.add_transcript("Doc", store.current_space, chunking_enabled=True, chunk_size=4)
+    assert t.chunking_enabled is True
+    assert t.chunk_size == 4
+
+
+def test_set_transcript_chunking_persists(tmp_path):
+    directory = str(tmp_path)
+    store = TranscriptStore(data_directory=directory)
+    t = store.add_transcript("Doc", store.current_space)
+    store.set_transcript_chunking(t.id, True, 5)
+    assert t.chunking_enabled is True and t.chunk_size == 5
+    reloaded = TranscriptStore(data_directory=directory)
+    rt = next(x for x in reloaded.transcripts if x.id == t.id)
+    assert rt.chunking_enabled is True and rt.chunk_size == 5

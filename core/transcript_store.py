@@ -208,12 +208,15 @@ class TranscriptStore:
         highlight_color: str = "#E74C3C",
         background_color: str = "#1E1E1E",
         font_size: int = 32,
+        chunking_enabled: bool = False,
+        chunk_size: int = 2,
     ) -> Transcript:
         transcript = Transcript(
             id=self._next_id, title=title, space=space,
             wpm=wpm, font_color=font_color,
             highlight_color=highlight_color, background_color=background_color,
             font_size=font_size,
+            chunking_enabled=chunking_enabled, chunk_size=chunk_size,
         )
         self._next_id += 1
         self._transcripts.append(transcript)
@@ -353,6 +356,18 @@ class TranscriptStore:
         t = self._find_transcript(transcript_id)
         if t:
             t.font_size = font_size
+            self._save()
+
+    def set_transcript_chunking(self, transcript_id: int, enabled: bool, size: int) -> None:
+        """Set a transcript's chunking on/off and its chunk size together, the
+        way the bottom control band submits them as a pair. Mirrors the other
+        per-transcript setters (an immediate save, not throttled). The open
+        reader does not change until the session is rebuilt; see
+        gui/components/canvas.py. See claude/chunking-v1-design.md."""
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.chunking_enabled = enabled
+            t.chunk_size = size
             self._save()
 
     def set_transcript_draft_text(self, transcript_id: int, draft_text: str) -> None:

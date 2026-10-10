@@ -384,6 +384,8 @@ class RSVPApp(ctk.CTk):
             highlight_color=highlight_color,
             background_color=background_color,
             font_size=self.settings_store.default_font_size,
+            chunking_enabled=self.settings_store.default_chunking_enabled,
+            chunk_size=self.settings_store.default_chunk_size,
         )
         self._refresh_transcript_list()
         return transcript
@@ -678,6 +680,8 @@ class RSVPApp(ctk.CTk):
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
             peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
+            default_chunking_enabled=self.settings_store.default_chunking_enabled,
+            default_chunk_size=self.settings_store.default_chunk_size,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -752,6 +756,8 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
         self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
+
+        self.settings_store.set_chunking_defaults(values["default_chunking_enabled"], values["default_chunk_size"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 

@@ -171,6 +171,8 @@ class Canvas(ctk.CTkFrame):
                 transcript.raw_text, wpm=transcript.wpm, start_index=transcript.position,
                 length_pacing_enabled=self._length_pacing_enabled,
                 warm_up_enabled=self._warm_up_enabled,
+                chunk_enabled=transcript.chunking_enabled,
+                chunk_size=transcript.chunk_size,
             )
             self.reader_display.load_session(session, start_paused=transcript.is_paused)
             self.scrub_bar.set_total(session.total_words)
@@ -453,6 +455,8 @@ class Canvas(ctk.CTkFrame):
             text, wpm=transcript.wpm, start_index=0,
             length_pacing_enabled=self._length_pacing_enabled,
             warm_up_enabled=self._warm_up_enabled,
+            chunk_enabled=transcript.chunking_enabled,
+            chunk_size=transcript.chunk_size,
         )
         self.reader_display.load_session(session, start_paused=False)
         # set_total() inside the scrubber resets its bookmark ticks, and a

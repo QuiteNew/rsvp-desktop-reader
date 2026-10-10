@@ -191,6 +191,8 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
                 self.transcript.raw_text, wpm=self.transcript.wpm, start_index=self.transcript.position,
                 length_pacing_enabled=self.length_pacing_enabled,
                 warm_up_enabled=self.warm_up_enabled,
+                chunk_enabled=self.transcript.chunking_enabled,
+                chunk_size=self.transcript.chunk_size,
             )
             self.reader_display.load_session(session, start_paused=self.transcript.is_paused)
             self.scrub_bar.set_total(session.total_words)
