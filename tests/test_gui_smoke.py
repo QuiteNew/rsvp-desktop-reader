@@ -18,6 +18,7 @@ import pytest
 import core.storage as storage
 import core.settings_store as settings_store
 import core.transcript_store as transcript_store
+from core.reader import CHUNK_MODE_ADAPTIVE
 
 # Every default-location constant the stores read, redirected together.
 # SETTINGS_DIR is what SettingsStore uses directly; the DEFAULT_DATA_DIR
@@ -86,6 +87,38 @@ def _load_chunking_transcript(application, enabled, size):
     store.set_transcript_chunking(transcript.id, enabled, size)
     application._handle_open_transcript(transcript)
     return transcript
+
+
+def _load_adaptive_transcript(application, char_target):
+    """Add a transcript in adaptive chunking mode and open it, so the reader
+    goes live with its words grouped by width rather than a word count. Returns
+    the Transcript (mutated in place by the store, so fields read back here)."""
+    store = application.store
+    transcript = store.add_transcript("Adaptive smoke", store.current_space)
+    store.set_transcript_text(transcript.id, "one two three four five six seven eight")
+    store.set_transcript_chunking(transcript.id, True, 3, CHUNK_MODE_ADAPTIVE, char_target)
+    application._handle_open_transcript(transcript)
+    return transcript
+
+
+def _open_chunking_dialog(application):
+    """Open Settings and build the chunking dialog exactly as
+    app._open_chunking_settings does, returning it so a test can drive its
+    controls directly. The caller destroys the dialog and the Settings window.
+    The gui import is local, the same deferral the app fixture uses, so a
+    display-less collection still skips rather than erroring here."""
+    from gui.components.chunking_settings_window import ChunkingSettingsWindow
+
+    application._open_settings_window()
+    return ChunkingSettingsWindow(
+        application._settings_window,
+        default_enabled=application.settings_store.default_chunking_enabled,
+        default_size=application.settings_store.default_chunk_size,
+        default_mode=application.settings_store.default_chunk_mode,
+        default_char_target=application.settings_store.default_chunk_char_target,
+        transcript=application._current_transcript,
+        on_apply=application._apply_chunking_settings,
+    )
 
 
 def test_app_constructs(app):
@@ -252,6 +285,123 @@ def test_detached_window_inherits_chunking(app):
     app._handle_chunking_changed(True, 5)
     assert detached.reader_display.session.chunk_size == 5
     assert app.canvas.reader_display.session is None
+
+    app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+
+
+def test_opens_chunking_settings_window(app):
+    """The Configure-chunking opener builds the dialog with the exact argument
+    list app hands it, the same argument-mismatch class of bug the Settings
+    smoke test guards against. Opening it is the test. It is parented to the
+    Settings window, so that is opened first, the way the button is only
+    reachable from inside Settings; destroying Settings tears the dialog down
+    with it."""
+    app._open_settings_window()
+    try:
+        app._open_chunking_settings()  # must not raise
+    finally:
+        app._settings_window.destroy()
+
+
+def test_chunking_dialog_applies_to_current_transcript(app):
+    """Apply-to-current from the dialog re-groups the live reader in place (the
+    same session, not a reload) and carries mode and adaptive width through to
+    both the transcript and the session, not just the on/off and fixed size."""
+    from gui.components.chunking_settings_window import TARGET_CURRENT
+
+    transcript = _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    session = reader.session
+    assert session is not None
+
+    dialog = _open_chunking_dialog(app)
+    try:
+        dialog.target_selector.set(TARGET_CURRENT)
+        dialog.group_switch.select()
+        dialog.mode_selector.set("Adaptive")
+        dialog.width_slider.set(40)
+        dialog._handle_apply()
+    finally:
+        dialog.destroy()
+        app._settings_window.destroy()
+
+    # Same live session, re-grouped in place, now carrying the adaptive fields.
+    assert reader.session is session
+    assert session.chunking_enabled is True
+    assert session.chunk_mode == CHUNK_MODE_ADAPTIVE
+    assert session.chunk_char_target == 40
+    # And persisted onto the transcript.
+    assert transcript.chunk_mode == CHUNK_MODE_ADAPTIVE
+    assert transcript.chunk_char_target == 40
+
+    app.canvas.stop()
+
+
+def test_chunking_dialog_applies_to_defaults_only(app):
+    """Apply-to-defaults updates the new-transcript defaults, mode and width
+    included, and leaves the open transcript untouched."""
+    from gui.components.chunking_settings_window import TARGET_DEFAULTS
+
+    transcript = _load_reading_transcript(app)
+    mode_before = transcript.chunk_mode
+    target_before = transcript.chunk_char_target
+
+    dialog = _open_chunking_dialog(app)
+    try:
+        dialog.target_selector.set(TARGET_DEFAULTS)
+        dialog.group_switch.select()
+        dialog.mode_selector.set("Adaptive")
+        dialog.size_slider.set(4)
+        dialog.width_slider.set(50)
+        dialog._handle_apply()
+    finally:
+        dialog.destroy()
+        app._settings_window.destroy()
+
+    settings = app.settings_store
+    assert settings.default_chunking_enabled is True
+    assert settings.default_chunk_mode == CHUNK_MODE_ADAPTIVE
+    assert settings.default_chunk_size == 4
+    assert settings.default_chunk_char_target == 50
+    # A defaults-only change never reaches the open transcript.
+    assert transcript.chunk_mode == mode_before
+    assert transcript.chunk_char_target == target_before
+
+    app.canvas.stop()
+
+
+def test_adaptive_transcript_reads_in_main_window(app):
+    """A transcript in adaptive mode opens into a live reader whose session
+    carries the adaptive mode and width; a representative reader sweep still
+    runs clean under width-driven grouping."""
+    _load_adaptive_transcript(app, char_target=35)
+    session = app.canvas.reader_display.session
+    assert session is not None
+    assert session.chunking_enabled is True
+    assert session.chunk_mode == CHUNK_MODE_ADAPTIVE
+    assert session.chunk_char_target == 35
+
+    app.canvas.toggle_pause()
+    app.canvas.skip_forward()
+    app.canvas.skip_backward()
+    app.canvas.restart()
+    app.canvas.stop()
+
+
+def test_adaptive_transcript_reads_in_detached_window(app):
+    """Adaptive grouping reaches the detached window too: it builds its reader
+    from the transcript's adaptive fields, the same way fixed chunking already
+    carries across. Reattaches at the end so the shared app is left clean."""
+    _load_adaptive_transcript(app, char_target=35)
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+
+    dsession = detached.reader_display.session
+    assert dsession is not None
+    assert dsession.chunk_mode == CHUNK_MODE_ADAPTIVE
+    assert dsession.chunk_char_target == 35
 
     app.canvas._handle_reattach()
     assert app.canvas._detached_window is None
