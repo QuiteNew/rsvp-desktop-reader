@@ -1,13 +1,13 @@
 import customtkinter as ctk
 from tkinter import colorchooser
 from gui.theme import WARM_MOCHA, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, WARM_LINE, FONT_BODY
-from core.settings_store import FONT_SIZE_RANGE
+from core.settings_store import FONT_SIZE_RANGE, CHUNK_SIZE_RANGE
 
 
 class Footer(ctk.CTkFrame):
     """Control band: font colour + background colour (left, stacked),
-    WPM + skip controls (middle), word size + highlight colour (right,
-    stacked to mirror the left column)."""
+    WPM + skip controls + chunking (middle), word size + highlight colour
+    (right, stacked to mirror the left column)."""
 
     def __init__(
         self,
@@ -19,6 +19,7 @@ class Footer(ctk.CTkFrame):
         on_skip_back=None,
         on_skip_forward=None,
         on_font_size_changed=None,
+        on_chunking_changed=None,
         font_size_step: int = 1,
     ):
         super().__init__(master, fg_color=WARM_MOCHA, corner_radius=0)
@@ -29,8 +30,16 @@ class Footer(ctk.CTkFrame):
         self.on_skip_back = on_skip_back
         self.on_skip_forward = on_skip_forward
         self.on_font_size_changed = on_font_size_changed
+        self.on_chunking_changed = on_chunking_changed
         self._font_size = 32
         self._font_size_step = font_size_step
+        # Per-transcript chunking state, mirrored from the open transcript in
+        # load_transcript(). The size is kept even while chunking is off, so a
+        # later toggle-on uses the size last chosen here (the store persists it
+        # regardless, matching the Settings size control). See
+        # claude/chunking-v1-design.md.
+        self._chunking_enabled = False
+        self._chunk_size = 2
 
         label_font = ctk.CTkFont(family=FONT_BODY, size=12)
         wpm_font = ctk.CTkFont(family=FONT_BODY, size=12, weight="bold")
@@ -64,7 +73,7 @@ class Footer(ctk.CTkFrame):
         )
         self.background_swatch.pack(side="left")
 
-        # ---- Middle: WPM (bold) + skip/slider row ----
+        # ---- Middle: WPM (bold) + skip/slider row + chunking row ----
         middle = ctk.CTkFrame(self, fg_color="transparent")
         middle.grid(row=0, column=1, sticky="nsew")
         self.wpm_label = ctk.CTkLabel(middle, text="300 WPM", text_color=COCOA_INK, font=wpm_font)
@@ -95,6 +104,37 @@ class Footer(ctk.CTkFrame):
             command=self._handle_skip_forward,
         )
         self.skip_forward_button.pack(side="left", padx=(8, 0))
+
+        # Chunking: an on/off switch and a 2-5 size stepper (mirroring the
+        # word-size stepper on the right), applied live to the current
+        # transcript. The store persists both; the open reader re-groups in
+        # place without restarting. See _emit_chunking() and
+        # claude/chunking-v1-design.md.
+        chunk_row = ctk.CTkFrame(middle, fg_color="transparent")
+        chunk_row.pack(pady=(6, 0))
+
+        self.chunk_switch = ctk.CTkSwitch(
+            chunk_row, text="Group", font=label_font, text_color=COCOA_INK,
+            progress_color=EMBER_GLOW, fg_color=WARM_LINE,
+            button_color=COCOA_INK, button_hover_color=COCOA_INK,
+            command=self._handle_chunk_toggle,
+        )
+        self.chunk_switch.pack(side="left", padx=(0, 10))
+
+        self.chunk_decrease_button = ctk.CTkButton(
+            chunk_row, text="-", width=24, height=24, corner_radius=8,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            command=self._handle_chunk_decrease,
+        )
+        self.chunk_decrease_button.pack(side="left", padx=(0, 6))
+        self.chunk_size_label = ctk.CTkLabel(chunk_row, text="2", text_color=COCOA_INK, font=label_font, width=16)
+        self.chunk_size_label.pack(side="left")
+        self.chunk_increase_button = ctk.CTkButton(
+            chunk_row, text="+", width=24, height=24, corner_radius=8,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
+            command=self._handle_chunk_increase,
+        )
+        self.chunk_increase_button.pack(side="left", padx=(6, 0))
 
         # ---- Right: Word size (top), Highlight (bottom), mirroring the left ----
         right = ctk.CTkFrame(self, fg_color="transparent")
@@ -138,6 +178,10 @@ class Footer(ctk.CTkFrame):
         self.highlight_swatch.configure(fg_color=transcript.highlight_color)
         self._font_size = transcript.font_size
         self.size_label.configure(text=f"{self._font_size}px")
+        self._chunking_enabled = transcript.chunking_enabled
+        self._chunk_size = transcript.chunk_size
+        (self.chunk_switch.select() if transcript.chunking_enabled else self.chunk_switch.deselect())
+        self.chunk_size_label.configure(text=str(self._chunk_size))
 
     def set_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
@@ -149,6 +193,9 @@ class Footer(ctk.CTkFrame):
         self.skip_forward_button.configure(state=state)
         self.size_decrease_button.configure(state=state)
         self.size_increase_button.configure(state=state)
+        self.chunk_switch.configure(state=state)
+        self.chunk_decrease_button.configure(state=state)
+        self.chunk_increase_button.configure(state=state)
 
     def set_font_size(self, size: int) -> None:
         """Update just the displayed size, for when the change comes
@@ -186,6 +233,34 @@ class Footer(ctk.CTkFrame):
         self.size_label.configure(text=f"{self._font_size}px")
         if self.on_font_size_changed:
             self.on_font_size_changed(self._font_size)
+
+    def _handle_chunk_toggle(self) -> None:
+        self._chunking_enabled = bool(self.chunk_switch.get())
+        self._emit_chunking()
+
+    def _handle_chunk_decrease(self) -> None:
+        self._change_chunk_size(-1)
+
+    def _handle_chunk_increase(self) -> None:
+        self._change_chunk_size(1)
+
+    def _change_chunk_size(self, delta: int) -> None:
+        """Step the chunk size within CHUNK_SIZE_RANGE and, if it actually
+        changed, push the change out. A press at either end is a no-op, so it
+        doesn't fire a redundant re-group. The size is reported (and persisted)
+        whether or not chunking is currently on, so turning it on later uses
+        the size chosen here."""
+        low, high = CHUNK_SIZE_RANGE
+        new_size = max(low, min(high, self._chunk_size + delta))
+        if new_size == self._chunk_size:
+            return
+        self._chunk_size = new_size
+        self.chunk_size_label.configure(text=str(self._chunk_size))
+        self._emit_chunking()
+
+    def _emit_chunking(self) -> None:
+        if self.on_chunking_changed:
+            self.on_chunking_changed(self._chunking_enabled, self._chunk_size)
 
     def _pick_font_color(self) -> None:
         color = colorchooser.askcolor(color=self.font_swatch.cget("fg_color"))[1]

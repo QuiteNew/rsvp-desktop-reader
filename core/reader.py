@@ -164,6 +164,20 @@ class ReaderSession:
             start = i
         return chunks
 
+    def _rebuild_chunks(self) -> None:
+        """Recompute the chunk ranges and the word-to-chunk map from the
+        current chunking_enabled / chunk_size, reusing the already-built
+        frames and pacing tables. Shared by __init__ (indirectly, via the
+        inline build it mirrors) and set_chunking(). With chunking off the
+        effective size is 1, so every chunk is a single word."""
+        effective_size = self.chunk_size if self.chunking_enabled else 1
+        n = len(self.frames)
+        self._chunks = self._build_chunks(effective_size)
+        self._chunk_bounds_of_word = [(0, 0)] * n
+        for start, end in self._chunks:
+            for j in range(start, end):
+                self._chunk_bounds_of_word[j] = (start, end)
+
     @property
     def total_words(self) -> int:
         return len(self.frames)
@@ -360,3 +374,20 @@ class ReaderSession:
 
     def set_warm_up_enabled(self, enabled: bool) -> None:
         self.warm_up_enabled = enabled
+
+    def set_chunking(self, enabled: bool, size: int) -> None:
+        """Re-group this already-built session with new chunking settings, in
+        place, without rebuilding the frames, pacing tables or warm-up ramp.
+        Recomputes the chunk ranges and the word-to-chunk map, then snaps the
+        current word index to the start of the chunk that now contains it, so
+        the reading position is preserved as a word and only its grouping
+        changes. Leaves _words_shown untouched, the same way seek() does:
+        re-grouping is not a fresh start. With enabled False the effective
+        size is 1, restoring single-word reading exactly. A finished session
+        (index at the end) keeps its position; there is no chunk to snap to.
+        See claude/chunking-v1-design.md."""
+        self.chunking_enabled = enabled
+        self.chunk_size = size
+        self._rebuild_chunks()
+        if self.index < self.total_words:
+            self.index = self._chunk_bounds_of_word[self.index][0]

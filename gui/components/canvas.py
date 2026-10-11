@@ -211,6 +211,18 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.reader_display.set_wpm(wpm)
 
+    def set_chunking(self, enabled: bool, size: int) -> None:
+        """Re-group the live reader with new chunking settings for the current
+        transcript, from the footer's per-transcript control. Forwarded to the
+        detached window's reader too; while a transcript is detached the main
+        reader is stopped (its session is None), so the call there harmlessly
+        no-ops, the same shape as set_wpm(). The reader keeps its word
+        position, snapped to a chunk boundary (see ReaderDisplay.set_chunking),
+        so reading just re-groups in place rather than restarting."""
+        self.reader_display.set_chunking(enabled, size)
+        if self._detached_window:
+            self._detached_window.reader_display.set_chunking(enabled, size)
+
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self.reader_display.set_colors(font_color, highlight_color, background_color)
         if self._detached_window:

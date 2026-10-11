@@ -169,6 +169,7 @@ class RSVPApp(ctk.CTk):
             on_skip_back=self.canvas.skip_backward,
             on_skip_forward=self.canvas.skip_forward,
             on_font_size_changed=self._handle_font_size_changed,
+            on_chunking_changed=self._handle_chunking_changed,
             font_size_step=self.settings_store.font_size_step,
         )
         self.footer.grid(row=4, column=2, sticky="nsew")
@@ -616,6 +617,20 @@ class RSVPApp(ctk.CTk):
             return
         self.store.set_transcript_wpm(self._current_transcript.id, wpm)
         self.canvas.set_wpm(wpm)
+
+    def _handle_chunking_changed(self, enabled: bool, size: int) -> None:
+        """One change to the footer's per-transcript chunking control: the
+        on/off switch or the size stepper. Persists both to the transcript
+        (set_transcript_chunking mutates it in place and saves), then re-groups
+        the live reader without restarting it, keeping the word position (see
+        Canvas.set_chunking). No-ops when nothing is open, like the other
+        footer handlers. If the reader is in the paste/edit view rather than
+        playing, the canvas call simply has no session to re-group, and the
+        saved setting takes effect when reading next starts."""
+        if not self._current_transcript:
+            return
+        self.store.set_transcript_chunking(self._current_transcript.id, enabled, size)
+        self.canvas.set_chunking(enabled, size)
 
     def _handle_font_color_changed(self, color: str) -> None:
         if not self._current_transcript:

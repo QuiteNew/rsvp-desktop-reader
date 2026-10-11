@@ -402,6 +402,28 @@ class ReaderDisplay(ctk.CTkFrame):
         if self.session:
             self.session.set_warm_up_enabled(enabled)
 
+    def set_chunking(self, enabled: bool, size: int) -> None:
+        """Re-group the current session with new chunking settings and refresh
+        what's on screen, without restarting the session or disturbing its
+        stats, pause state or word position. The session snaps the word index
+        to its new chunk's start (see ReaderSession.set_chunking), so reading
+        continues from the same place, just grouped differently, and the
+        snapped position is reported so it's saved. While actually playing, the
+        pending advance is cancelled and rescheduled against the new chunk's
+        dwell, so a change made mid-flight takes effect from the current chunk
+        forward; while paused, finished or mid-scrub the timing is left alone
+        and the normal resume/scrub-end path picks up the new grouping. A no-op
+        when no session is loaded."""
+        if self.session is None:
+            return
+        self.session.set_chunking(enabled, size)
+        self._show_current_frame()
+        self._report_position()
+        if self._is_running() and not self._scrubbing:
+            self._cancel_pending()
+            self._schedule_next()
+        self._update_guide_marks()
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         """Whether resuming from a pause first steps back `words` words for
         re-entry context, and by how many. Read at resume time in
