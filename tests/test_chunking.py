@@ -13,7 +13,10 @@ import json
 import core.storage as storage
 from core.models import Transcript
 from core.settings_store import AppSettings, SettingsStore, CHUNK_SIZE_RANGE, CHUNK_CHAR_TARGET_RANGE
-from core.reader import ReaderSession, CHUNK_CHAR_CAP
+from core.reader import (
+    ReaderSession, CHUNK_CHAR_CAP,
+    CHUNK_MODE_FIXED, CHUNK_MODE_ADAPTIVE, ADAPTIVE_MAX_WORDS,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -377,3 +380,101 @@ def test_settings_bundle_round_trip_preserves_adaptive(tmp_path):
     dst.replace_from_bundle(bundle_settings)
     assert dst.default_chunk_mode == "adaptive"
     assert dst.default_chunk_char_target == 50
+
+
+# ---------------------------------------------------------------------------
+# v2 adaptive chunking - Step 2: adaptive grouping in ReaderSession.
+# See claude/chunking-v2-adaptive-design.md.
+# ---------------------------------------------------------------------------
+
+def test_adaptive_constants():
+    assert ADAPTIVE_MAX_WORDS == 6
+    assert CHUNK_MODE_FIXED == "fixed"
+    assert CHUNK_MODE_ADAPTIVE == "adaptive"
+
+
+def test_adaptive_fills_to_the_char_target():
+    # Four 4-char words. With a 14-char target the first three fit
+    # (4 + 1 + 4 + 1 + 4 = 14), the fourth would overflow (19 > 14).
+    s = ReaderSession(
+        "aaaa bbbb cccc dddd", chunk_enabled=True,
+        chunk_mode=CHUNK_MODE_ADAPTIVE, chunk_char_target=14,
+    )
+    assert s.chunk_ranges() == [(0, 3), (3, 4)]
+
+
+def test_adaptive_word_ceiling_caps_short_words():
+    # Eight one-char words with a wide target: the width never binds, so the
+    # ADAPTIVE_MAX_WORDS ceiling (6) closes the first chunk.
+    text = " ".join(["a"] * 8)
+    s = ReaderSession(
+        text, chunk_enabled=True,
+        chunk_mode=CHUNK_MODE_ADAPTIVE, chunk_char_target=60,
+    )
+    assert s.chunk_ranges() == [(0, 6), (6, 8)]
+
+
+def test_adaptive_breaks_at_a_sentence():
+    # A sentence end closes the chunk even well under the width target.
+    s = ReaderSession(
+        "one two. three four five", chunk_enabled=True,
+        chunk_mode=CHUNK_MODE_ADAPTIVE, chunk_char_target=60,
+    )
+    assert s.chunk_ranges() == [(0, 2), (2, 5)]
+
+
+def test_adaptive_overlong_first_word_is_its_own_chunk():
+    # A first word longer than the target still forms a one-word chunk rather
+    # than an empty one; the next word starts fresh.
+    long_word = "x" * 20
+    s = ReaderSession(
+        long_word + " short", chunk_enabled=True,
+        chunk_mode=CHUNK_MODE_ADAPTIVE, chunk_char_target=15,
+    )
+    assert s.chunk_ranges() == [(0, 1), (1, 2)]
+
+
+def test_fixed_mode_grouping_is_unchanged():
+    # Explicit fixed mode matches the v1 size-2 grouping exactly.
+    s = ReaderSession(
+        "one two three four five", chunk_enabled=True,
+        chunk_size=2, chunk_mode=CHUNK_MODE_FIXED,
+    )
+    assert s.chunk_ranges() == [(0, 2), (2, 4), (4, 5)]
+
+
+def test_disabled_overrides_adaptive_mode():
+    # Chunking off means single words no matter what the mode says.
+    s = ReaderSession(
+        "one two three", chunk_enabled=False,
+        chunk_mode=CHUNK_MODE_ADAPTIVE, chunk_char_target=60,
+    )
+    assert s.chunk_ranges() == [(0, 1), (1, 2), (2, 3)]
+
+
+def test_set_chunking_switches_mode_in_place():
+    s = ReaderSession(
+        "aaaa bbbb cccc dddd", chunk_enabled=True,
+        chunk_size=2, chunk_mode=CHUNK_MODE_FIXED,
+    )
+    assert s.chunk_ranges() == [(0, 2), (2, 4)]
+    s.set_chunking(True, 2, mode=CHUNK_MODE_ADAPTIVE, char_target=14)
+    assert s.chunk_mode == CHUNK_MODE_ADAPTIVE
+    assert s.chunk_char_target == 14
+    assert s.chunk_ranges() == [(0, 3), (3, 4)]
+
+
+def test_set_chunking_without_mode_keeps_current_mode():
+    # The v1 two-arg call path (toggle/fixed-size only) must not clobber an
+    # adaptive transcript's mode or width.
+    s = ReaderSession(
+        "aaaa bbbb cccc dddd", chunk_enabled=True,
+        chunk_mode=CHUNK_MODE_ADAPTIVE, chunk_char_target=14,
+    )
+    assert s.chunk_ranges() == [(0, 3), (3, 4)]
+    s.set_chunking(False, 2)  # disable with a two-arg call
+    assert s.chunk_ranges() == [(0, 1), (1, 2), (2, 3), (3, 4)]
+    s.set_chunking(True, 2)   # re-enable, still no mode passed
+    assert s.chunk_mode == CHUNK_MODE_ADAPTIVE
+    assert s.chunk_char_target == 14
+    assert s.chunk_ranges() == [(0, 3), (3, 4)]

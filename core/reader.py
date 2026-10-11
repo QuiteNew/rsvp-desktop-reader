@@ -11,12 +11,25 @@ from core.punctuation import split_punctuation, classify_pacing, PACE_SENTENCE
 
 
 # Soft upper bound on the characters (words plus the single spaces between
-# them) a chunk may hold when chunking is on. A chunk stops before a word that
-# would push it past this, so a run of long words does not overflow the
+# them) a chunk may hold in FIXED chunking mode. A chunk stops before a word
+# that would push it past this, so a run of long words does not overflow the
 # reading area. It never yields an empty chunk: a lone word longer than the cap
 # still forms a one-word chunk. This is a tuning value; see
-# claude/chunking-v1-design.md.
+# claude/chunking-v1-design.md. In ADAPTIVE mode the per-transcript
+# chunk_char_target plays this role instead (see _chunk_limits()).
 CHUNK_CHAR_CAP = 30
+
+# Chunk sizing modes (Transcript.chunk_mode). "fixed" groups up to chunk_size
+# words (v1 behaviour); "adaptive" fills each chunk up to chunk_char_target
+# characters instead, capped at ADAPTIVE_MAX_WORDS words. See
+# claude/chunking-v2-adaptive-design.md.
+CHUNK_MODE_FIXED = "fixed"
+CHUNK_MODE_ADAPTIVE = "adaptive"
+
+# Hard ceiling on how many words one adaptive chunk may hold, regardless of
+# the character target, so a run of very short words ("a is of to it") can't
+# pile an absurd number into a single flash. See the adaptive design doc.
+ADAPTIVE_MAX_WORDS = 6
 
 
 class PeripheralContext(NamedTuple):
@@ -31,15 +44,17 @@ class PeripheralContext(NamedTuple):
 class ReaderSession:
     """Holds a tokenized, ORP-split transcript and tracks playback position.
 
-    When chunking is on (chunk_enabled), the words are grouped into chunks of
-    up to chunk_size words and the reader advances a whole chunk at a time
-    rather than a single word. The word index stays the canonical position:
-    advancing, skipping and seeking all land on a chunk's first word, so a
-    saved position or bookmark (a word index) stays valid and flipping chunking
-    off just reads the same words one at a time. When chunking is off, the
-    effective chunk size is 1, so every chunk is a single word and the
-    behaviour is identical to single-word reading. See
-    claude/chunking-v1-design.md."""
+    When chunking is on (chunk_enabled), the words are grouped into chunks and
+    the reader advances a whole chunk at a time rather than a single word. How
+    a chunk's size is decided depends on chunk_mode: "fixed" groups up to
+    chunk_size words (the v1 behaviour), while "adaptive" fills each chunk up
+    to chunk_char_target characters instead, capped at ADAPTIVE_MAX_WORDS
+    words. Either way the word index stays the canonical position: advancing,
+    skipping and seeking all land on a chunk's first word, so a saved position
+    or bookmark (a word index) stays valid and flipping chunking off just
+    reads the same words one at a time. When chunking is off, every chunk is a
+    single word and the behaviour is identical to single-word reading. See
+    claude/chunking-v1-design.md and claude/chunking-v2-adaptive-design.md."""
 
     def __init__(
         self, raw_text: str, wpm: int = 300, start_index: int = 0,
@@ -47,6 +62,8 @@ class ReaderSession:
         warm_up_enabled: bool = False,
         chunk_enabled: bool = False,
         chunk_size: int = 2,
+        chunk_mode: str = CHUNK_MODE_FIXED,
+        chunk_char_target: int = 30,
     ):
         clean = clean_transcript(raw_text)
         words = tokenize(clean)
@@ -104,16 +121,17 @@ class ReaderSession:
         self.warm_up_enabled = warm_up_enabled
         self.chunking_enabled = chunk_enabled
         self.chunk_size = chunk_size
+        self.chunk_mode = chunk_mode
+        self.chunk_char_target = chunk_char_target
 
-        # Group the words into chunks. With chunking off the effective size is
-        # 1, so every chunk is a single word and the chunk-aware navigation
-        # below collapses to plain word-at-a-time stepping, leaving single-word
-        # reading unchanged. _chunks is the ordered list of (start, end)
-        # word-index ranges (end exclusive); _chunk_bounds_of_word maps each
-        # word index to the (start, end) of its chunk, for O(1) lookup when
-        # advancing and snapping.
-        effective_size = self.chunk_size if self.chunking_enabled else 1
-        self._chunks: list[tuple[int, int]] = self._build_chunks(effective_size)
+        # Group the words into chunks, using whatever limits the current mode
+        # implies (see _chunk_limits()). With chunking off those collapse to
+        # one word per chunk, leaving single-word reading unchanged. _chunks is
+        # the ordered list of (start, end) word-index ranges (end exclusive);
+        # _chunk_bounds_of_word maps each word index to the (start, end) of its
+        # chunk, for O(1) lookup when advancing and snapping.
+        max_words, char_limit = self._chunk_limits()
+        self._chunks: list[tuple[int, int]] = self._build_chunks(max_words, char_limit)
         self._chunk_bounds_of_word: list[tuple[int, int]] = [(0, 0)] * n
         for start, end in self._chunks:
             for j in range(start, end):
@@ -134,14 +152,35 @@ class ReaderSession:
         # chunk's word count, so the ramp stays word-based. Reset by reset().
         self._words_shown = 0
 
-    def _build_chunks(self, size: int) -> list[tuple[int, int]]:
-        """Group the word indices into chunks of up to `size` words. A chunk
-        also closes after a word that ends a sentence, so a chunk never crosses
-        a sentence boundary, and before a word that would push it past
-        CHUNK_CHAR_CAP characters. The first word of a chunk is always
-        included, so a single word longer than the cap still forms a one-word
-        chunk rather than an empty one, and the final chunk may be short. With
-        size 1 every chunk is a single word."""
+    def _chunk_limits(self) -> tuple[int, int]:
+        """The (max_words, char_limit) a single chunk may reach, derived from
+        the current chunking state. Both __init__ and _rebuild_chunks() go
+        through here, so the fixed and adaptive rules live in one place and
+        can't drift.
+
+        - Chunking off: one word per chunk (max_words 1), reproducing
+          single-word reading. The char limit is irrelevant at one word.
+        - Fixed mode: up to chunk_size words, with CHUNK_CHAR_CAP as the same
+          safety cap v1 used, so fixed grouping stays byte-for-byte unchanged.
+        - Adaptive mode: fill up to chunk_char_target characters instead, with
+          ADAPTIVE_MAX_WORDS as a word ceiling. See
+          claude/chunking-v2-adaptive-design.md."""
+        if not self.chunking_enabled:
+            return 1, CHUNK_CHAR_CAP
+        if self.chunk_mode == CHUNK_MODE_ADAPTIVE:
+            return ADAPTIVE_MAX_WORDS, self.chunk_char_target
+        return self.chunk_size, CHUNK_CHAR_CAP
+
+    def _build_chunks(self, max_words: int, char_limit: int) -> list[tuple[int, int]]:
+        """Group the word indices into chunks, scanning left to right and
+        closing the current chunk when any of three things holds: it has
+        reached `max_words` words; the word just added ends a sentence (so a
+        chunk never crosses a sentence boundary); or adding the next word would
+        push the chunk past `char_limit` characters (words plus the single
+        spaces between them). The first word of a chunk is always included, so
+        a single word longer than the limit still forms a one-word chunk rather
+        than an empty one, and the final chunk may be short. With max_words 1
+        every chunk is a single word, whatever the char limit."""
         n = len(self.frames)
         chunks: list[tuple[int, int]] = []
         start = 0
@@ -152,11 +191,11 @@ class ReaderSession:
                 frame = self.frames[i]
                 word_len = len(frame.before) + len(frame.focus) + len(frame.after)
                 projected = char_count + (0 if i == start else 1) + word_len
-                if i > start and projected > CHUNK_CHAR_CAP:
+                if i > start and projected > char_limit:
                     break
                 char_count = projected
                 i += 1
-                if i - start >= size:
+                if i - start >= max_words:
                     break
                 if self._paces[i - 1] == PACE_SENTENCE:
                     break
@@ -166,13 +205,13 @@ class ReaderSession:
 
     def _rebuild_chunks(self) -> None:
         """Recompute the chunk ranges and the word-to-chunk map from the
-        current chunking_enabled / chunk_size, reusing the already-built
-        frames and pacing tables. Shared by __init__ (indirectly, via the
-        inline build it mirrors) and set_chunking(). With chunking off the
-        effective size is 1, so every chunk is a single word."""
-        effective_size = self.chunk_size if self.chunking_enabled else 1
+        current chunking state, reusing the already-built frames and pacing
+        tables. Shared by __init__ (indirectly, via the inline build it
+        mirrors) and set_chunking(). The per-mode limits come from
+        _chunk_limits()."""
+        max_words, char_limit = self._chunk_limits()
         n = len(self.frames)
-        self._chunks = self._build_chunks(effective_size)
+        self._chunks = self._build_chunks(max_words, char_limit)
         self._chunk_bounds_of_word = [(0, 0)] * n
         for start, end in self._chunks:
             for j in range(start, end):
@@ -375,19 +414,28 @@ class ReaderSession:
     def set_warm_up_enabled(self, enabled: bool) -> None:
         self.warm_up_enabled = enabled
 
-    def set_chunking(self, enabled: bool, size: int) -> None:
+    def set_chunking(self, enabled: bool, size: int, mode: str | None = None, char_target: int | None = None) -> None:
         """Re-group this already-built session with new chunking settings, in
         place, without rebuilding the frames, pacing tables or warm-up ramp.
         Recomputes the chunk ranges and the word-to-chunk map, then snaps the
         current word index to the start of the chunk that now contains it, so
         the reading position is preserved as a word and only its grouping
         changes. Leaves _words_shown untouched, the same way seek() does:
-        re-grouping is not a fresh start. With enabled False the effective
-        size is 1, restoring single-word reading exactly. A finished session
-        (index at the end) keeps its position; there is no chunk to snap to.
-        See claude/chunking-v1-design.md."""
+        re-grouping is not a fresh start.
+
+        enabled and size always apply. mode and char_target are optional: when
+        left None they keep whatever this session already has, so a caller that
+        only flips the toggle or the fixed size (the v1 footer path) doesn't
+        have to know the mode. Pass them to switch between fixed and adaptive
+        or change the adaptive width. A finished session (index at the end)
+        keeps its position; there is no chunk to snap to. See
+        claude/chunking-v1-design.md and claude/chunking-v2-adaptive-design.md."""
         self.chunking_enabled = enabled
         self.chunk_size = size
+        if mode is not None:
+            self.chunk_mode = mode
+        if char_target is not None:
+            self.chunk_char_target = char_target
         self._rebuild_chunks()
         if self.index < self.total_words:
             self.index = self._chunk_bounds_of_word[self.index][0]
