@@ -226,7 +226,7 @@ class Canvas(ctk.CTkFrame):
         pass straight through; left None they keep the session's current mode
         and adaptive width, so the footer's toggle/size path doesn't disturb
         them, while the Configure-chunking dialog passes them to switch mode or
-        width. See claude/chunking-v2-adaptive-design.md."""
+        width."""
         self.reader_display.set_chunking(enabled, size, mode, char_target)
         if self._detached_window:
             self._detached_window.reader_display.set_chunking(enabled, size, mode, char_target)

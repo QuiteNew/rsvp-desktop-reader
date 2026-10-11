@@ -15,6 +15,7 @@ from gui.components.add_transcript_dialog import AddTranscriptDialog
 from gui.components.add_transcript_chooser_dialog import AddTranscriptChooserDialog
 from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
+from gui.components.chunking_settings_window import ChunkingSettingsWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
 from gui.components.space_selection_dialog import SpaceSelectionDialog
 from gui.components.delete_space_dialog import DeleteSpaceDialog
@@ -703,8 +704,6 @@ class RSVPApp(ctk.CTk):
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
             peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
-            default_chunking_enabled=self.settings_store.default_chunking_enabled,
-            default_chunk_size=self.settings_store.default_chunk_size,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -715,6 +714,7 @@ class RSVPApp(ctk.CTk):
             on_import_requested=self._handle_import_requested,
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
+            on_configure_chunking=self._open_chunking_settings,
             appearance_mode=self.settings_store.appearance_mode,
             transcripts=self.store.transcripts,
         )
@@ -780,9 +780,42 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
         self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
 
-        self.settings_store.set_chunking_defaults(values["default_chunking_enabled"], values["default_chunk_size"])
-
         self.settings_store.set_appearance_mode(values["appearance_mode"])
+
+    def _open_chunking_settings(self) -> None:
+        """Opens the chunking window from the Settings "Configure chunking"
+        button. Parented to self._settings_window, the window actually on
+        screen when this fires, so it stacks above it rather than behind,
+        the same reason the Export/Import dialogs are parented there (see
+        _handle_export_requested). It's handed both the new-transcript
+        defaults and the transcript open right now, so its "Apply to"
+        selector can offer either; _current_transcript is None when nothing
+        is open, and the window then offers defaults only."""
+        ChunkingSettingsWindow(
+            self._settings_window,
+            default_enabled=self.settings_store.default_chunking_enabled,
+            default_size=self.settings_store.default_chunk_size,
+            default_mode=self.settings_store.default_chunk_mode,
+            default_char_target=self.settings_store.default_chunk_char_target,
+            transcript=self._current_transcript,
+            on_apply=self._apply_chunking_settings,
+        )
+
+    def _apply_chunking_settings(self, target: str, enabled: bool, size: int, mode: str, char_target: int) -> None:
+        """One Apply from the chunking window, for whichever target it had
+        selected. "defaults" updates only what new transcripts start from
+        and leaves existing ones alone. "current" writes to the open
+        transcript and re-groups the live reader in place without losing
+        the word position (see Canvas.set_chunking), exactly as the footer's
+        own chunking control does. The window never offers "current" when
+        nothing is open, but the guard here is kept for safety."""
+        if target == "defaults":
+            self.settings_store.set_chunking_defaults(enabled, size, mode, char_target)
+            return
+        if not self._current_transcript:
+            return
+        self.store.set_transcript_chunking(self._current_transcript.id, enabled, size, mode, char_target)
+        self.canvas.set_chunking(enabled, size, mode, char_target)
 
     def _handle_export_requested(self, path: str) -> None:
         """Builds a bundle from the two stores' current in-memory state

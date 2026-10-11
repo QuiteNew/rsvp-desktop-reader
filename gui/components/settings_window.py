@@ -9,7 +9,7 @@ from core.settings_store import (
     SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
     WPM_RANGE, SKIP_WORD_COUNT_RANGE, FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE,
     HIGHLIGHT_OFFSET_RANGE, GUIDE_MARK_THICKNESS_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
-    RESUME_REWIND_WORDS_RANGE, CHUNK_SIZE_RANGE,
+    RESUME_REWIND_WORDS_RANGE,
 )
 from core.timing import format_duration
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
@@ -39,8 +39,6 @@ class SettingsWindow(ctk.CTkToplevel):
         warm_up_enabled,
         scrub_pause_enabled,
         peripheral_context_enabled,
-        default_chunking_enabled,
-        default_chunk_size,
         guide_mark_horizontal_enabled,
         guide_mark_thickness_px,
         guide_mark_length_percent,
@@ -53,6 +51,7 @@ class SettingsWindow(ctk.CTkToplevel):
         on_import_requested,
         on_skip_word_count_changed=None,
         on_pause_on_skip_changed=None,
+        on_configure_chunking=None,
     ):
         super().__init__(master)
 
@@ -86,6 +85,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.on_import_requested = on_import_requested
         self.on_skip_word_count_changed = on_skip_word_count_changed
         self.on_pause_on_skip_changed = on_pause_on_skip_changed
+        self.on_configure_chunking = on_configure_chunking
         self._data_directory = data_directory
         self._defaults_scroll = None  # set once the Defaults tab's scrollable frame exists
 
@@ -121,7 +121,6 @@ class SettingsWindow(ctk.CTkToplevel):
             peripheral_context_enabled,
             guide_mark_horizontal_enabled,
             guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color,
-            default_chunking_enabled, default_chunk_size,
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
@@ -302,7 +301,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
-    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, peripheral_context_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color, chunking_enabled, chunk_size) -> None:
+    def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, peripheral_context_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -349,25 +348,10 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font,
         ).pack(anchor="w", pady=(0, 20))
 
-        self.chunking_switch = self._styled_switch(scroll, "Flash words in groups")
-        (self.chunking_switch.select() if chunking_enabled else self.chunking_switch.deselect())
-        self.chunking_switch.pack(anchor="w", pady=(0, 5))
-
-        chunk_size_row = ctk.CTkFrame(scroll, fg_color="transparent")
-        chunk_size_row.pack(fill="x", pady=6)
-        ctk.CTkLabel(chunk_size_row, text="Group size", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
-        self.chunk_size_label = ctk.CTkLabel(chunk_size_row, text=f"{chunk_size} words", width=70, text_color=COCOA_INK, font=self.label_font)
-        self.chunk_size_label.pack(side="right")
-        self.default_chunk_size = chunk_size
-        self.chunk_size_slider = self._styled_slider(
-            scroll, CHUNK_SIZE_RANGE[0], CHUNK_SIZE_RANGE[1], CHUNK_SIZE_RANGE[1] - CHUNK_SIZE_RANGE[0],
-            lambda v: (self.chunk_size_label.configure(text=f"{int(v)} words"), setattr(self, "default_chunk_size", int(v))),
-        )
-        self.chunk_size_slider.set(chunk_size)
-        self.chunk_size_slider.pack(fill="x", pady=(0, 4))
+        self._styled_button(scroll, "Configure chunking…", self._handle_configure_chunking, width=180).pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
             scroll,
-            text="Flashes several words at once instead of one at a time, so your eyes move less across each flash. The group size sets how many words show together; sentence ends and very long groups are split automatically, so a group can be shorter than this. Applies to newly created transcripts.",
+            text="Flash several words at once instead of one at a time, so your eyes move less across each flash. Opens a window where you can turn this on for the transcript open now or for new transcripts, pick a fixed number of words or an adaptive width, and set the size.",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
@@ -598,6 +582,10 @@ class SettingsWindow(ctk.CTkToplevel):
         if self.on_pause_on_skip_changed:
             self.on_pause_on_skip_changed(enabled)
 
+    def _handle_configure_chunking(self) -> None:
+        if self.on_configure_chunking:
+            self.on_configure_chunking()
+
     def _handle_reset_defaults(self) -> None:
         original = AppSettings()
 
@@ -616,11 +604,6 @@ class SettingsWindow(ctk.CTkToplevel):
         self.default_font_size = original.default_font_size
         self.default_font_size_slider.set(original.default_font_size)
         self.default_font_size_label.configure(text=f"{original.default_font_size} px")
-
-        (self.chunking_switch.select() if original.default_chunking_enabled else self.chunking_switch.deselect())
-        self.default_chunk_size = original.default_chunk_size
-        self.chunk_size_slider.set(original.default_chunk_size)
-        self.chunk_size_label.configure(text=f"{original.default_chunk_size} words")
 
         self._set_entry_value(self.font_size_step_entry, original.font_size_step)
         self._set_entry_value(self.highlight_offset_entry, original.highlight_offset_px)
@@ -913,8 +896,6 @@ class SettingsWindow(ctk.CTkToplevel):
         values["resume_rewind_enabled"] = bool(self.resume_rewind_switch.get())
         values["scrub_pause_enabled"] = bool(self.scrub_pause_switch.get())
         values["peripheral_context_enabled"] = bool(self.peripheral_context_switch.get())
-        values["default_chunking_enabled"] = bool(self.chunking_switch.get())
-        values["default_chunk_size"] = int(self.chunk_size_slider.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory

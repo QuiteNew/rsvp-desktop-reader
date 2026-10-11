@@ -14,15 +14,13 @@ from core.punctuation import split_punctuation, classify_pacing, PACE_SENTENCE
 # them) a chunk may hold in FIXED chunking mode. A chunk stops before a word
 # that would push it past this, so a run of long words does not overflow the
 # reading area. It never yields an empty chunk: a lone word longer than the cap
-# still forms a one-word chunk. This is a tuning value; see
-# claude/chunking-v1-design.md. In ADAPTIVE mode the per-transcript
+# still forms a one-word chunk. This is a tuning value. In ADAPTIVE mode the per-transcript
 # chunk_char_target plays this role instead (see _chunk_limits()).
 CHUNK_CHAR_CAP = 30
 
 # Chunk sizing modes (Transcript.chunk_mode). "fixed" groups up to chunk_size
 # words (v1 behaviour); "adaptive" fills each chunk up to chunk_char_target
-# characters instead, capped at ADAPTIVE_MAX_WORDS words. See
-# claude/chunking-v2-adaptive-design.md.
+# characters instead, capped at ADAPTIVE_MAX_WORDS words.
 CHUNK_MODE_FIXED = "fixed"
 CHUNK_MODE_ADAPTIVE = "adaptive"
 
@@ -53,8 +51,7 @@ class ReaderSession:
     skipping and seeking all land on a chunk's first word, so a saved position
     or bookmark (a word index) stays valid and flipping chunking off just
     reads the same words one at a time. When chunking is off, every chunk is a
-    single word and the behaviour is identical to single-word reading. See
-    claude/chunking-v1-design.md and claude/chunking-v2-adaptive-design.md."""
+    single word and the behaviour is identical to single-word reading."""
 
     def __init__(
         self, raw_text: str, wpm: int = 300, start_index: int = 0,
@@ -163,8 +160,7 @@ class ReaderSession:
         - Fixed mode: up to chunk_size words, with CHUNK_CHAR_CAP as the same
           safety cap v1 used, so fixed grouping stays byte-for-byte unchanged.
         - Adaptive mode: fill up to chunk_char_target characters instead, with
-          ADAPTIVE_MAX_WORDS as a word ceiling. See
-          claude/chunking-v2-adaptive-design.md."""
+          ADAPTIVE_MAX_WORDS as a word ceiling. """
         if not self.chunking_enabled:
             return 1, CHUNK_CHAR_CAP
         if self.chunk_mode == CHUNK_MODE_ADAPTIVE:
@@ -428,8 +424,7 @@ class ReaderSession:
         only flips the toggle or the fixed size (the v1 footer path) doesn't
         have to know the mode. Pass them to switch between fixed and adaptive
         or change the adaptive width. A finished session (index at the end)
-        keeps its position; there is no chunk to snap to. See
-        claude/chunking-v1-design.md and claude/chunking-v2-adaptive-design.md."""
+        keeps its position; there is no chunk to snap to."""
         self.chunking_enabled = enabled
         self.chunk_size = size
         if mode is not None:

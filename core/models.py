@@ -72,8 +72,8 @@ class Transcript:
     pre_normalize_text: str = ""
     normalized_text: str = ""
 
-    # Multi-word chunking (see claude/chunking-v1-design.md). When
-    # chunking_enabled is True, the reader flashes a chunk of words at a
+    # Multi-word chunking
+    # When chunking_enabled is True, the reader flashes a chunk of words at a
     # time instead of one, with only the first word of each chunk keeping
     # the ORP highlight. This is per-transcript: it's seeded at creation
     # from the app-wide defaults (default_chunking_enabled etc. in
@@ -86,7 +86,6 @@ class Transcript:
     chunking_enabled: bool = False
     chunk_size: int = 2
 
-    # v2 adaptive chunking (see claude/chunking-v2-adaptive-design.md).
     # chunk_mode decides how a chunk's size is chosen: "fixed" uses
     # chunk_size words (the v1 behaviour, and the default), while "adaptive"
     # instead fills each chunk up to chunk_char_target characters (the words

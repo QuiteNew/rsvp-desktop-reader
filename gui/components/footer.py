@@ -36,8 +36,7 @@ class Footer(ctk.CTkFrame):
         # Per-transcript chunking state, mirrored from the open transcript in
         # load_transcript(). The size is kept even while chunking is off, so a
         # later toggle-on uses the size last chosen here (the store persists it
-        # regardless, matching the Settings size control). See
-        # claude/chunking-v1-design.md.
+        # regardless, matching the Settings size control).
         self._chunking_enabled = False
         self._chunk_size = 2
 
@@ -108,8 +107,7 @@ class Footer(ctk.CTkFrame):
         # Chunking: an on/off switch and a 2-5 size stepper (mirroring the
         # word-size stepper on the right), applied live to the current
         # transcript. The store persists both; the open reader re-groups in
-        # place without restarting. See _emit_chunking() and
-        # claude/chunking-v1-design.md.
+        # place without restarting.
         chunk_row = ctk.CTkFrame(middle, fg_color="transparent")
         chunk_row.pack(pady=(6, 0))
 

@@ -1,11 +1,6 @@
-"""Tests for the chunking (multi-word flash) feature.
-
-Step 1 covers the data layer: the new Transcript and AppSettings fields,
-their defaults, that they persist, and that save files written before the
-feature load with the right defaults. Step 2 covers the grouping and
-chunk-aware navigation in ReaderSession. Step 3 adds the chunk-aware
-peripheral context the ribbon uses. The reader display and settings UI are
-tested as later steps add them."""
+"""Tests for the chunking feature: the data model and settings, the
+  grouping and chunk-aware navigation in ReaderSession, the peripheral
+  context ribbon, and the store wiring that seeds and updates it."""
 
 import json
 
@@ -19,7 +14,7 @@ from core.reader import (
 
 
 # ---------------------------------------------------------------------------
-# Step 1: data model and settings.
+# Data model and settings.
 # ---------------------------------------------------------------------------
 
 def test_new_transcript_defaults_to_chunking_off_size_two():
@@ -110,7 +105,7 @@ def test_settings_bundle_round_trip_preserves_chunking(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Step 2: grouping and chunk-aware navigation in ReaderSession.
+# Grouping and chunk-aware navigation in ReaderSession.
 # ---------------------------------------------------------------------------
 
 def test_grouping_splits_by_size_with_short_final_chunk():
@@ -227,7 +222,7 @@ def test_disabled_session_matches_single_word_stepping():
 
 
 # ---------------------------------------------------------------------------
-# Step 3: chunk-aware peripheral context for the reader's ribbon.
+# Chunk-aware peripheral context for the reader's ribbon.
 # ---------------------------------------------------------------------------
 
 def test_chunk_peripheral_context_surrounds_the_whole_chunk():
@@ -255,7 +250,7 @@ def test_chunk_peripheral_context_matches_plain_when_disabled():
 
 
 # ---------------------------------------------------------------------------
-# Step 5a: the store seeds chunking onto new transcripts and can set it.
+# The store seeds chunking onto new transcripts and can set it.
 # ---------------------------------------------------------------------------
 
 from core.transcript_store import TranscriptStore
@@ -287,7 +282,7 @@ def test_set_transcript_chunking_persists(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# v2 adaptive chunking - Step 1: data model and settings.
+# Data model and settings.
 # ---------------------------------------------------------------------------
 
 def test_new_transcript_defaults_to_fixed_mode_target_30():
@@ -318,8 +313,7 @@ def test_transcript_adaptive_fields_round_trip(tmp_path):
 
 
 def test_old_transcript_without_adaptive_keys_loads_defaults():
-    # A v1-era transcript dict: it carries the v1 chunking keys but not the
-    # v2 ones, so chunk_mode / chunk_char_target must fall back to the
+    # chunk_mode / chunk_char_target must fall back to the
     # dataclass defaults (fixed, 30), with no backfill.
     old_transcript = {
         "id": 1, "title": "Doc", "space": "General", "raw_text": "hello world",

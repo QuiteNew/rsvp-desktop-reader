@@ -375,8 +375,7 @@ class TranscriptStore:
         path (toggle plus fixed-size stepper) doesn't disturb a transcript's
         mode or adaptive width, while the Configure-chunking dialog passes them
         to switch mode or change the width. The open reader does not change
-        until the session is rebuilt; see gui/components/canvas.py. See
-        claude/chunking-v1-design.md and claude/chunking-v2-adaptive-design.md."""
+        until the session is rebuilt; see gui/components/canvas.py."""
         t = self._find_transcript(transcript_id)
         if t:
             t.chunking_enabled = enabled

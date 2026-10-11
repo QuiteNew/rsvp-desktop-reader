@@ -93,9 +93,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._resume_rewind_words = 3
         self._scrub_pause_enabled = True
         # Peripheral context ribbon (dim words around the current one),
-        # off by default; the Commit-3 settings wiring flips it on. The
-        # counts are how many words show on each side. See
-        # set_peripheral_context() and _update_peripheral_context().
+        # off by default
         self._peripheral_context_enabled = False
         self._peripheral_context_before = 1
         self._peripheral_context_after = 2
