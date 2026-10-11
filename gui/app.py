@@ -387,6 +387,8 @@ class RSVPApp(ctk.CTk):
             font_size=self.settings_store.default_font_size,
             chunking_enabled=self.settings_store.default_chunking_enabled,
             chunk_size=self.settings_store.default_chunk_size,
+            chunk_mode=self.settings_store.default_chunk_mode,
+            chunk_char_target=self.settings_store.default_chunk_char_target,
         )
         self._refresh_transcript_list()
         return transcript
@@ -626,7 +628,13 @@ class RSVPApp(ctk.CTk):
         Canvas.set_chunking). No-ops when nothing is open, like the other
         footer handlers. If the reader is in the paste/edit view rather than
         playing, the canvas call simply has no session to re-group, and the
-        saved setting takes effect when reading next starts."""
+        saved setting takes effect when reading next starts.
+
+        Only enabled and the fixed size flow from the footer; the transcript's
+        chunk_mode and adaptive width are left as they are (both the store
+        setter and the canvas call keep them when not passed), so the footer
+        never disturbs an adaptive transcript's mode or width. Those are
+        changed from the Configure-chunking dialog instead."""
         if not self._current_transcript:
             return
         self.store.set_transcript_chunking(self._current_transcript.id, enabled, size)

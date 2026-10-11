@@ -210,6 +210,8 @@ class TranscriptStore:
         font_size: int = 32,
         chunking_enabled: bool = False,
         chunk_size: int = 2,
+        chunk_mode: str = "fixed",
+        chunk_char_target: int = 30,
     ) -> Transcript:
         transcript = Transcript(
             id=self._next_id, title=title, space=space,
@@ -217,6 +219,7 @@ class TranscriptStore:
             highlight_color=highlight_color, background_color=background_color,
             font_size=font_size,
             chunking_enabled=chunking_enabled, chunk_size=chunk_size,
+            chunk_mode=chunk_mode, chunk_char_target=chunk_char_target,
         )
         self._next_id += 1
         self._transcripts.append(transcript)
@@ -358,16 +361,30 @@ class TranscriptStore:
             t.font_size = font_size
             self._save()
 
-    def set_transcript_chunking(self, transcript_id: int, enabled: bool, size: int) -> None:
-        """Set a transcript's chunking on/off and its chunk size together, the
-        way the bottom control band submits them as a pair. Mirrors the other
-        per-transcript setters (an immediate save, not throttled). The open
-        reader does not change until the session is rebuilt; see
-        gui/components/canvas.py. See claude/chunking-v1-design.md."""
+    def set_transcript_chunking(
+        self, transcript_id: int, enabled: bool, size: int,
+        mode: str | None = None, char_target: int | None = None,
+    ) -> None:
+        """Set a transcript's chunking on/off and its fixed size together, the
+        way the bottom control band submits them as a pair, and optionally its
+        sizing mode and adaptive width. Mirrors the other per-transcript
+        setters (an immediate save, not throttled).
+
+        enabled and size always apply. mode and char_target are optional: when
+        left None they keep whatever the transcript already has, so the footer
+        path (toggle plus fixed-size stepper) doesn't disturb a transcript's
+        mode or adaptive width, while the Configure-chunking dialog passes them
+        to switch mode or change the width. The open reader does not change
+        until the session is rebuilt; see gui/components/canvas.py. See
+        claude/chunking-v1-design.md and claude/chunking-v2-adaptive-design.md."""
         t = self._find_transcript(transcript_id)
         if t:
             t.chunking_enabled = enabled
             t.chunk_size = size
+            if mode is not None:
+                t.chunk_mode = mode
+            if char_target is not None:
+                t.chunk_char_target = char_target
             self._save()
 
     def set_transcript_draft_text(self, transcript_id: int, draft_text: str) -> None:

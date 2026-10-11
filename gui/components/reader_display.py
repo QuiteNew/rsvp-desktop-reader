@@ -402,7 +402,7 @@ class ReaderDisplay(ctk.CTkFrame):
         if self.session:
             self.session.set_warm_up_enabled(enabled)
 
-    def set_chunking(self, enabled: bool, size: int) -> None:
+    def set_chunking(self, enabled: bool, size: int, mode: str | None = None, char_target: int | None = None) -> None:
         """Re-group the current session with new chunking settings and refresh
         what's on screen, without restarting the session or disturbing its
         stats, pause state or word position. The session snaps the word index
@@ -412,11 +412,17 @@ class ReaderDisplay(ctk.CTkFrame):
         pending advance is cancelled and rescheduled against the new chunk's
         dwell, so a change made mid-flight takes effect from the current chunk
         forward; while paused, finished or mid-scrub the timing is left alone
-        and the normal resume/scrub-end path picks up the new grouping. A no-op
+        and the normal resume/scrub-end path picks up the new grouping.
+
+        enabled and size always apply. mode and char_target are optional and
+        passed straight through to ReaderSession.set_chunking, which keeps the
+        session's current values when they are None, so the footer's two-arg
+        call leaves the mode and adaptive width untouched while the
+        Configure-chunking dialog passes them to switch mode or width. A no-op
         when no session is loaded."""
         if self.session is None:
             return
-        self.session.set_chunking(enabled, size)
+        self.session.set_chunking(enabled, size, mode, char_target)
         self._show_current_frame()
         self._report_position()
         if self._is_running() and not self._scrubbing:

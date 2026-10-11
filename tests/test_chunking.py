@@ -478,3 +478,48 @@ def test_set_chunking_without_mode_keeps_current_mode():
     assert s.chunk_mode == CHUNK_MODE_ADAPTIVE
     assert s.chunk_char_target == 14
     assert s.chunk_ranges() == [(0, 3), (3, 4)]
+
+
+# ---------------------------------------------------------------------------
+# v2 adaptive chunking - Step 3: store carries mode and width.
+# See claude/chunking-v2-adaptive-design.md.
+# ---------------------------------------------------------------------------
+
+def test_add_transcript_defaults_adaptive_fields(tmp_path):
+    store = TranscriptStore(data_directory=str(tmp_path))
+    t = store.add_transcript("Doc", store.current_space)
+    assert t.chunk_mode == "fixed"
+    assert t.chunk_char_target == 30
+
+
+def test_add_transcript_seeds_adaptive_from_args(tmp_path):
+    store = TranscriptStore(data_directory=str(tmp_path))
+    t = store.add_transcript(
+        "Doc", store.current_space, chunk_mode="adaptive", chunk_char_target=40,
+    )
+    assert t.chunk_mode == "adaptive"
+    assert t.chunk_char_target == 40
+
+
+def test_set_transcript_chunking_carries_mode_and_target(tmp_path):
+    directory = str(tmp_path)
+    store = TranscriptStore(data_directory=directory)
+    t = store.add_transcript("Doc", store.current_space)
+    store.set_transcript_chunking(t.id, True, 3, "adaptive", 40)
+    assert t.chunk_mode == "adaptive" and t.chunk_char_target == 40
+    reloaded = TranscriptStore(data_directory=directory)
+    rt = next(x for x in reloaded.transcripts if x.id == t.id)
+    assert rt.chunking_enabled is True and rt.chunk_size == 3
+    assert rt.chunk_mode == "adaptive" and rt.chunk_char_target == 40
+
+
+def test_set_transcript_chunking_keeps_mode_when_not_passed(tmp_path):
+    # The footer's two-arg call (enabled + fixed size only) must leave a
+    # transcript's adaptive mode and width untouched.
+    store = TranscriptStore(data_directory=str(tmp_path))
+    t = store.add_transcript(
+        "Doc", store.current_space, chunk_mode="adaptive", chunk_char_target=40,
+    )
+    store.set_transcript_chunking(t.id, True, 4)
+    assert t.chunking_enabled is True and t.chunk_size == 4
+    assert t.chunk_mode == "adaptive" and t.chunk_char_target == 40

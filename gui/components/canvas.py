@@ -173,6 +173,8 @@ class Canvas(ctk.CTkFrame):
                 warm_up_enabled=self._warm_up_enabled,
                 chunk_enabled=transcript.chunking_enabled,
                 chunk_size=transcript.chunk_size,
+                chunk_mode=transcript.chunk_mode,
+                chunk_char_target=transcript.chunk_char_target,
             )
             self.reader_display.load_session(session, start_paused=transcript.is_paused)
             self.scrub_bar.set_total(session.total_words)
@@ -211,17 +213,23 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window:
             self._detached_window.reader_display.set_wpm(wpm)
 
-    def set_chunking(self, enabled: bool, size: int) -> None:
+    def set_chunking(self, enabled: bool, size: int, mode: str | None = None, char_target: int | None = None) -> None:
         """Re-group the live reader with new chunking settings for the current
-        transcript, from the footer's per-transcript control. Forwarded to the
-        detached window's reader too; while a transcript is detached the main
-        reader is stopped (its session is None), so the call there harmlessly
-        no-ops, the same shape as set_wpm(). The reader keeps its word
-        position, snapped to a chunk boundary (see ReaderDisplay.set_chunking),
-        so reading just re-groups in place rather than restarting."""
-        self.reader_display.set_chunking(enabled, size)
+        transcript. Forwarded to the detached window's reader too; while a
+        transcript is detached the main reader is stopped (its session is
+        None), so the call there harmlessly no-ops, the same shape as
+        set_wpm(). The reader keeps its word position, snapped to a chunk
+        boundary (see ReaderDisplay.set_chunking), so reading just re-groups in
+        place rather than restarting.
+
+        enabled and size always apply. mode and char_target are optional and
+        pass straight through; left None they keep the session's current mode
+        and adaptive width, so the footer's toggle/size path doesn't disturb
+        them, while the Configure-chunking dialog passes them to switch mode or
+        width. See claude/chunking-v2-adaptive-design.md."""
+        self.reader_display.set_chunking(enabled, size, mode, char_target)
         if self._detached_window:
-            self._detached_window.reader_display.set_chunking(enabled, size)
+            self._detached_window.reader_display.set_chunking(enabled, size, mode, char_target)
 
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self.reader_display.set_colors(font_color, highlight_color, background_color)
@@ -469,6 +477,8 @@ class Canvas(ctk.CTkFrame):
             warm_up_enabled=self._warm_up_enabled,
             chunk_enabled=transcript.chunking_enabled,
             chunk_size=transcript.chunk_size,
+            chunk_mode=transcript.chunk_mode,
+            chunk_char_target=transcript.chunk_char_target,
         )
         self.reader_display.load_session(session, start_paused=False)
         # set_total() inside the scrubber resets its bookmark ticks, and a
