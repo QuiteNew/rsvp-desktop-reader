@@ -57,6 +57,10 @@ The top-level shape is:
 | `highlight_color` | string | `#E74C3C` | Highlighted-letter color. |
 | `background_color` | string | `#1E1E1E` | Reading-canvas background. |
 | `font_size` | int | 32 | Word size in pixels. |
+| `chunking_enabled` | bool | false | Whether words are flashed in groups rather than one at a time. |
+| `chunk_size` | int | 2 | Words per group in fixed mode (2 to 5). |
+| `chunk_mode` | string | `fixed` | How a group's size is chosen: `fixed` (a word count) or `adaptive` (a character width). |
+| `chunk_char_target` | int | 30 | Target group width in characters for adaptive mode (15 to 60), counting letters and the spaces between words. |
 | `is_paused` | bool | false | Whether it was paused when last saved. |
 | `draft_text` | string | `""` | Unsaved text sitting in the edit box. |
 | `is_stopped` | bool | false | Whether the last session was stopped (so it reopens to the edit box). |
@@ -107,6 +111,10 @@ A flat object, one key per setting. Defaults shown.
 | `default_background_color` | `#F6EFE3` | Background for new transcripts. |
 | `default_font_size` | 32 | Word size for new transcripts. |
 | `font_size_step` | 1 | Pixels the +/- buttons change word size by. |
+| `default_chunking_enabled` | false | Whether new transcripts start with grouping on. |
+| `default_chunk_size` | 2 | Fixed words-per-group for new transcripts (2 to 5). |
+| `default_chunk_mode` | `fixed` | Group-size mode for new transcripts: `fixed` or `adaptive`. |
+| `default_chunk_char_target` | 30 | Adaptive group width for new transcripts (15 to 60). |
 
 **Reading behavior** (all global, applied to every transcript)
 

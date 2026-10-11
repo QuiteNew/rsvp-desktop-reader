@@ -1,243 +1,399 @@
-# The science behind RSVP
+# Usage
 
-RSVP Desktop Reader shows one word at a time in a fixed spot, with a single
-letter highlighted. The idea is simple to use and surprisingly deep underneath,
-resting on decades of research into how the eye moves, where it lands, and what
-actually limits reading speed. This page walks through that background: how
-ordinary reading works, what the highlighted letter is really doing, where the
-one-word-at-a-time method came from, and what studies have found about whether
-it helps. The short version is that the technique is clever and genuinely
-useful for some things, and also not the dramatic speed boost it has sometimes
-been sold as.
+This guide covers everything in RSVP Desktop Reader: how the reading itself
+works, organizing transcripts into Spaces, getting text in and editing it,
+the reader and its controls, the detached window, the keyboard shortcuts, and
+every setting.
 
-## How the eye reads
+## How the reading works
 
-Reading feels continuous, as though the eye slides evenly along each line. It
-does not. The eye moves in quick jumps, called saccades, with brief pauses
-between them, called fixations. Reading happens only during the pauses. During
-a jump the image on the retina smears across the visual field too fast to use,
-and the brain suppresses it, so for those few tens of milliseconds you are
-effectively blind and simply do not notice.
+RSVP (Rapid Serial Visual Presentation) shows text one word at a time in a
+single fixed spot, so your eyes never move across a page. Within each word,
+one letter is highlighted: the Optimal Recognition Point, the letter your eye
+naturally lands on to recognize the word fastest.
 
-Decades of eye-tracking have made the pattern precise. A skilled adult reading
-silently fixates for about 200 to 250 milliseconds at a time, then jumps
-forward roughly 7 to 9 letters, a distance of about two degrees of visual angle
-(Rayner, 2009). Somewhere between one jump in seven and one in ten goes
-backward instead of forward. Those backward jumps, called regressions, make up
-about 10 to 15% of all saccades, and they turn out to matter more than they
-look.
+A few mechanics are worth knowing, because several settings tune them:
 
-The jumping exists because sharp vision is scarce. Only a tiny central region
-of the retina, the fovea, sees in high detail, and it covers around two degrees
-of the visual field, a patch barely wide enough for a handful of letters at
-normal reading distance. Everything outside it gets blurrier fast. To read a
-whole line, the eye has no choice but to keep moving that small sharp window
-along the text, word by word.
+- **The highlighted letter** sits a little left of center and moves one
+  position to the right as words get longer: the first letter for a
+  one-letter word, the second for words up to five letters, the third up to
+  nine, the fourth up to thirteen, and the fifth beyond that. The center of
+  that letter is pinned to the same point on screen for every word, so your
+  eye rests in one place and never has to relocate.
+- **Guide marks** are the two short vertical marks above and below the focus
+  letter. They appear only while words are actively flashing and disappear
+  when you pause, stop, or finish. Their length, thickness, and color are
+  adjustable, and you can optionally add faint horizontal lines through them
+  to form a crosshair.
+- **Pacing** starts from your speed in words per minute: at 300 WPM each word
+  gets about 200 ms. Punctuation then lengthens the pause after a word, a word
+  that ends a sentence stays up about two and a half times as long, and one
+  ending in a comma, colon, or semicolon about one and a half times. If "slow
+  down for long words" is on, longer words also get up to roughly 1.2, 1.45,
+  or 1.7 times their normal time in three length bands. Punctuation and length
+  pauses do not stack, whichever is longer wins for that word.
+- **Ease in** (off by default) starts a session at about half speed and ramps
+  smoothly up to your full speed over the first twenty words, to settle your
+  eyes in. Restarting a session restarts the ramp; skipping or scrubbing does
+  not.
 
-How much you actually pick up around each fixation is called the perceptual
-span, and it was mapped in the 1970s with an elegant trick: a moving-window
-display that shows normal text only within a few characters of where the reader
-is looking and replaces the rest with other letters (McConkie & Rayner, 1975).
-By shrinking and growing that window and watching when reading slows down, you
-can measure the span directly. For English it is asymmetric: a reader takes in
-detail about 3 to 4 characters to the left of fixation and 14 to 15 to the
-right, biased toward the text still to come.
+## Spaces
 
-That rightward reach is not wasted. The blurry preview of the next word or two,
-known as parafoveal preview, lets the brain begin working on a word before the
-eye ever lands on it, which is part of why fluent reading feels so effortless.
-A single-word display gives none of that. Each word arrives on its own, with no
-run-up and nothing waiting in the wings.
+Spaces are named groups of transcripts, like browser-tab categories, so
+related transcripts stay together. The sidebar list only ever shows the
+transcripts in the current Space. There is always at least one Space, and on
+first launch it is called **General**.
 
-## Why one letter is highlighted
+Spaces are managed from the switcher bar at the bottom of the sidebar, which
+shows a **v** button on the left, the current Space name in the middle, and a
+**+** button on the right.
 
-The highlighted letter comes from a narrower finding: when the eye fixates a
-word, how fast and how accurately you recognize it depends on where in the word
-the eye lands.
+- **Create a Space:** click **+** on the switcher bar, type a name in the
+  **New Space** dialog, and click **Create**. Creating a Space switches you
+  to it. A blank name does nothing, and a duplicate name is rejected.
+- **Switch Spaces:** click **v** to open the **Select Space** picker. The
+  current Space is shown highlighted and the others are clickable, click one
+  to switch.
+- **Rename a Space:** in that same picker, click the pencil icon on a row,
+  edit the name, and press Enter (or click away) to commit, or Escape to
+  cancel. Renaming reassigns all of that Space's transcripts to the new name.
+- **Delete a Space:** click the X icon on a row in the picker. You cannot
+  delete your only Space, and you cannot delete a Space that still contains
+  transcripts, move or delete those first. Otherwise you confirm in a
+  **Space deletion** dialog.
 
-Two threads of research describe this. The first is where the eyes naturally
-tend to land, which is not the first letter but a point between the start and
-the middle of the word, the preferred viewing location (Rayner, 1979). The
-second is where recognition is actually best, which is slightly left of the
-word's center. Land there and the word is identified fastest and with the
-fewest errors; land at either edge and performance falls off, more steeply
-toward the end than the start. That sweet spot is the optimal viewing position,
-established by O'Regan, Jacobs and colleagues across the 1980s and early 1990s
-(O'Regan & Jacobs, 1992). The reason is geometric. From just left of center,
-the whole word sits inside or close to the sharp foveal region. Fixate the
-first letter of a long word and its ending trails off into the blur; fixate the
-end and the beginning is already gone.
+## Transcripts
 
-The one-word readers took this idea and built an interface around it. Spritz,
-the app that brought the approach to a wide audience in 2014, named the letter
-near that position the Optimal Recognition Point, colored it red, and aligned
-every word so that letter always falls on the same spot (van der Hoop, 2014).
-With the words registered to a fixed point, the eye never has to hunt for where
-to look, and in principle it can spend its time recognizing rather than aiming.
-RSVP Desktop Reader works the same way, computing each word's recognition-point
-letter, highlighting it, and holding it at one horizontal position so the eye
-can settle in a single place.
+### Creating a transcript
 
-One caveat is worth keeping straight. "Optimal Recognition Point" is an app-era
-name; the underlying science, the optimal viewing position, is about where the
-eye chooses to fixate inside a word. A single-word display removes that choice
-entirely, since there is only ever one word and the eye is not scanning a line.
-So the highlight is best understood as a visual anchor that keeps one word
-landing where the last one did, rather than a literal re-creation of the
-viewing-position effect. Useful, but for a slightly different reason than the
-marketing implies.
+Click **+** at the top of the sidebar. The **Add Transcript** chooser asks
+how you want to add one, with two choices:
 
-## Where RSVP came from
+- **Blank transcript** opens an empty transcript.
+- **Add from file...** imports text from a file (covered below).
 
-Rapid serial visual presentation is far older than any reading app. It started
-as a method for studying perception and attention in the lab. In the late 1960s
-and 1970s, Mary C. Potter and Ellen Levy flashed rapid sequences of pictures to
-measure how quickly the mind takes in a scene (Potter & Levy, 1969), and
-Kenneth Forster presented word sequences the same way to study how sentences
-are understood (Forster, 1970). Showing stimuli one at a time, in one place, at
-a controlled rate gave researchers precise command over exactly what reached the
-eye and when, which made RSVP a natural experimental tool long before anyone
-thought of it as a way to get through email.
+Either way you then get a dialog asking for a **Title** and which **Space**
+the transcript belongs to (pre-set to your current Space), with a **Create**
+button. A blank title does nothing, and duplicate titles are allowed.
 
-It became a mainstay of cognitive psychology. It is the standard way to study
-the attentional blink, the curious fact that when two targets appear in quick
-succession in a fast stream, people frequently miss the second (Raymond,
-Shapiro & Arnell, 1992). It has also shown how fast meaning can register at all:
-viewers can catch the gist of a picture shown for as little as 13 milliseconds
-(Potter, Wyble, Hagmann & McCourt, 2014). Findings like that are part of what
-makes the single-word reading idea so tempting. If the visual system can grab a
-word in a flash, the thinking goes, why not simply deliver words as fast as it
-can take them?
+A new blank transcript starts empty and opens into the paste and edit box
+when you select it.
 
-RSVP has one setting where its value for reading is well supported: low vision.
-People with central-field loss have to read using peripheral vision, where eye
-movements and visual crowding are especially punishing. Presenting words one at
-a time in a fixed location removes the hardest part of that, and training
-studies in this population report real gains in reading rate (building on work
-such as Pelli and colleagues, 2007).
+### Importing from a file
 
-## Does it make you read faster?
+Choosing **Add from file...** opens a file picker titled **Add from File**.
+Supported formats are:
 
-For ordinary readers, the evidence is more sobering, and it is worth looking at
-directly.
+- Plain text (`.txt`)
+- Subtitles (`.srt`, `.vtt`)
+- Markdown (`.md`, `.markdown`)
+- HTML (`.html`, `.htm`)
+- Word documents (`.docx`)
+- PDF (`.pdf`)
 
-The selling point rests on a single premise: that moving the eyes is what costs
-you, so removing the movement removes the bottleneck. Spritz framed eye movement
-as roughly 80% of conventional reading time (van der Hoop, 2014). The trouble is
-that the mechanics do not support it. The jumps themselves are brief, a few tens
-of milliseconds each, while the fixations where reading actually happens run
-five to ten times longer. Very little of reading time is literally spent in
-motion. What takes the time is processing, and the ceiling on how much you can
-absorb per fixation is set by language and comprehension, not by how quickly the
-eye can be moved. A 2016 review of the whole field stated it plainly: the limit
-is cognitive and linguistic, and the fuzziness of peripheral vision is a feature
-of how the system allocates its limited sharp vision, not an obstacle an
-interface can design away (Rayner, Schotter, Masson, Potter & Treiman, 2016).
+While the file is read, a small **Importing** notice appears. Importing is a
+single blocking step, so the app will not respond until it finishes, which can
+take a moment for large files. When it is done, the create dialog opens with
+the title pre-filled from the file name (selected, so typing replaces it).
 
-Taking eye movement away also removes two things that were doing real work. The
-first is rereading. Regressions are not a bad habit; they are repair. A study
-tracked readers' eyes and masked each word the instant the eye moved past it, so
-that looking back revealed nothing. Comprehension dropped, for plain and
-ambiguous sentences alike, and the authors concluded that the freedom to look
-back is part of understanding, not a detour around it (Schotter, Tran & Rayner,
-2014). A one-word stream makes that impossible by construction; the word is
-simply gone. The second is the parafoveal preview described earlier, the quiet
-head start on the next word, which a single-word display cannot provide.
+Importing cleans the text up for reading automatically:
 
-Push the rate up and the costs grow. Comprehension slips and visual fatigue
-climbs as words come faster, and studies of trained speed readers have long
-found the same tradeoff: the faster they read, the less they retain (Rayner et
-al., 2016). A typical adult reads for comprehension at somewhere around 200 to
-300 words per minute. Driving a one-word reader to 600 or 1,000 is less reading
-faster than skimming with the gaps politely hidden. There is no setting at which
-full comprehension and several-times-normal speed hold at once.
+- **Timestamps are stripped**, including subtitle timing lines, bracketed or
+  parenthesized times, full hour-minute-second times, and bare minute-second
+  times sitting alone on their own line (the YouTube style). A time written
+  inside a sentence, like "we met at 10:30", is kept.
+- **Structure is preserved** for the edit view (line breaks kept, runs of
+  blank lines collapsed, each line trimmed), and format-specific markup is
+  removed: subtitle index and timing lines, Markdown formatting, HTML tags and
+  scripts, and so on. PDF text is pulled page by page, and common extraction
+  damage like broken ligatures is repaired.
 
-## What it is actually good for
+If a file parses to more than about 30,000 words, the dialog shows a heads-up
+that very large transcripts have been known to crash the app and suggests
+splitting the file. It is a warning, not a block. If a file cannot be read (a
+password-protected PDF, an empty or unsupported file), you get a **Couldn't
+add that file** message explaining why.
 
-The honest case for the technique is narrower than the pitch, and more
-interesting for being true.
+Imported text lands in the edit box as a draft, it does not start reading on
+its own.
 
-It does remove the search for where to look next, and whatever that is worth,
-for some readers on some material a single fixed point is simply more
-comfortable than scanning. It is a strong pacing and focus aid: a steady,
-externally set rhythm leaves little room to drift off, trail away, or drift back
-over the same line without noticing, and for getting through lighter or familiar
-material, or for staying on task when attention is thin, that structure can be
-the entire benefit. It asks almost nothing of the screen, which suits phones and
-small displays, and it has the genuine low-vision uses noted above.
+### Editing the text, and Normalize
 
-It also rewards matching the method to the material. Straightforward prose you
-want to move through briskly is a good fit. Dense, technical, or closely argued
-text, the kind where a reader naturally slows down, pauses, and looks back, is
-exactly where losing the ability to regress costs the most. The useful habit is
-to settle on the fastest speed at which you still genuinely follow the meaning,
-rather than the highest number you can endure, and to ease off for anything that
-deserves it.
+A transcript opens into its paste and edit box when it has no text yet or when
+it has been stopped. Paste or type your text there and click **Start
+reading**. A transcript that already has text and is not stopped opens
+straight into the reader instead, to get back to its text, click **Stop** (or
+press Esc), which returns you to the edit box with the last saved text.
 
-## How this app applies it
+Beneath the edit box is a **Normalize** button that tidies the layout of the
+text: it removes list markers and page numbers, strips any timestamps that
+slipped through, rejoins lines that were broken mid-sentence, and repairs
+PDF-extraction damage. It is a toggle, clicking it again reverts if you have
+not changed the box, and it does nothing if there is nothing to tidy.
+Normalizing only changes how the text is laid out in the box, never which
+words get read. Optionally (a setting, off by default) it also splits very
+long walls of text into paragraphs at sentence ends.
 
-RSVP Desktop Reader leans on what the technique does well and deliberately
-softens its sharpest limitation. The fixed reading point and the highlighted
-letter handle the anchoring side. The pacing is not flatly uniform: words that
-close a sentence or a clause are held a little longer, which leaves a beat to
-absorb meaning before the next one arrives, and an optional ease-in opens a
-session more slowly so the eyes settle before reaching full speed.
+### Reading just a selection
 
-The part the research is clearest about is the freedom to go back, and the app
-keeps it rather than throwing it away. You can pause, skip backward, drag the
-progress bar to any earlier word, and leave bookmarks to return to a spot later.
-Classic RSVP removes regressions as a matter of design; here they come back as
-deliberate controls you reach for when you want them. The aim is not to outrun
-the way reading works, which does not go well, but to work alongside it, treating
-the single-word display as a focus and pacing tool rather than a promise of
-impossible speed.
+You do not have to read a whole transcript. Select a portion of text in the
+edit box, right-click it, and choose **Play** to read just that selection, or
+**Detach** to open it in its own window. Selection reading is independent, it
+never changes the transcript's saved text, position, or stats.
 
-## Sources and further reading
+### Renaming, moving, and deleting
 
-If you want to go past my summary, here's where it all traces back, roughly in
-order of how useful it is to actually read.
+- **Rename:** double-click the transcript's title in the sidebar. The title
+  turns into an editable field, press Enter or click away to save, Escape to
+  cancel.
+- **Move to another Space:** right-click the transcript's row and choose
+  **Move to Space...**, then pick the destination. If you only have one Space,
+  it tells you to create another first.
+- **Delete:** hover the row and click the **X** on its right. You confirm in a
+  **Transcript deletion** dialog before it is permanently removed.
 
-Start with the two that are written for normal humans and are free online:
+### Finding transcripts
 
-- Rayner, Schotter, Masson, Potter & Treiman (2016), *So Much to Read, So Little
-  Time*. This is the one to read if you read only one. A whole team of the
-  field's heavyweights sat down specifically to answer "can speed reading
-  work," and the short answer is "not the way the apps claim." Overview here:
-  https://www.psychologicalscience.org/publications/speed_reading.html
-- Schotter, Tran & Rayner (2014), *Don't Believe What You Read (Only Once)*.
-  This is the "regressions actually matter" experiment, and it name-checks the
-  one-word apps directly. Readable writeup:
-  https://today.ucsd.edu/story/dont_believe_what_you_read_only_once_speed_reading_apps_may_impair_reading
+A **Search...** box above the list filters the current Space's transcripts by
+title (case-insensitive), it does not search the body text. Next to it, a sort
+button offers Title A to Z, Title Z to A, Date added newest or oldest first,
+Most read, and Most time spent reading.
 
-The numbers about how the eye moves (the 200 to 250 ms fixations, the 7 to 9
-letter jumps, the 10 to 15% regressions, the lopsided perceptual span) all come
-from Keith Rayner, who basically spent a career on this. A good dense summary is
-Rayner (2009), *Eye movements and attention in reading*:
-https://pages.ucsd.edu/~bkbergen/cogs200/Rayner-Bartlett.pdf
+## The reader
 
-For background on what RSVP even is and where it's used, the Wikipedia page is a
-fine starting point:
-https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation
+### Controls
 
-And if you want to see where the "Optimal Recognition Point" marketing came
-from, this is roughly the moment Spritz showed up in 2014 claiming 1,000 words a
-minute:
-https://thewritelife.com/new-speed-reading-app-spritz/
+The reading view has a floating **Stop** button in the top-left corner and a
+toolbar on the right. In the main window the toolbar shows, left to right, two
+read-out pills (estimated time remaining and progress percent), then
+**Play/Pause**, **Restart**, **Bookmarks**, **Detach**, and **Focus mode**.
 
-Then there are the classic papers behind specific claims. These are mostly
-paywalled or library-only, but they're easy to find by title if you want the
-primary source:
+- **Play/Pause** starts and pauses the flashing.
+- **Restart** jumps back to the first word, resumes playing, and restarts the
+  ease-in ramp.
+- **Stop** ends the session and drops you back to the edit box showing the
+  transcript's saved text. (It is careful not to wipe anything, it only acts
+  when the reader is genuinely what is on screen.)
+- **Detach** pops the transcript out into its own window (see below).
+- **Focus mode** hides the sidebar and app chrome so only the flashing words
+  remain. It is a main-window feature.
 
-- McConkie & Rayner (1975), the moving-window trick that first measured how wide
-  the "useful" window around your eye actually is.
-- Rayner (1979), on where the eye tends to land inside a word (not the first
-  letter).
-- O'Regan & Jacobs (1992), the optimal-viewing-position work, i.e. the real
-  science the highlighted letter is loosely based on.
-- Potter & Levy (1969) and Forster (1970), the early lab experiments that
-  basically invented RSVP before anyone thought to read with it.
-- Raymond, Shapiro & Arnell (1992), the "attentional blink," which is the thing
-  RSVP is most famous for in psychology.
-- Potter et al. (2014), the one showing you can get the gist of a picture in
-  about 13 milliseconds, which is the kind of result that makes fast reading
-  sound more plausible than it is.
+If no transcript is open, the area shows "Select or create a transcript to
+begin".
+
+### Skipping
+
+Skipping moves backward or forward by a configurable number of words (ten by
+default, adjustable from 1 to 50 in Settings). In the **main window skipping
+is done with the left and right arrow keys**, there are no skip buttons on the
+main toolbar. The detached window does have dedicated skip buttons. You can
+optionally have the reader pause on the word it lands on after a skip.
+
+### The progress bar
+
+Below the words is a progress bar you can drag to seek. Above it, a read-out
+shows "word X of Y", and the toolbar pills show the estimated time remaining
+and the percent complete. While you drag, playback holds so you can see where
+you are landing. By default, releasing the bar leaves the reader paused on that
+word, you can change that in Settings so it resumes playing instead.
+
+### Bookmarks
+
+Press **B** (or the toggle in the Bookmarks popover) to bookmark the word
+currently on screen, or to remove a bookmark already there. Bookmarks show up
+two ways: as small ticks under the progress bar at each bookmarked word, and as
+rows in the **Bookmarks** popover (opened from the toolbar). In the popover,
+single-click a row to jump to that word (which pauses there and closes the
+popover), and double-click a row to rename it. Each row has an **X** to delete
+it.
+
+### The surrounding-words line
+
+Optionally (off by default) a dim line appears beneath the flashing word
+showing a couple of words before and after it, so your peripheral vision keeps
+the thread of the sentence. The current word is centered and dimmed under the
+same point as the focus letter.
+
+## Reading words in groups (chunking)
+
+By default the reader shows one word at a time. Chunking instead flashes a
+small group of words together in the same fixed spot, so your eyes take in a
+few words per stop rather than one. The first word of the group anchors its
+focus letter to the usual point, and the rest of the group trails to the right
+of it.
+
+A group never runs past the end of a sentence, so a single flash never
+straddles two sentences. Timing is unchanged: a group stays on screen for
+exactly as long as its words would have taken one at a time, so grouping does
+not by itself change your reading speed, only how the words are parceled out.
+
+There are two ways a group's size is decided:
+
+- **Fixed** flashes a set number of words per group (2 to 5).
+- **Adaptive** fills each group up to a character width instead (15 to 60
+  characters, counting the letters and the single spaces between the words), so
+  short words pack together and long ones do not crowd the line. In adaptive
+  mode a group also never holds more than six words.
+
+Chunking is set per transcript, so different transcripts can read differently,
+and there are defaults that new transcripts start from.
+
+### The quick control
+
+The control band at the bottom of the main window has a **Group** switch and a
+small size stepper for the transcript you are reading. The switch turns grouping
+on and off, and the stepper raises or lowers the fixed word count. Changing
+either re-groups the words in place, without losing your spot or restarting the
+session. The stepper always edits the fixed word count; the sizing mode and the
+adaptive width live in the Configure chunking window below.
+
+### The Configure chunking window
+
+For the full set of options, open **Settings**, under Defaults, and click
+**Configure chunking...**. At the top is an **Apply to** selector that chooses
+whether your changes land on the transcript open right now or on the defaults
+for new transcripts (only the defaults are offered when no transcript is open).
+Below it are:
+
+- **Group words together**, the on/off switch.
+- **Group size**: **Fixed** or **Adaptive**.
+- **Words per group**, the fixed word count, used in Fixed mode.
+- **Group width**, the adaptive character width, used in Adaptive mode.
+
+Applying to the current transcript re-groups the live reader in place and keeps
+your spot; applying to the defaults only affects transcripts you create later.
+The bottom control band and this window stay in step, since both drive the same
+per-transcript settings.
+
+## The detached window
+
+The **Detach** button pops the current transcript out into its own standalone
+window that reads completely independently of the main window, with its own
+position, play state, and stats. While it is out, the main window shows a
+"Transcript window detached" placeholder with a **Bring back** button.
+
+The detached window has its own full set of reading controls: play/pause,
+**skip backward and forward buttons** (unlike the main window, which uses the
+arrow keys), restart, the progress bar with bookmark ticks, its own Bookmarks
+popover, and Stop. It keeps all your settings in sync with the main window.
+
+Two things it deliberately does not do: it has no **Focus mode** (there is no
+sidebar or chrome to hide), and it cannot detach again. Only one detached
+window exists at a time. To bring it back, click **Bring back** or just close
+the window.
+
+## Keyboard shortcuts
+
+Shortcuts act on the reading controls. They are ignored while you are typing in
+a text field (the search box, a rename field, or the edit box).
+
+| Key | Action |
+| --- | --- |
+| Space | Play / Pause |
+| Left / Right arrows | Skip backward / forward, by the skip word count set in Settings |
+| R | Restart |
+| B | Bookmark the current word (or remove the bookmark there) |
+| Esc | Stop: ends the session and returns to the edit view. Works in both the main and detached windows |
+| F | Toggle focus mode (main window only) |
+
+## Settings
+
+Open **Settings** from the top-right. Changes on most tabs are staged until you
+click **Apply** (with **Close** to dismiss), and a few act immediately, noted
+below. There are five tabs.
+
+### Defaults
+
+The color, speed, and word-size controls at the top are **defaults for newly
+created transcripts** and do not change transcripts you already have. Most of
+the controls below them apply **globally**, to every transcript, and the skip
+controls at the bottom apply **live**.
+
+New-transcript defaults:
+
+- **Speed** (100 to 1000 WPM, default 300)
+- **Font colour**, **Highlight colour**, **Background colour** for the reading
+  canvas
+- **Word size** (16 to 96 px, default 32)
+
+Global controls:
+
+- **Word-size step** for the +/- buttons (1 to 10 px, default 1)
+- **Highlight vertical offset**, shift the focus letter up or down (-3 to 3 px,
+  default 0)
+- **Guide-mark thickness** (2 to 6 px, default 2)
+- **Mark length** as a percent of word size (15 to 60%, default 35), so it
+  scales with word size
+- **Mark colour**
+- **Show horizontal guide lines**, adds the crosshair lines (default off)
+- **Slow down for long words**, the length pacing described above (default off)
+- **Ease in at the start of reading** (default off)
+- **Split long paragraphs when normalizing** (default off)
+- **Rewind a few words when resuming** (default off), with a **words to
+  rewind** amount (1 to 5, default 3)
+- **Pause after using the scrubber** (default on)
+- **Show surrounding words**, the peripheral line (default off)
+
+Live controls (take effect immediately, on the current transcript and future
+ones):
+
+- **Skip amount** (1 to 50 words, default 10)
+- **Pause playback when skipping** (default off)
+
+A **Configure chunking...** button opens the chunking window described under
+[Reading words in groups](#reading-words-in-groups-chunking) above, where you
+set grouping for the current transcript or for new transcripts.
+
+A **Reset to Original Defaults** button restores this tab.
+
+### Layout
+
+- **Free-form resize**, lets you drag the sidebar and bottom-band borders
+  directly in the main window (default off)
+- **Window width** (500 to 2000, default 1000)
+- **Window height** (400 to 1400, default 650)
+- **Sidebar width** (120 to 500, default 220)
+- **Bottom band height** (80 to 400, default 100)
+- **Reset to Original Defaults**
+
+### Storage
+
+Shows the folder your transcripts are saved in (as a JSON file).
+
+- **Choose folder...** picks a new data folder. The change is staged and takes
+  effect when you click Apply.
+- **Export Data...** saves a single file containing all your transcripts,
+  Spaces, and settings (except the data-folder path, which is
+  machine-specific). This happens immediately.
+- **Import Data...** loads such a file. You then choose **Replace** (wipe
+  everything here and replace it with the file), **Expand** (add the file's
+  transcripts and Spaces to what you have, leaving your settings untouched), or
+  **Cancel**. Either way the app closes afterward so the change can take
+  effect, reopen it when you are ready.
+- **Reset to Original Defaults** restores the default data folder.
+
+### Appearance
+
+- **Colour theme**: Light, Dark, or System (default Light). This one takes
+  effect the next time you launch the app, not live.
+
+Note that a new transcript's reading colors come from the Defaults tab, not
+from the theme, so they will not automatically match Light or Dark. Adjust them
+under Defaults, or per transcript from the control band at the bottom of the
+window.
+
+### Stats
+
+A read-only summary, one card per transcript across all Spaces, showing how
+many times you have read it, how many words, and the total time spent. The
+totals update when a reading session ends (clicking Stop, switching
+transcripts, detaching, or closing the app), not while you are simply paused,
+so if you want the latest numbers, stop or switch away first, then reopen
+Settings.
+
+### When changes take effect
+
+- **Immediately:** the Skip amount and Pause-when-skipping controls, and the
+  Export and Import buttons (Import then closes the app).
+- **On Apply:** everything else on Defaults, Layout, and Storage.
+- **Next launch:** the Appearance theme.

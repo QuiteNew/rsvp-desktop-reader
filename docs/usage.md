@@ -214,6 +214,57 @@ showing a couple of words before and after it, so your peripheral vision keeps
 the thread of the sentence. The current word is centered and dimmed under the
 same point as the focus letter.
 
+## Reading words in groups (chunking)
+
+By default the reader shows one word at a time. Chunking instead flashes a
+small group of words together in the same fixed spot, so your eyes take in a
+few words per stop rather than one. The first word of the group anchors its
+focus letter to the usual point, and the rest of the group trails to the right
+of it.
+
+A group never runs past the end of a sentence, so a single flash never
+straddles two sentences. Timing is unchanged: a group stays on screen for
+exactly as long as its words would have taken one at a time, so grouping does
+not by itself change your reading speed, only how the words are parceled out.
+
+There are two ways a group's size is decided:
+
+- **Fixed** flashes a set number of words per group (2 to 5).
+- **Adaptive** fills each group up to a character width instead (15 to 60
+  characters, counting the letters and the single spaces between the words), so
+  short words pack together and long ones do not crowd the line. In adaptive
+  mode a group also never holds more than six words.
+
+Chunking is set per transcript, so different transcripts can read differently,
+and there are defaults that new transcripts start from.
+
+### The quick control
+
+The control band at the bottom of the main window has a **Group** switch and a
+small size stepper for the transcript you are reading. The switch turns grouping
+on and off, and the stepper raises or lowers the fixed word count. Changing
+either re-groups the words in place, without losing your spot or restarting the
+session. The stepper always edits the fixed word count; the sizing mode and the
+adaptive width live in the Configure chunking window below.
+
+### The Configure chunking window
+
+For the full set of options, open **Settings**, under Defaults, and click
+**Configure chunking...**. At the top is an **Apply to** selector that chooses
+whether your changes land on the transcript open right now or on the defaults
+for new transcripts (only the defaults are offered when no transcript is open).
+Below it are:
+
+- **Group words together**, the on/off switch.
+- **Group size**: **Fixed** or **Adaptive**.
+- **Words per group**, the fixed word count, used in Fixed mode.
+- **Group width**, the adaptive character width, used in Adaptive mode.
+
+Applying to the current transcript re-groups the live reader in place and keeps
+your spot; applying to the defaults only affects transcripts you create later.
+The bottom control band and this window stay in step, since both drive the same
+per-transcript settings.
+
 ## The detached window
 
 The **Detach** button pops the current transcript out into its own standalone
@@ -288,6 +339,10 @@ ones):
 
 - **Skip amount** (1 to 50 words, default 10)
 - **Pause playback when skipping** (default off)
+
+A **Configure chunking...** button opens the chunking window described under
+[Reading words in groups](#reading-words-in-groups-chunking) above, where you
+set grouping for the current transcript or for new transcripts.
 
 A **Reset to Original Defaults** button restores this tab.
 

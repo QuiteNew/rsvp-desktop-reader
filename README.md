@@ -40,8 +40,8 @@ whole layout system - was built one small, testable step at a time, with a
 real architecture underneath it: a clean split between the pure reading
 logic in `core/` and everything GUI-related in `gui/`, so the two never
 depend on each other.
-
 <br>
+
 For the background, the eye-movement physiology, the Optimal Viewing Position
 research behind the highlighted letter, and what the studies actually say about
 reading this way (including where it helps and where it does not), see [The science behind RSVP](docs/technique.md)
@@ -64,6 +64,9 @@ reading this way (including where it helps and where it does not), see [The scie
 
 - Word-by-word RSVP display with real Optimal Recognition Point highlighting
 - Adjustable reading speed (words per minute)
+- Optional multi-word chunking - flash a few words at once instead of one at a
+  time, sized by a fixed words-per-group count or an adaptive character width,
+  set per transcript
 - Skip forward/backward by a configurable word count, with an optional
   auto-pause when you skip
 - Pause, resume, restart, and stop (return to draft) controls
@@ -117,8 +120,8 @@ including the per-platform Tkinter look at [docs/installation.md](docs/installat
    band at the bottom of the window.
 5. Open **Settings** (top-right) for new-transcript defaults, layout
    sizing, where your data is stored, and theme.
-
 <br>
+
 For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs/usage.md).
 
 
@@ -127,47 +130,48 @@ For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs
 ````
 rsvp-desktop-reader/
 ├── assets/
-│   ├── fonts/                  # Bundled Fredoka & Quicksand font files
-│   └── icons/                  # Custom made icon 
-├── core/                       # Pure reading engine — no GUI dependencies
-│   ├── models.py               # The Transcript data model
-│   ├── importers.py            # Turns a picked file (.txt/.srt/.docx/.pdf) into plain transcript text
-│   ├── parser.py               # Strips timestamps from raw transcript text
-│   ├── normalizer.py           # Normalizes transcript text and can split long walls of text into paragraphs
-│   ├── tokenizer.py            # Splits cleaned text into words
-│   ├── punctuation.py          # Splits punctuation off each word and classifies the pause that should follow it
-│   ├── orp.py                  # Calculates each word's Optimal Recognition Point
-│   ├── colors.py               # Color helpers (hex parsing, blending one color toward another)
-│   ├── timing.py               # Converts WPM into a per-word delay
-│   ├── reader.py               # ReaderSession — ties the above together
-│   ├── transcript_store.py     # In-memory store + persistence for transcripts/spaces
-│   ├── settings_store.py       # In-memory store + persistence for app settings
-│   ├── storage.py              # Low-level JSON read/write
-│   └── data_bundle.py          # Cross-machine export/import: builds and applies a full-app data bundle
+│ ├── fonts/ # Bundled Fredoka & Quicksand font files
+│ └── icons/ # Custom made icon
+├── core/ # Pure reading engine — no GUI dependencies
+│ ├── models.py # The Transcript data model
+│ ├── importers.py # Turns a picked file (.txt/.srt/.docx/.pdf) into plain transcript text
+│ ├── parser.py # Strips timestamps from raw transcript text
+│ ├── normalizer.py # Normalizes transcript text and can split long walls of text into paragraphs
+│ ├── tokenizer.py # Splits cleaned text into words
+│ ├── punctuation.py # Splits punctuation off each word and classifies the pause that should follow it
+│ ├── orp.py # Calculates each word’s Optimal Recognition Point
+│ ├── colors.py # Color helpers (hex parsing, blending one color toward another)
+│ ├── timing.py # Converts WPM into a per-word delay
+│ ├── reader.py # ReaderSession — ties the above together
+│ ├── transcript_store.py # In-memory store + persistence for transcripts/spaces
+│ ├── settings_store.py # In-memory store + persistence for app settings
+│ ├── storage.py # Low-level JSON read/write
+│ └── data_bundle.py # Cross-machine export/import: builds and applies a full-app data bundle
 ├── gui/
-│   ├── app.py                  # Main application window
-│   ├── theme.py                # Central design tokens: colors, fonts, theme resolution
-│   ├── icons.py                # Hand-drawn icons (avoids font-glyph rendering issues)
-│   └── components/             # Every individual UI piece — header, canvas, dialogs, etc.
-├── tests/                      # Automated test suite covering core engine modules
-│   ├── conftest.py
-│   ├── test_colors.py   
-│   ├── test_data_bundle.py
-│   ├── test_gui_smoke.py
-│   ├── test_importers.py
-│   ├── test_models.py
-│   ├── test_normalizer.py
-│   ├── test_orp.py
-│   ├── test_parser.py
-│   ├── test_punctuation.py
-│   ├── test_reader.py
-│   ├── test_settings_store.py
-│   ├── test_storage.py
-│   ├── test_timing.py
-│   ├── test_tokenizer.py
-│   └── test_transcript_store.py
-├── main.py                     # Entry point
-└── requirements.txt            # Python dependencies
+│ ├── app.py # Main application window
+│ ├── theme.py # Central design tokens: colors, fonts, theme resolution
+│ ├── icons.py # Hand-drawn icons (avoids font-glyph rendering issues)
+│ └── components/ # Every individual UI piece — header, canvas, dialogs, etc.
+├── tests/ # Automated test suite covering core engine modules
+│ ├── conftest.py
+│ ├── test_chunking.py
+│ ├── test_colors.py
+│ ├── test_data_bundle.py
+│ ├── test_gui_smoke.py
+│ ├── test_importers.py
+│ ├── test_models.py
+│ ├── test_normalizer.py
+│ ├── test_orp.py
+│ ├── test_parser.py
+│ ├── test_punctuation.py
+│ ├── test_reader.py
+│ ├── test_settings_store.py
+│ ├── test_storage.py
+│ ├── test_timing.py
+│ ├── test_tokenizer.py
+│ └── test_transcript_store.py
+├── main.py # Entry point
+└── requirements.txt # Python dependencies
 ````
 <br>
 
@@ -225,7 +229,7 @@ Settings are organized into five tabs:
 - Quality of life polish 2.0
 - ~~Settings additions~~
 - ~~Peripheral context line~~
-- Chunking (multi-word flash)
+- ~~Chunking (multi-word flash)~~
 - ~~Progress scrubber/seek bar~~
 - ~~Bookmarks~~
 - ~~Estimated read time and live progress %~~
@@ -233,6 +237,7 @@ Settings are organized into five tabs:
 - ~~Upgrading the test suite~~
 - ~~Numorous bug fixes~~
 - ~~Documentation and README reformatting~~ 
+- Horizontal scrollbar in the reader display (reposition the flash left/right)
 
 
 ## License
