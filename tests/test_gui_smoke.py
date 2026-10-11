@@ -76,6 +76,18 @@ def _load_reading_transcript(application):
     return transcript
 
 
+def _load_chunking_transcript(application, enabled, size):
+    """Add a transcript seeded with chunking and open it, so the reader goes
+    live with its words already grouped. Returns the Transcript (the store
+    mutates it in place, so the test can read its fields back directly)."""
+    store = application.store
+    transcript = store.add_transcript("Chunk smoke", store.current_space)
+    store.set_transcript_text(transcript.id, "one two three four five six seven eight")
+    store.set_transcript_chunking(transcript.id, enabled, size)
+    application._handle_open_transcript(transcript)
+    return transcript
+
+
 def test_app_constructs(app):
     # The fixture already built it; just confirm the main pieces are wired.
     assert app.canvas is not None
@@ -165,6 +177,81 @@ def test_pause_and_restart_route_to_the_detached_reader(app):
 
     app.canvas.restart()
     assert detached_reader._is_paused is False  # restart always resumes
+
+    app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+
+
+def test_footer_chunking_controls_drive_the_reader(app):
+    """The footer's Group switch and size stepper re-group the live reader in
+    place: the toggle and the stepper both route footer -> app -> store and
+    canvas, and the reader keeps the very same ReaderSession object (a
+    re-group, not a restart). Starts from a plain single-word reader and
+    confirms enabling and resizing land on that session."""
+    _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    session = reader.session
+    assert session is not None and session.chunking_enabled is False
+
+    # Turn chunking on through the footer switch, exactly as a click would.
+    app.footer.chunk_switch.select()
+    app.footer._handle_chunk_toggle()
+    assert reader.session is session          # same session, re-grouped in place
+    assert session.chunking_enabled is True
+
+    # Bump the size through the footer stepper (seeded at 2 -> 3).
+    app.footer._handle_chunk_increase()
+    assert reader.session is session
+    assert session.chunk_size == 3
+
+    app.canvas.stop()
+
+
+def test_chunking_change_does_not_finalize_the_session(app):
+    """A chunking change must never end the reading session: it does not
+    finalize (so it banks no 'read' and resets no counters) and leaves the
+    active-time span open, so toggling mid-read can't inflate the stats. This
+    is the guarantee behind choosing an in-place re-group over a reload."""
+    transcript = _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    assert reader.session is not None
+    assert reader._active_span_start is not None       # playing: a span is open
+
+    words_before = reader._session_words_read
+    span_before = reader._active_span_start
+    reads_before = transcript.times_read
+
+    app._handle_chunking_changed(True, 3)
+
+    # Still the same live session, not stopped or finished.
+    assert reader.session is not None and not reader.session.is_finished
+    # No finalize happened: counters untouched and the same span still open.
+    assert reader._session_words_read == words_before
+    assert reader._active_span_start == span_before
+    assert transcript.times_read == reads_before
+
+    app.canvas.stop()
+
+
+def test_detached_window_inherits_chunking(app):
+    """A detached window builds its reader from the transcript's chunking, and
+    the footer control (routed through the app) re-groups the detached reader
+    while a transcript is detached, the same way WPM and colours already reach
+    it. Reattaches at the end so the shared app is left clean."""
+    _load_chunking_transcript(app, enabled=True, size=3)
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+
+    dsession = detached.reader_display.session
+    assert dsession is not None
+    assert dsession.chunking_enabled is True and dsession.chunk_size == 3
+
+    # A footer-driven change while detached reaches the detached reader; the
+    # stopped main reader has no session, so the forwarded call there no-ops.
+    app._handle_chunking_changed(True, 5)
+    assert detached.reader_display.session.chunk_size == 5
+    assert app.canvas.reader_display.session is None
 
     app.canvas._handle_reattach()
     assert app.canvas._detached_window is None
