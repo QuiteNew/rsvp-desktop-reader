@@ -23,13 +23,11 @@ GUIDE_MARK_THICKNESS_RANGE = (2, 6)  # 1px is deliberately excluded: a 1px-thick
                                       # vertical marks disappear too.
 GUIDE_MARK_LENGTH_PERCENT_RANGE = (15, 60)
 RESUME_REWIND_WORDS_RANGE = (1, 5)
-CHUNK_SIZE_RANGE = (2, 5)  # words flashed together in fixed chunking mode. 1 is excluded because
-                            # "off" is the chunking toggle's job, not size 1. See
-                            # claude/chunking-v1-design.md.
+CHUNK_SIZE_RANGE = (2, 5)  # words flashed together in fixed chunking mode. 1 is excluded
+                            # because "off" is the chunking toggle's job, not size 1.
 CHUNK_CHAR_TARGET_RANGE = (15, 60)  # adaptive chunking width, in characters (the words plus the
-                                     # single spaces between them). The driver for "adaptive" mode,
-                                     # as CHUNK_SIZE_RANGE is for "fixed". See
-                                     # claude/chunking-v2-adaptive-design.md.
+                                     # single spaces between them). It drives adaptive mode the way
+                                     # CHUNK_SIZE_RANGE drives fixed mode.
 
 @dataclass
 class AppSettings:
@@ -42,15 +40,13 @@ class AppSettings:
     default_highlight_color: str = "#D98A3D"
     default_background_color: str = "#F6EFE3"
     default_font_size: int = 32
-    default_chunking_enabled: bool = False  # new-transcript default for multi-word chunking (see
-                                             # claude/chunking-v1-design.md); seeded onto
-                                             # Transcript.chunking_enabled at creation.
+    default_chunking_enabled: bool = False  # new-transcript default for multi-word chunking; seeded
+                                             # onto Transcript.chunking_enabled at creation.
     default_chunk_size: int = 2  # new-transcript default for Transcript.chunk_size, the number of words
                                   # flashed together in fixed chunking mode. See CHUNK_SIZE_RANGE (2 to 5).
-    default_chunk_mode: str = "fixed"  # new-transcript default for Transcript.chunk_mode: "fixed" (v1
-                                        # behaviour, chunk_size words) or "adaptive" (fill to
-                                        # default_chunk_char_target characters). See
-                                        # claude/chunking-v2-adaptive-design.md.
+    default_chunk_mode: str = "fixed"  # new-transcript default for Transcript.chunk_mode: "fixed" groups
+                                        # chunk_size words, "adaptive" fills each chunk up to
+                                        # default_chunk_char_target characters instead.
     default_chunk_char_target: int = 30  # new-transcript default for Transcript.chunk_char_target, the
                                           # adaptive-mode width. See CHUNK_CHAR_TARGET_RANGE (15 to 60).
     font_size_step: int = 1
@@ -305,14 +301,25 @@ class SettingsStore:
         self._settings.default_font_size = font_size
         self._save()
 
-    def set_chunking_defaults(self, enabled: bool, size: int) -> None:
-        """Set both chunking defaults together, since Settings' Apply submits
-        them as a pair (the toggle plus its size). These are the new-transcript
-        defaults seeded onto Transcript.chunking_enabled / chunk_size at
-        creation; changing them does not touch transcripts that already exist.
-        See claude/chunking-v1-design.md."""
+    def set_chunking_defaults(
+        self, enabled: bool, size: int,
+        mode: str | None = None, char_target: int | None = None,
+    ) -> None:
+        """Set the new-transcript chunking defaults, seeded onto a transcript's
+        chunking_enabled / chunk_size / chunk_mode / chunk_char_target at
+        creation; changing them never touches transcripts that already exist.
+
+        enabled and size always apply. mode and char_target are optional and
+        keep their current stored value when left None, so a caller that only
+        has the toggle and the fixed size (an older two-argument call) leaves
+        the default mode and adaptive width alone, while a caller that has all
+        four passes them all."""
         self._settings.default_chunking_enabled = enabled
         self._settings.default_chunk_size = size
+        if mode is not None:
+            self._settings.default_chunk_mode = mode
+        if char_target is not None:
+            self._settings.default_chunk_char_target = char_target
         self._save()
 
     def set_font_size_step(self, step: int) -> None:

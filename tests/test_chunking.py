@@ -5,8 +5,7 @@ their defaults, that they persist, and that save files written before the
 feature load with the right defaults. Step 2 covers the grouping and
 chunk-aware navigation in ReaderSession. Step 3 adds the chunk-aware
 peripheral context the ribbon uses. The reader display and settings UI are
-tested as later steps add them. See claude/chunking-v1-design.md, and
-claude/chunking-v2-adaptive-design.md for the adaptive-sizing addition."""
+tested as later steps add them."""
 
 import json
 
@@ -289,7 +288,6 @@ def test_set_transcript_chunking_persists(tmp_path):
 
 # ---------------------------------------------------------------------------
 # v2 adaptive chunking - Step 1: data model and settings.
-# See claude/chunking-v2-adaptive-design.md.
 # ---------------------------------------------------------------------------
 
 def test_new_transcript_defaults_to_fixed_mode_target_30():
@@ -383,8 +381,7 @@ def test_settings_bundle_round_trip_preserves_adaptive(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# v2 adaptive chunking - Step 2: adaptive grouping in ReaderSession.
-# See claude/chunking-v2-adaptive-design.md.
+# Adaptive grouping in ReaderSession.
 # ---------------------------------------------------------------------------
 
 def test_adaptive_constants():
@@ -481,8 +478,7 @@ def test_set_chunking_without_mode_keeps_current_mode():
 
 
 # ---------------------------------------------------------------------------
-# v2 adaptive chunking - Step 3: store carries mode and width.
-# See claude/chunking-v2-adaptive-design.md.
+# Store carries mode and width.
 # ---------------------------------------------------------------------------
 
 def test_add_transcript_defaults_adaptive_fields(tmp_path):
@@ -523,3 +519,27 @@ def test_set_transcript_chunking_keeps_mode_when_not_passed(tmp_path):
     store.set_transcript_chunking(t.id, True, 4)
     assert t.chunking_enabled is True and t.chunk_size == 4
     assert t.chunk_mode == "adaptive" and t.chunk_char_target == 40
+
+# ---------------------------------------------------------------------------
+# The settings setter carries mode and width.
+# ---------------------------------------------------------------------------
+
+def test_set_chunking_defaults_carries_mode_and_target(tmp_path):
+    directory = str(tmp_path)
+    store = SettingsStore(settings_directory=directory)
+    store.set_chunking_defaults(True, 3, "adaptive", 45)
+    assert store.default_chunk_mode == "adaptive"
+    assert store.default_chunk_char_target == 45
+    reloaded = SettingsStore(settings_directory=directory)
+    assert reloaded.default_chunk_mode == "adaptive"
+    assert reloaded.default_chunk_char_target == 45
+
+
+def test_set_chunking_defaults_keeps_mode_when_not_passed(tmp_path):
+    # The older two-arg call (toggle + fixed size) must not reset the default
+    # mode or adaptive width.
+    store = SettingsStore(settings_directory=str(tmp_path))
+    store.set_chunking_defaults(True, 3, "adaptive", 45)
+    store.set_chunking_defaults(False, 2)
+    assert store.default_chunk_mode == "adaptive"
+    assert store.default_chunk_char_target == 45
