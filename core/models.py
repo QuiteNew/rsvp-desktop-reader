@@ -73,18 +73,31 @@ class Transcript:
     normalized_text: str = ""
 
     # Multi-word chunking (see claude/chunking-v1-design.md). When
-    # chunking_enabled is True, the reader flashes chunk_size words at a
+    # chunking_enabled is True, the reader flashes a chunk of words at a
     # time instead of one, with only the first word of each chunk keeping
     # the ORP highlight. This is per-transcript: it's seeded at creation
-    # from the app-wide defaults (default_chunking_enabled and
-    # default_chunk_size in core/settings_store.py) and can be toggled per
-    # transcript, including on one that's already open. "Off" is the
-    # toggle's job, so chunk_size stays in the 2 to 5 range
-    # (CHUNK_SIZE_RANGE) and never drops to 1. The defaults here (disabled,
-    # size 2) are also the right values for old save files that predate the
-    # feature, so no backfill is needed, the same as the stats fields above.
+    # from the app-wide defaults (default_chunking_enabled etc. in
+    # core/settings_store.py) and can be toggled per transcript, including
+    # on one that's already open. "Off" is the toggle's job, so chunk_size
+    # stays in the 2 to 5 range (CHUNK_SIZE_RANGE) and never drops to 1.
+    # The defaults here (disabled, size 2) are also the right values for
+    # old save files that predate the feature, so no backfill is needed,
+    # the same as the stats fields above.
     chunking_enabled: bool = False
     chunk_size: int = 2
+
+    # v2 adaptive chunking (see claude/chunking-v2-adaptive-design.md).
+    # chunk_mode decides how a chunk's size is chosen: "fixed" uses
+    # chunk_size words (the v1 behaviour, and the default), while "adaptive"
+    # instead fills each chunk up to chunk_char_target characters (the words
+    # plus the single spaces between them), capped at a few words. Both are
+    # seeded at creation from the app-wide defaults (default_chunk_mode and
+    # default_chunk_char_target in core/settings_store.py) and are
+    # per-transcript. The defaults here ("fixed", 30) are also the right
+    # values for old save files that predate v2, so no backfill is needed,
+    # the same as the v1 chunking fields above.
+    chunk_mode: str = "fixed"
+    chunk_char_target: int = 30
 
     # Deliberately saved reading positions within this transcript (see the
     # Bookmark dataclass above and TranscriptStore.add_bookmark). Kept

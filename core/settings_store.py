@@ -23,9 +23,13 @@ GUIDE_MARK_THICKNESS_RANGE = (2, 6)  # 1px is deliberately excluded: a 1px-thick
                                       # vertical marks disappear too.
 GUIDE_MARK_LENGTH_PERCENT_RANGE = (15, 60)
 RESUME_REWIND_WORDS_RANGE = (1, 5)
-CHUNK_SIZE_RANGE = (2, 5)  # words flashed together when chunking is on. 1 is excluded because
+CHUNK_SIZE_RANGE = (2, 5)  # words flashed together in fixed chunking mode. 1 is excluded because
                             # "off" is the chunking toggle's job, not size 1. See
                             # claude/chunking-v1-design.md.
+CHUNK_CHAR_TARGET_RANGE = (15, 60)  # adaptive chunking width, in characters (the words plus the
+                                     # single spaces between them). The driver for "adaptive" mode,
+                                     # as CHUNK_SIZE_RANGE is for "fixed". See
+                                     # claude/chunking-v2-adaptive-design.md.
 
 @dataclass
 class AppSettings:
@@ -42,7 +46,13 @@ class AppSettings:
                                              # claude/chunking-v1-design.md); seeded onto
                                              # Transcript.chunking_enabled at creation.
     default_chunk_size: int = 2  # new-transcript default for Transcript.chunk_size, the number of words
-                                  # flashed together when chunking is on. See CHUNK_SIZE_RANGE (2 to 5).
+                                  # flashed together in fixed chunking mode. See CHUNK_SIZE_RANGE (2 to 5).
+    default_chunk_mode: str = "fixed"  # new-transcript default for Transcript.chunk_mode: "fixed" (v1
+                                        # behaviour, chunk_size words) or "adaptive" (fill to
+                                        # default_chunk_char_target characters). See
+                                        # claude/chunking-v2-adaptive-design.md.
+    default_chunk_char_target: int = 30  # new-transcript default for Transcript.chunk_char_target, the
+                                          # adaptive-mode width. See CHUNK_CHAR_TARGET_RANGE (15 to 60).
     font_size_step: int = 1
     highlight_offset_px: int = 0  # global, not per-transcript: positive is up, negative is down
     data_directory: str = field(default_factory=lambda: str(DEFAULT_DATA_DIR))
@@ -196,6 +206,14 @@ class SettingsStore:
     @property
     def default_chunk_size(self) -> int:
         return self._settings.default_chunk_size
+
+    @property
+    def default_chunk_mode(self) -> str:
+        return self._settings.default_chunk_mode
+
+    @property
+    def default_chunk_char_target(self) -> int:
+        return self._settings.default_chunk_char_target
 
     @property
     def font_size_step(self) -> int:

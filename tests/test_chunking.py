@@ -5,13 +5,14 @@ their defaults, that they persist, and that save files written before the
 feature load with the right defaults. Step 2 covers the grouping and
 chunk-aware navigation in ReaderSession. Step 3 adds the chunk-aware
 peripheral context the ribbon uses. The reader display and settings UI are
-tested as later steps add them. See claude/chunking-v1-design.md."""
+tested as later steps add them. See claude/chunking-v1-design.md, and
+claude/chunking-v2-adaptive-design.md for the adaptive-sizing addition."""
 
 import json
 
 import core.storage as storage
 from core.models import Transcript
-from core.settings_store import AppSettings, SettingsStore, CHUNK_SIZE_RANGE
+from core.settings_store import AppSettings, SettingsStore, CHUNK_SIZE_RANGE, CHUNK_CHAR_TARGET_RANGE
 from core.reader import ReaderSession, CHUNK_CHAR_CAP
 
 
@@ -281,3 +282,98 @@ def test_set_transcript_chunking_persists(tmp_path):
     reloaded = TranscriptStore(data_directory=directory)
     rt = next(x for x in reloaded.transcripts if x.id == t.id)
     assert rt.chunking_enabled is True and rt.chunk_size == 5
+
+
+# ---------------------------------------------------------------------------
+# v2 adaptive chunking - Step 1: data model and settings.
+# See claude/chunking-v2-adaptive-design.md.
+# ---------------------------------------------------------------------------
+
+def test_new_transcript_defaults_to_fixed_mode_target_30():
+    t = Transcript(id=1, title="Doc", space="General")
+    assert t.chunk_mode == "fixed"
+    assert t.chunk_char_target == 30
+
+
+def test_app_settings_adaptive_defaults():
+    s = AppSettings()
+    assert s.default_chunk_mode == "fixed"
+    assert s.default_chunk_char_target == 30
+
+
+def test_chunk_char_target_range_is_fifteen_to_sixty():
+    assert CHUNK_CHAR_TARGET_RANGE == (15, 60)
+
+
+def test_transcript_adaptive_fields_round_trip(tmp_path):
+    directory = str(tmp_path)
+    t = Transcript(id=1, title="Doc", space="General", chunk_mode="adaptive", chunk_char_target=42)
+    storage.save_state(directory, ["General"], 0, [t], next_id=2)
+    loaded = storage.load_state(directory)
+    assert loaded is not None
+    restored = loaded["transcripts"][0]
+    assert restored.chunk_mode == "adaptive"
+    assert restored.chunk_char_target == 42
+
+
+def test_old_transcript_without_adaptive_keys_loads_defaults():
+    # A v1-era transcript dict: it carries the v1 chunking keys but not the
+    # v2 ones, so chunk_mode / chunk_char_target must fall back to the
+    # dataclass defaults (fixed, 30), with no backfill.
+    old_transcript = {
+        "id": 1, "title": "Doc", "space": "General", "raw_text": "hello world",
+        "wpm": 300, "position": 0,
+        "font_color": "#FFFFFF", "highlight_color": "#E74C3C", "background_color": "#1E1E1E",
+        "font_size": 32, "is_paused": False, "draft_text": "", "is_stopped": False,
+        "font_color_is_default": True, "highlight_color_is_default": True,
+        "background_color_is_default": True,
+        "times_read": 0, "total_words_read": 0, "total_time_spent_seconds": 0,
+        "pre_normalize_text": "", "normalized_text": "",
+        "chunking_enabled": False, "chunk_size": 2,
+        "bookmarks": [],
+    }
+    data = {"next_id": 2, "current_space_index": 0, "spaces": ["General"],
+            "transcripts": [old_transcript]}
+    parsed = storage.parse_data(data)
+    assert parsed is not None
+    t = parsed["transcripts"][0]
+    assert t.chunk_mode == "fixed"
+    assert t.chunk_char_target == 30
+
+
+def test_old_settings_without_adaptive_keys_loads_defaults(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    settings_file.write_text(json.dumps({"default_wpm": 450}), encoding="utf-8")
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert store.default_chunk_mode == "fixed"
+    assert store.default_chunk_char_target == 30
+
+
+def test_settings_json_with_adaptive_keys_loads(tmp_path):
+    settings_file = tmp_path / "settings.json"
+    settings_file.write_text(
+        json.dumps({"default_chunk_mode": "adaptive", "default_chunk_char_target": 45}),
+        encoding="utf-8",
+    )
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert store.default_chunk_mode == "adaptive"
+    assert store.default_chunk_char_target == 45
+
+
+def test_export_settings_includes_adaptive_defaults(tmp_path):
+    store = SettingsStore(settings_directory=str(tmp_path))
+    exported = store.export_settings()
+    assert exported["default_chunk_mode"] == "fixed"
+    assert exported["default_chunk_char_target"] == 30
+    assert "data_directory" not in exported
+
+
+def test_settings_bundle_round_trip_preserves_adaptive(tmp_path):
+    src = SettingsStore(settings_directory=str(tmp_path / "a"))
+    bundle_settings = src.export_settings()
+    bundle_settings["default_chunk_mode"] = "adaptive"
+    bundle_settings["default_chunk_char_target"] = 50
+    dst = SettingsStore(settings_directory=str(tmp_path / "b"))
+    dst.replace_from_bundle(bundle_settings)
+    assert dst.default_chunk_mode == "adaptive"
+    assert dst.default_chunk_char_target == 50
