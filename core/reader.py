@@ -39,6 +39,25 @@ class PeripheralContext(NamedTuple):
     after: list[str]
 
 
+def assemble_chunk_text(frames: list[ORPWord]) -> tuple[str, str, str]:
+    """Assemble a chunk's on-screen text as a (before, focus, after) triple,
+    the exact split the reader draws: only the chunk's first word keeps its own
+    before/focus/after, and every later word trails inside the after part after
+    a single separating space. With a single frame this is just that frame's own
+    split. Returns three empty strings for an empty list, which a real chunk
+    never is. Kept next to how chunks are built so the reader's drawing and the
+    font-fit measurement share one definition of a chunk's text instead of each
+    assembling it their own way."""
+    if not frames:
+        return "", "", ""
+    first = frames[0]
+    after_text = first.after
+    if len(frames) > 1:
+        trailing = " ".join(f.before + f.focus + f.after for f in frames[1:])
+        after_text = f"{first.after} {trailing}"
+    return first.before, first.focus, after_text
+
+
 class ReaderSession:
     """Holds a tokenized, ORP-split transcript and tracks playback position.
 
@@ -225,6 +244,14 @@ class ReaderSession:
         """The word-index ranges of every chunk, (start, end) with end
         exclusive, in order. With chunking off there is one range per word."""
         return list(self._chunks)
+
+    def chunk_texts(self) -> list[tuple[str, str, str]]:
+        """The assembled (before, focus, after) text of every chunk, in order,
+        the same split the reader draws (see assemble_chunk_text). Read-only and
+        position-independent: it spans the whole transcript, not just the chunk
+        on screen, so the display can measure the widest chunk once and fit the
+        font to the reading row. With chunking off there is one entry per word."""
+        return [assemble_chunk_text(self.frames[start:end]) for start, end in self._chunks]
 
     def current_frame(self) -> ORPWord | None:
         if self.is_finished:

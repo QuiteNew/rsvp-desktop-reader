@@ -10,6 +10,7 @@ from core.settings_store import AppSettings, SettingsStore, CHUNK_SIZE_RANGE, CH
 from core.reader import (
     ReaderSession, CHUNK_CHAR_CAP,
     CHUNK_MODE_FIXED, CHUNK_MODE_ADAPTIVE, ADAPTIVE_MAX_WORDS,
+    assemble_chunk_text,
 )
 
 
@@ -537,3 +538,61 @@ def test_set_chunking_defaults_keeps_mode_when_not_passed(tmp_path):
     store.set_chunking_defaults(False, 2)
     assert store.default_chunk_mode == "adaptive"
     assert store.default_chunk_char_target == 45
+
+
+# ---------------------------------------------------------------------------
+# Assembled chunk text, shared by the reader's drawing and the font-fit sizing.
+# ---------------------------------------------------------------------------
+
+def test_assemble_chunk_text_single_frame_is_its_own_split():
+    s = ReaderSession("hello", chunk_enabled=False)
+    chunk = s.current_chunk()
+    assert chunk is not None and len(chunk) == 1
+    before, focus, after = assemble_chunk_text(chunk)
+    # The triple reconstructs the whole word, and the focus is a single letter.
+    assert before + focus + after == "hello"
+    assert len(focus) == 1
+
+
+def test_assemble_chunk_text_trails_later_words_in_the_after_part():
+    s = ReaderSession("alpha beta gamma", chunk_enabled=True, chunk_size=3)
+    chunk = s.current_chunk()
+    assert chunk is not None and len(chunk) == 3
+    before, focus, after = assemble_chunk_text(chunk)
+    # Only the first word keeps its own split; the rest trail in the after part.
+    first = chunk[0]
+    assert before == first.before
+    assert focus == first.focus
+    # before + focus + after reconstructs the whole chunk, words space-joined.
+    assert before + focus + after == "alpha beta gamma"
+
+
+def test_assemble_chunk_text_empty_is_blank():
+    assert assemble_chunk_text([]) == ("", "", "")
+
+
+def test_chunk_texts_covers_every_chunk_in_reading_order():
+    s = ReaderSession("w0 w1 w2 w3 w4", chunk_enabled=True, chunk_size=2)
+    ranges = s.chunk_ranges()
+    texts = s.chunk_texts()
+    assert len(texts) == len(ranges)
+    # Each triple reconstructs exactly the words of its range, space-joined.
+    for (start, end), (before, focus, after) in zip(ranges, texts):
+        expected = " ".join(f.before + f.focus + f.after for f in s.frames[start:end])
+        assert before + focus + after == expected
+
+
+def test_chunk_texts_matches_the_current_chunk_assembly():
+    # chunk_texts() must agree with assembling the on-screen chunk directly, so
+    # the whole-transcript measurement and the live drawing cannot drift apart.
+    s = ReaderSession("alpha beta gamma delta", chunk_enabled=True, chunk_size=2)
+    assert s.chunk_texts()[0] == assemble_chunk_text(s.current_chunk())
+    s.advance()
+    assert s.chunk_texts()[1] == assemble_chunk_text(s.current_chunk())
+
+
+def test_chunk_texts_one_entry_per_word_when_disabled():
+    s = ReaderSession("one two three", chunk_enabled=False)
+    texts = s.chunk_texts()
+    assert len(texts) == 3
+    assert [b + f + a for b, f, a in texts] == ["one", "two", "three"]
