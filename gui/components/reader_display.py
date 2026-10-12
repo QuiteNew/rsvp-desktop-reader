@@ -143,10 +143,13 @@ class ReaderDisplay(ctk.CTkFrame):
         # Anchor geometry from the most recent _position_word() call.
         # None until the row has been sized at least once. Guide marks
         # read these rather than recomputing, so they always match
-        # exactly where the letter actually was last placed.
+        # exactly where the letter actually was last placed. _focus_width
+        # is kept so a pan can re-place before/after around the focus
+        # letter without re-measuring it (see _apply_pan()).
         self._anchor_x: float | None = None
         self._focus_y: float | None = None
         self._focus_half_height: float = 0
+        self._focus_width: float = 0
         self._row_width: float = 0
 
         self.word_row = ctk.CTkFrame(self, fg_color="transparent")
@@ -235,6 +238,16 @@ class ReaderDisplay(ctk.CTkFrame):
         self.context_before = ctk.CTkLabel(self.word_row, text="", font=self.context_font, text_color=self.DEFAULT_FONT_COLOR)
         self.context_current = ctk.CTkLabel(self.word_row, text="", font=self.context_font, text_color=self.DEFAULT_FONT_COLOR)
         self.context_after = ctk.CTkLabel(self.word_row, text="", font=self.context_font, text_color=self.DEFAULT_FONT_COLOR)
+
+        # Cached ribbon placement from the last _update_peripheral_context(),
+        # so a pan can slide the ribbon sideways by the same offset as the word
+        # without re-measuring or re-drawing it. _ctx_side_offset is the gap
+        # from the centred current word out to each flanking side.
+        self._ctx_shown = False
+        self._ctx_before_shown = False
+        self._ctx_after_shown = False
+        self._ctx_ribbon_y = 0.0
+        self._ctx_side_offset = 0.0
 
     def load_session(self, session: ReaderSession, start_paused: bool = False) -> None:
         self._cancel_pending()
@@ -735,9 +748,63 @@ class ReaderDisplay(ctk.CTkFrame):
             self._pan_offset_px = clamp_pan(self._pan_offset_px - amount * step, overflow_left, overflow_right)
         else:
             return
-        self._position_word()
-        self._update_guide_marks()
+        self._apply_pan()
         self._update_scrollbar()
+
+    def _apply_pan(self) -> None:
+        """Slide the current flash (and the context ribbon under it) to the
+        current pan offset, re-placing them at the new x without re-measuring or
+        re-sizing anything. The guide marks are not slid: they bracket the fixed
+        centre eye point, so a pan hides them instead (see _update_guide_marks()).
+
+        A pan changes only the horizontal anchor, not the text or the font, so
+        every size from the last full layout still holds: this just moves what
+        is already on screen. It deliberately avoids the update_idletasks()
+        reflow that the full layout does on every call, which is what made a drag
+        flicker the words. Falls back to a full layout if one has not run yet
+        (the row was never sized), and does nothing for the short "(finished)"
+        message, which never overflows and so is never panned."""
+        if self.session is None or self.session.is_finished:
+            return
+        if self._anchor_x is None:
+            self._position_word()
+            self._update_guide_marks()
+            return
+        # winfo_width()/winfo_height() are read without an update_idletasks()
+        # flush: the window is not resizing during a pan, so the last reported
+        # size is current and reading it forces no redraw.
+        row_width = self.word_row.winfo_width()
+        row_height = self.word_row.winfo_height()
+        if row_width <= 1 or row_height <= 1:
+            return
+        center_y = row_height / 2
+        focus_y = center_y - self._highlight_offset_px
+        anchor_x = row_width / 2 + self._pan_offset_px
+
+        self._place_physical(self.before_label, x=anchor_x - self._focus_width / 2, y=center_y, anchor="e")
+        self._place_physical(self.focus_label, x=anchor_x, y=focus_y, anchor="center")
+        self._place_physical(self.after_label, x=anchor_x + self._focus_width / 2, y=center_y, anchor="w")
+        self._anchor_x = anchor_x
+        self._focus_y = focus_y
+        self._row_width = row_width
+
+        # The guide marks stay put at the centre eye point rather than following
+        # the pan: _update_guide_marks() hides them while panned (pan != 0) and
+        # restores them when the pan returns to 0. This is also what keeps the
+        # solid mark frames from leaving ghost trails along the drag. While
+        # panned this is just a cheap set of place_forget() calls.
+        self._update_guide_marks()
+
+        # The ribbon, if shown, slides by the same offset, using the width it
+        # was last measured at.
+        if self._ctx_shown:
+            self._place_physical(self.context_current, x=anchor_x, y=self._ctx_ribbon_y, anchor="center")
+            if self._ctx_before_shown:
+                self._place_physical(self.context_before, x=anchor_x - self._ctx_side_offset, y=self._ctx_ribbon_y, anchor="e")
+            if self._ctx_after_shown:
+                self._place_physical(self.context_after, x=anchor_x + self._ctx_side_offset, y=self._ctx_ribbon_y, anchor="w")
+
+        
 
     def _show_current_frame(self) -> None:
         if self.session is None:
@@ -780,7 +847,6 @@ class ReaderDisplay(ctk.CTkFrame):
         cancels the doubling out, so the widget lands at the physical
         position we actually computed. Every place() call in this file
         must go through this method: calling .place(x=, y=) directly on
-        a child of word_row will reintroduce this bug on any
         a child of word_row will reintroduce this bug on any
         non-100%-scaled display.
         """
@@ -865,6 +931,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self._anchor_x = anchor_x
         self._focus_y = focus_y
         self._focus_half_height = focus_height / 2
+        self._focus_width = focus_width
         self._row_width = row_width
 
         # Redraw the context ribbon against the freshly placed word. This
@@ -875,7 +942,14 @@ class ReaderDisplay(ctk.CTkFrame):
         self._update_peripheral_context()
 
     def _update_guide_marks(self) -> None:
-        if not self._is_running() or self._anchor_x is None:
+        # Hidden whenever there is no live anchor, and also whenever the flash is
+        # panned off centre. The marks bracket the one fixed centre eye point, so
+        # off centre they have nothing to bracket; and because they are solid
+        # canvas-backed frames, sliding them sideways leaves uncleared ghost
+        # copies along the drag (the vacated pixels are not always repainted).
+        # Hiding them while panned sidesteps both. They reappear the moment the
+        # pan returns to centred.
+        if not self._is_running() or self._anchor_x is None or self._pan_offset_px != 0:
             self.guide_mark_above.place_forget()
             self.guide_mark_below.place_forget()
             self.guide_line_above.place_forget()
@@ -1007,10 +1081,19 @@ class ReaderDisplay(ctk.CTkFrame):
         else:
             self.context_after.place_forget()
 
+        # Remember where the ribbon landed so a pan can shift it without a
+        # re-measure (see _apply_pan()).
+        self._ctx_shown = True
+        self._ctx_ribbon_y = ribbon_y
+        self._ctx_side_offset = current_width / 2 + word_gap
+        self._ctx_before_shown = bool(before_text)
+        self._ctx_after_shown = bool(after_text)
+
     def _hide_peripheral_context(self) -> None:
         self.context_before.place_forget()
         self.context_current.place_forget()
         self.context_after.place_forget()
+        self._ctx_shown = False
 
     def _is_running(self) -> bool:
         return self.session is not None and not self.session.is_finished and not self._is_paused
