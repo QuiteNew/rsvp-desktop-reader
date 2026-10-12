@@ -121,6 +121,19 @@ def _open_chunking_dialog(application):
     )
 
 
+def _load_wide_chunk_transcript(application, font_size):
+    """Add a transcript whose chunks group several words, at a large Word size,
+    and open it, so auto-fit has a reason to shrink the rendered font. Returns
+    the Transcript."""
+    store = application.store
+    transcript = store.add_transcript("Wide chunk", store.current_space)
+    store.set_transcript_text(transcript.id, "alpha bravo charlie delta echo foxtrot golf hotel")
+    store.set_transcript_font_size(transcript.id, font_size)
+    store.set_transcript_chunking(transcript.id, True, 5)
+    application._handle_open_transcript(transcript)
+    return transcript
+
+
 def test_app_constructs(app):
     # The fixture already built it; just confirm the main pieces are wired.
     assert app.canvas is not None
@@ -402,6 +415,53 @@ def test_adaptive_transcript_reads_in_detached_window(app):
     assert dsession is not None
     assert dsession.chunk_mode == CHUNK_MODE_ADAPTIVE
     assert dsession.chunk_char_target == 35
+
+    app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+
+
+def test_autofit_records_chosen_size_and_measures_widest_chunk(app):
+    """Opening a chunked transcript records the chosen Word size, measures a
+    widest chunk to fit to, and never renders larger than the chosen size. The
+    exact shrink depends on the live window width, so it is checked by eye on a
+    real display rather than asserted here (this layer does not assert pixels)."""
+    _load_wide_chunk_transcript(app, font_size=80)
+    reader = app.canvas.reader_display
+    assert reader._chosen_font_size == 80
+    assert reader._fit_widest is not None
+    assert reader.word_font.cget("size") <= 80
+    app.canvas.stop()
+
+
+def test_autofit_is_render_only_and_leaves_the_saved_size(app):
+    """Auto-fit changes only the on-screen font; the transcript's saved Word
+    size is untouched, whatever the render size ends up being."""
+    transcript = _load_wide_chunk_transcript(app, font_size=80)
+    assert transcript.font_size == 80
+    app.canvas.stop()
+
+
+def test_autofit_runs_for_a_plain_transcript_too(app):
+    """A single-word transcript still routes through the fit cleanly: the chosen
+    size is recorded and the render size never exceeds it."""
+    _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    assert reader.word_font.cget("size") <= reader._chosen_font_size
+    app.canvas.stop()
+
+
+def test_autofit_wires_into_the_detached_window(app):
+    """The detached window runs the same auto-fit: loading a wide chunk there
+    measures a widest chunk and renders no larger than its own chosen size.
+    Reattaches at the end so the shared app is left clean."""
+    _load_wide_chunk_transcript(app, font_size=80)
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+
+    drd = detached.reader_display
+    assert drd._fit_widest is not None
+    assert drd.word_font.cget("size") <= drd._chosen_font_size
 
     app.canvas._handle_reattach()
     assert app.canvas._detached_window is None
