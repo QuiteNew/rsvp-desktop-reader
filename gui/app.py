@@ -193,7 +193,7 @@ class RSVPApp(ctk.CTk):
     def _bind_shortcuts(self) -> None:
         """Reading-control keyboard shortcuts for the main window only.
         The detached transcript window has its own identical Space/Left/
-        Right/R/B/Esc bindings (added separately in DetachedTranscriptWindow
+        Right/R/B/C/Esc bindings (added separately in DetachedTranscriptWindow
         itself), since Tk's "falls through to its own toplevel" behavior
         only reaches as far as the window that owns the binding. F (Focus
         mode) is deliberately not mirrored there: the detached window has
@@ -205,7 +205,7 @@ class RSVPApp(ctk.CTk):
         child currently has keyboard focus, without reaching into every
         other open Tk window in the process the way bind_all() would.
 
-        Both case variants of R, F and B are bound, since Caps Lock or an
+        Both case variants of R, F, B and C are bound, since Caps Lock or an
         accidental Shift would otherwise land on a keysym this doesn't
         catch; Space, the arrow keys, and Escape have no such variant.
 
@@ -224,7 +224,13 @@ class RSVPApp(ctk.CTk):
         B toggles a bookmark at the current word. Like the bookmark button
         it routes through Canvas, which no-ops it over a preview or when no
         live word exists, and delegates to the detached window when one is
-        open (the same routing _skip() uses)."""
+        open (the same routing _skip() uses).
+
+        C snaps a horizontally panned flash back to centre, the same as the
+        small centre button beside the reader's scrollbar. It routes through
+        Canvas too, so it reaches the detached reader while one is open, and
+        does nothing when the flash is not panned.
+        """
         self.bind("<space>", self._handle_shortcut_pause_toggle)
         self.bind("<Left>", self._handle_shortcut_skip_backward)
         self.bind("<Right>", self._handle_shortcut_skip_forward)
@@ -234,6 +240,8 @@ class RSVPApp(ctk.CTk):
         self.bind("<F>", self._handle_shortcut_focus_mode)
         self.bind("<b>", self._handle_shortcut_bookmark)
         self.bind("<B>", self._handle_shortcut_bookmark)
+        self.bind("<c>", self._handle_shortcut_center)
+        self.bind("<C>", self._handle_shortcut_center)
         self.bind("<Escape>", self._handle_shortcut_stop)
 
     def _shortcut_should_fire(self) -> bool:
@@ -278,6 +286,10 @@ class RSVPApp(ctk.CTk):
     def _handle_shortcut_bookmark(self, event=None) -> None:
         if self._shortcut_should_fire():
             self.canvas.toggle_bookmark_here()
+
+    def _handle_shortcut_center(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.canvas.center_pan()
 
     def _handle_shortcut_stop(self, event=None) -> None:
         if self._shortcut_should_fire():

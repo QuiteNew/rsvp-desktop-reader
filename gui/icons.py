@@ -7,7 +7,7 @@ which is exactly why the power icon showed up as an empty box. Drawing
 them ourselves guarantees the same appearance on any machine.
 """
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageColor, ImageDraw
 import customtkinter as ctk
 
 LIGHT_MODE_COLOR = (32, 32, 32, 255)     # dark icon, legible on a light button
@@ -109,4 +109,42 @@ def normalize_icon(size: int = 24) -> ctk.CTkImage:
 def revert_icon(size: int = 24) -> ctk.CTkImage:
     """The Normalize button's icon while it offers to revert: a plain page."""
     glyph = _draw_page_glyph(size * _PAGE_ICON_SOURCE_SCALE, PAGE_ICON_COLOR, with_check=False)
+    return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
+
+
+def _draw_center_glyph(size: int, color) -> Image.Image:
+    """A centring target: a ring with a dot at its middle and a short tick
+    running out from each side, the familiar "locate" mark.
+
+    Proportions keep the ticks reaching almost to the edge of the square,
+    so the glyph fills a small button without loose space around it."""
+    supersample = 4  # draw large, then downscale: gives smooth, anti-aliased edges
+    s = size * supersample
+    line_width = max(2, round(s * 0.09))
+    centre = s / 2
+
+    image = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    ring = s * 0.27
+    draw.ellipse([centre - ring, centre - ring, centre + ring, centre + ring], outline=color, width=line_width)
+
+    dot = s * 0.10
+    draw.ellipse([centre - dot, centre - dot, centre + dot, centre + dot], fill=color)
+
+    tick_start = ring - line_width / 2
+    tick_end = s * 0.48
+    draw.line([(centre, centre - tick_start), (centre, centre - tick_end)], fill=color, width=line_width)
+    draw.line([(centre, centre + tick_start), (centre, centre + tick_end)], fill=color, width=line_width)
+    draw.line([(centre - tick_start, centre), (centre - tick_end, centre)], fill=color, width=line_width)
+    draw.line([(centre + tick_start, centre), (centre + tick_end, centre)], fill=color, width=line_width)
+
+    return image.resize((size, size), Image.LANCZOS)
+
+
+def center_icon(size: int = 12, color: str = "#FFFFFF") -> ctk.CTkImage:
+    """The reader's "centre" button icon, drawn in the given #RRGGBB colour
+    (the caller passes its theme's ink colour, so it reads on the button)."""
+    rgba = (*ImageColor.getrgb(color)[:3], 255)
+    glyph = _draw_center_glyph(size * _PAGE_ICON_SOURCE_SCALE, rgba)
     return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))

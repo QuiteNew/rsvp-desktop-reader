@@ -422,7 +422,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         had no existing private handler to call into, since this window had
         no stop capability before it (see that method's own docstring).
 
-        Both case variants of R and B are bound, since Caps Lock or an
+        C snaps a panned flash back to centre, calling straight into this
+        window's own reader (the same action as its centre button).
+
+        Both case variants of R, B and C are bound, since Caps Lock or an
         accidental Shift would otherwise land on a keysym this doesn't
         catch; Space, the arrow keys, and Escape have no such variant."""
         self.bind("<space>", self._handle_shortcut_pause_toggle)
@@ -432,6 +435,8 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.bind("<R>", self._handle_shortcut_restart)
         self.bind("<b>", self._handle_shortcut_bookmark)
         self.bind("<B>", self._handle_shortcut_bookmark)
+        self.bind("<c>", self._handle_shortcut_center)
+        self.bind("<C>", self._handle_shortcut_center)
         self.bind("<Escape>", self._handle_shortcut_stop)
 
     def _shortcut_should_fire(self) -> bool:
@@ -463,6 +468,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _handle_shortcut_bookmark(self, event=None) -> None:
         if self._shortcut_should_fire():
             self.toggle_bookmark_here()
+
+    def _handle_shortcut_center(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.reader_display.center_pan()
 
     def _handle_shortcut_stop(self, event=None) -> None:
         if self._shortcut_should_fire():

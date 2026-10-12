@@ -4,6 +4,7 @@ import customtkinter as ctk
 from core.reader import ReaderSession, assemble_chunk_text
 from core.colors import blend_colors
 from core.scroll import scrollbar_fractions, pan_from_fraction, clamp_pan
+from gui.icons import center_icon
 from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, HEARTH_PAPER
 
 class ReaderDisplay(ctk.CTkFrame):
@@ -94,6 +95,13 @@ class ReaderDisplay(ctk.CTkFrame):
                                     # measure in real pixels when finding the widest one
     SCROLL_UNIT_PX = 24            # how far one scrollbar "unit" (an arrow click or a wheel
                                     # notch) slides the flash; a trough click pans a full row
+
+    CENTER_BUTTON_SIZE = 20        # px, the centre button is a small square, smaller than
+                                    # the other controls
+    CENTER_BUTTON_RADIUS = 4       # px, just enough corner curve to soften the square
+    CENTER_BUTTON_ICON_PX = 12     # px, the crosshair drawn inside it
+    CENTER_BUTTON_MARGIN_PX = 6    # px, gap from the row's left edge and from the scrollbar
+                                    # sitting just below it
 
     def __init__(self, master, on_position_changed=None, on_session_stats=None, on_progress=None):
         super().__init__(master, fg_color="transparent")
@@ -197,6 +205,19 @@ class ReaderDisplay(ctk.CTkFrame):
             self, orientation="horizontal", command=self._handle_scroll,
             button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
             fg_color="transparent",
+        )
+
+        # A small button that snaps the flash back to centred. It floats over
+        # the bottom-left corner of the reading row, just above the scrollbar,
+        # and is shown and hidden together with the scrollbar (see
+        # _update_scrollbar()). It is a child of this display rather than of
+        # the row, so it is stacked above everything the row draws.
+        self._center_button = ctk.CTkButton(
+            self, text="", image=center_icon(self.CENTER_BUTTON_ICON_PX, COCOA_INK),
+            width=self.CENTER_BUTTON_SIZE, height=self.CENTER_BUTTON_SIZE,
+            corner_radius=self.CENTER_BUTTON_RADIUS,
+            fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER,
+            command=self.center_pan,
         )
 
         # Not placed yet: _update_guide_marks() shows/positions them
@@ -524,6 +545,9 @@ class ReaderDisplay(ctk.CTkFrame):
         self._background_color = background_color
         self.configure(fg_color=background_color)
         self.word_row.configure(fg_color=background_color)
+        # The button's rounded corners are painted in this colour, so they blend
+        # into the reading background rather than showing as small tinted notches.
+        self._center_button.configure(bg_color=background_color)
         self.before_label.configure(text_color=font_color)
         self.after_label.configure(text_color=font_color)
         self.focus_label.configure(text_color=highlight_color)
@@ -715,12 +739,14 @@ class ReaderDisplay(ctk.CTkFrame):
         and keep the pan offset clamped to what there is to reveal. When nothing
         overflows the pan is reset to centred and the scrollbar is removed, so it
         never lingers once a narrower grouping or a smaller font makes everything
-        fit again."""
+        fit again. The centre button appears and disappears with the scrollbar,
+        since there is nothing to centre while the flash fits."""
         overflow_left, overflow_right, usable = self._pan_overflows()
         if overflow_left + overflow_right <= 0:
             self._pan_offset_px = 0.0
             if self._scrollbar_visible:
                 self._scrollbar.pack_forget()
+                self._center_button.place_forget()
                 self._scrollbar_visible = False
             return
         self._pan_offset_px = clamp_pan(self._pan_offset_px, overflow_left, overflow_right)
@@ -728,6 +754,12 @@ class ReaderDisplay(ctk.CTkFrame):
         self._scrollbar.set(first, last)
         if not self._scrollbar_visible:
             self._scrollbar.pack(side="bottom", fill="x", before=self.word_row)
+            # Anchored to the row's bottom-left corner, which sits directly above
+            # the scrollbar, so the button always rides just over it.
+            self._center_button.place(
+                in_=self.word_row, relx=0.0, rely=1.0,
+                x=self.CENTER_BUTTON_MARGIN_PX, y=-self.CENTER_BUTTON_MARGIN_PX, anchor="sw",
+            )
             self._scrollbar_visible = True
 
     def _handle_scroll(self, *args) -> None:
@@ -748,6 +780,18 @@ class ReaderDisplay(ctk.CTkFrame):
             self._pan_offset_px = clamp_pan(self._pan_offset_px - amount * step, overflow_left, overflow_right)
         else:
             return
+        self._apply_pan()
+        self._update_scrollbar()
+
+    def center_pan(self) -> None:
+        """Snap the flash back to the centred position, as if the scrollbar had
+        been dragged to the middle of its travel. Used by the centre button and
+        the C shortcut. A no-op when the flash is already centred, which is also
+        the case whenever nothing overflows. Centring brings the guide marks
+        back (they are hidden only while panned) and re-syncs the thumb."""
+        if self._pan_offset_px == 0:
+            return
+        self._pan_offset_px = 0.0
         self._apply_pan()
         self._update_scrollbar()
 
@@ -803,8 +847,6 @@ class ReaderDisplay(ctk.CTkFrame):
                 self._place_physical(self.context_before, x=anchor_x - self._ctx_side_offset, y=self._ctx_ribbon_y, anchor="e")
             if self._ctx_after_shown:
                 self._place_physical(self.context_after, x=anchor_x + self._ctx_side_offset, y=self._ctx_ribbon_y, anchor="w")
-
-        
 
     def _show_current_frame(self) -> None:
         if self.session is None:

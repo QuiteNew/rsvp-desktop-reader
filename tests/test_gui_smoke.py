@@ -542,6 +542,96 @@ def test_scrollbar_wires_into_the_detached_window(app, monkeypatch):
     assert app.canvas._detached_window is None
 
 
+def test_center_button_follows_the_scrollbar(app, monkeypatch):
+    """The small centre button is shown while the scrollbar is, and removed with
+    it. The overflow is forced to fixed pixels, as in the scrollbar tests, so
+    this checks the show/hide wiring without depending on live geometry. Ends by
+    forcing the fits case so the shared reader is left with no scrollbar."""
+    _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 60.0, 300.0))
+    reader._update_scrollbar()
+    assert reader._scrollbar_visible is True
+    assert reader._center_button.winfo_manager() == "place"
+
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 0.0, 300.0))
+    reader._update_scrollbar()
+    assert reader._scrollbar_visible is False
+    assert reader._center_button.winfo_manager() == ""
+    app.canvas.stop()
+
+
+def test_center_pan_returns_the_flash_to_centre(app, monkeypatch):
+    """center_pan() undoes a pan, whether it is called directly or through the
+    button's command, and is harmless when already centred."""
+    _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 60.0, 300.0))
+    reader._update_scrollbar()
+
+    reader._handle_scroll("moveto", "1.0")
+    assert abs(reader._pan_offset_px - (-60.0)) < 1e-6
+    reader.center_pan()
+    assert reader._pan_offset_px == 0.0
+
+    # The button is wired to the same action.
+    reader._handle_scroll("moveto", "1.0")
+    assert reader._pan_offset_px != 0.0
+    reader._center_button.invoke()
+    assert reader._pan_offset_px == 0.0
+
+    # Already centred: a second call changes nothing and does not raise.
+    reader.center_pan()
+    assert reader._pan_offset_px == 0.0
+
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 0.0, 300.0))
+    reader._update_scrollbar()
+    app.canvas.stop()
+
+
+def test_center_shortcut_reaches_the_main_and_detached_readers(app, monkeypatch):
+    """The C shortcut routes like pause and restart: to the main reader normally
+    and to the detached reader while a transcript is detached. The focus guard
+    is forced open so the result does not depend on which widget happens to hold
+    focus in the test window. Reattaches at the end so the shared app is clean."""
+    _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 60.0, 300.0))
+    reader._update_scrollbar()
+    reader._handle_scroll("moveto", "1.0")
+    assert reader._pan_offset_px != 0.0
+
+    monkeypatch.setattr(app, "_shortcut_should_fire", lambda: True)
+    app._handle_shortcut_center()
+    assert reader._pan_offset_px == 0.0
+
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 0.0, 300.0))
+    reader._update_scrollbar()
+
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+    drd = detached.reader_display
+    monkeypatch.setattr(drd, "_pan_overflows", lambda: (40.0, 0.0, 300.0))
+    drd._update_scrollbar()
+    drd._handle_scroll("moveto", "0.0")
+    assert abs(drd._pan_offset_px - 40.0) < 1e-6
+
+    # Through the main window's routing, then through the window's own binding.
+    app.canvas.center_pan()
+    assert drd._pan_offset_px == 0.0
+    drd._handle_scroll("moveto", "0.0")
+    monkeypatch.setattr(detached, "_shortcut_should_fire", lambda: True)
+    detached._handle_shortcut_center()
+    assert drd._pan_offset_px == 0.0
+
+    monkeypatch.setattr(drd, "_pan_overflows", lambda: (0.0, 0.0, 300.0))
+    drd._update_scrollbar()
+    app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+
+
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
     drag in between still fires on_drag_end, which commits _pending_value, so

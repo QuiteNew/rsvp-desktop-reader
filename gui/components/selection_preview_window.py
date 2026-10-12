@@ -245,7 +245,8 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
     def _bind_shortcuts(self) -> None:
         """Reading-control shortcuts scoped to this window, mirroring the
         detached transcript window: Space to pause, Left/Right to skip, R
-        to restart, Escape to stop back to the edit box. Bound on this
+        to restart,  C to snap a panned flash back to centre,
+        Escape to stop back to the edit box. Bound on this
         toplevel directly, since Tk's window-level bindings only reach the
         window that owns them."""
         self.bind("<space>", self._handle_shortcut_pause_toggle)
@@ -253,6 +254,8 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.bind("<Right>", self._handle_shortcut_skip_forward)
         self.bind("<r>", self._handle_shortcut_restart)
         self.bind("<R>", self._handle_shortcut_restart)
+        self.bind("<c>", self._handle_shortcut_center)
+        self.bind("<C>", self._handle_shortcut_center)
         self.bind("<Escape>", self._handle_shortcut_stop)
 
     def _shortcut_should_fire(self) -> bool:
@@ -280,6 +283,10 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
     def _handle_shortcut_restart(self, event=None) -> None:
         if self._shortcut_should_fire():
             self._handle_restart()
+
+    def _handle_shortcut_center(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self.reader_display.center_pan()
 
     def _handle_shortcut_stop(self, event=None) -> None:
         if self._shortcut_should_fire():

@@ -582,6 +582,16 @@ class Canvas(ctk.CTkFrame):
             self.toolbar.set_paused(False)
         self._handle_pause_changed(False)
 
+    def center_pan(self) -> None:
+        """Snap the live reader's horizontally panned flash back to centred.
+        Routed to the detached reader while a transcript is detached, the same
+        way pause and restart are. Does nothing when the flash is not panned,
+        including over the paste/edit box."""
+        if self._detached_window:
+            self._detached_window.reader_display.center_pan()
+        else:
+            self.reader_display.center_pan()
+
     def open_bookmarks(self) -> None:
         """Open (or refocus) the bookmarks popover for the reader that's
         actually live. While a transcript is detached, the main reader is
