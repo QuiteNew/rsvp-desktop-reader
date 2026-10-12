@@ -1,7 +1,7 @@
 import time
 
 import customtkinter as ctk
-from core.reader import ReaderSession
+from core.reader import ReaderSession, assemble_chunk_text
 from core.colors import blend_colors
 from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, HEARTH_PAPER
 
@@ -84,6 +84,14 @@ class ReaderDisplay(ctk.CTkFrame):
     PERIPHERAL_CONTEXT_WORD_GAP_PX = 10    # gap between the current word and each flanking side
     PERIPHERAL_CONTEXT_TOP_MARGIN_PX = 8   # breathing space below the lowest guide-mark tip
 
+    FIT_FLOOR_RATIO = 0.6          # auto-fit shrinks the rendered font no smaller than this
+                                    # fraction of the chosen Word size; anything that still
+                                    # overflows past the floor is the scrollbar's job (later)
+    FIT_SIDE_MARGIN_PX = 8         # px kept clear on each side of the reading row, so a fitted
+                                    # flash sits just inside the edges rather than flush to them
+    FIT_WIDEST_CANDIDATES = 12     # how many of the longest chunks (by character length) to
+                                    # measure in real pixels when finding the widest one
+
     def __init__(self, master, on_position_changed=None, on_session_stats=None, on_progress=None):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
@@ -150,6 +158,21 @@ class ReaderDisplay(ctk.CTkFrame):
         self.focus_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_HIGHLIGHT_COLOR)
         self.after_label = ctk.CTkLabel(self.word_row, text="", font=self.word_font, text_color=self.DEFAULT_FONT_COLOR)
 
+        # Auto-fit state. The chosen Word size is what the user set; the font is
+        # rendered at a size <= it so the widest chunk still fits the reading
+        # row. Only the render size ever changes, the chosen size is never
+        # written back. _fit_widest is the (before, focus, after) of the widest
+        # chunk and _fit_required_per_size its required width per unit of font
+        # size, both recomputed only when the chunks change (a load or a
+        # re-group). _fit_measure_label is an off-screen label used only to size
+        # a chunk in real pixels (winfo_reqwidth); it is never placed, so it
+        # never disturbs the three visible labels.
+        self._chosen_font_size = self.DEFAULT_FONT_SIZE
+        self._fit_widest: tuple[str, str, str] | None = None
+        self._fit_required_per_size: float | None = None
+        self._fit_measure_font = ctk.CTkFont(family=FONT_HEADING, size=self.DEFAULT_FONT_SIZE)
+        self._fit_measure_label = ctk.CTkLabel(self.word_row, text="", font=self._fit_measure_font)
+
         # Not placed yet: _update_guide_marks() shows/positions them
         # only while a session is actively running.
         self.guide_mark_above = ctk.CTkFrame(
@@ -200,6 +223,8 @@ class ReaderDisplay(ctk.CTkFrame):
         self._active_span_start = None
         if not start_paused:
             self._start_active_span()
+        self._recompute_fit_widest()
+        self._apply_fit()
         self._show_current_frame()
         self._schedule_next()
         self._update_guide_marks()
@@ -421,6 +446,8 @@ class ReaderDisplay(ctk.CTkFrame):
         if self.session is None:
             return
         self.session.set_chunking(enabled, size, mode, char_target)
+        self._recompute_fit_widest()
+        self._apply_fit()
         self._show_current_frame()
         self._report_position()
         if self._is_running() and not self._scrubbing:
@@ -469,7 +496,13 @@ class ReaderDisplay(ctk.CTkFrame):
         self._update_peripheral_context()
 
     def set_font_size(self, size: int) -> None:
-        self.word_font.configure(size=size)
+        """Set the chosen Word size. The font is then rendered at the fitted
+        size (never larger than this), so a wide chunk still fits the reading
+        row; the chosen size is only stored here, never read back as the display
+        size. The chunks are unchanged, so only the render size is re-derived,
+        not the widest chunk."""
+        self._chosen_font_size = size
+        self._apply_fit()
         self._position_word()
         self._update_guide_marks()
 
@@ -524,6 +557,80 @@ class ReaderDisplay(ctk.CTkFrame):
         self.guide_mark_above.configure(fg_color=color)
         self.guide_mark_below.configure(fg_color=color)
 
+    # Auto-fit: shrink the displayed font so the widest chunk fits the row,
+    # without changing the chosen Word size.
+
+    def _apply_fit(self) -> None:
+        """Set the font's rendered size to the fitted size for the reading
+        row's current width. Render-only: it changes what's on screen, never
+        the chosen Word size. Cheap enough to call on every resize, since it
+        reuses the widest-chunk measurement cached by _recompute_fit_widest()."""
+        self.word_font.configure(size=self._fit_render_size())
+
+    def _fit_render_size(self) -> int:
+        """The size to actually render at: the chosen Word size when the widest
+        chunk already fits, otherwise the largest size that does fit, down to
+        the floor (FIT_FLOOR_RATIO of the chosen size). Falls back to the chosen
+        size when there is nothing measured yet or the row has not been sized.
+        The widest chunk's required width grows with the font size, so the
+        stored width-per-size scales it: the size that just fits is
+        usable_width / required_per_size."""
+        chosen = self._chosen_font_size
+        per_size = self._fit_required_per_size
+        if per_size is None or per_size <= 0:
+            return chosen
+        usable = self.word_row.winfo_width() - 2 * self.FIT_SIDE_MARGIN_PX
+        if usable <= 1:
+            return chosen  # row not sized yet; the resize handler refits later
+        floor = max(8, round(chosen * self.FIT_FLOOR_RATIO))
+        fit = int(usable / per_size)
+        return max(floor, min(chosen, fit))
+
+    def _recompute_fit_widest(self) -> None:
+        """Find the chunk that needs the most horizontal room and remember how
+        wide it is per unit of font size, so _fit_render_size() can size the
+        font to it. Done only when the chunks change (a load or a re-group),
+        not on a resize or a plain size nudge. Character length is a close but
+        imperfect stand-in for rendered width (wide and narrow letters differ),
+        so this shortlists the longest chunks by characters and then measures
+        those few in real pixels, keeping the widest."""
+        self._fit_widest = None
+        self._fit_required_per_size = None
+        if self.session is None:
+            return
+        texts = self.session.chunk_texts()
+        if not texts:
+            return
+        candidates = sorted(texts, key=lambda t: max(len(t[0]), len(t[2])), reverse=True)
+        widest = None
+        widest_width = -1.0
+        for before, focus, after in candidates[:self.FIT_WIDEST_CANDIDATES]:
+            width = self._required_width_at(self._chosen_font_size, before, focus, after)
+            if width > widest_width:
+                widest_width = width
+                widest = (before, focus, after)
+        if widest is None or self._chosen_font_size <= 0:
+            return
+        self._fit_widest = widest
+        self._fit_required_per_size = widest_width / self._chosen_font_size
+
+    def _required_width_at(self, size: int, before: str, focus: str, after: str) -> float:
+        """The reading-row width a chunk needs at a given font size, in real
+        pixels. The flash is centred on the ORP letter, not on the chunk's
+        middle, so the binding side is whichever of the before part or the
+        trailing after part reaches further from that centre; the row must hold
+        twice that reach. Each part is measured on its own off-screen label, the
+        same way the three visible labels are sized, so the measurement matches
+        what gets drawn."""
+        self._fit_measure_font.configure(size=size)
+        widths = []
+        for text in (before, focus, after):
+            self._fit_measure_label.configure(text=text)
+            self._fit_measure_label.update_idletasks()
+            widths.append(self._fit_measure_label.winfo_reqwidth())
+        before_w, focus_w, after_w = widths
+        return 2 * max(before_w + focus_w / 2, after_w + focus_w / 2)
+
     def _show_current_frame(self) -> None:
         if self.session is None:
             return
@@ -532,20 +639,16 @@ class ReaderDisplay(ctk.CTkFrame):
             self.focus_label.configure(text="")
             self.after_label.configure(text="")
         else:
-            # The chunk currently on screen. With chunking off this is a
-            # single-word list, so this path is identical to showing one word.
-            # Only the first word of a chunk keeps its ORP split and anchored
-            # highlight; the rest of the chunk trails to its right in the normal
-            # font color, appended to the after-label after a separating space.
-            chunk = self.session.current_chunk()
-            first = chunk[0]
-            after_text = first.after
-            if len(chunk) > 1:
-                trailing = " ".join(f.before + f.focus + f.after for f in chunk[1:])
-                after_text = f"{first.after} {trailing}"
-            self.before_label.configure(text=first.before)
-            self.focus_label.configure(text=first.focus)
-            self.after_label.configure(text=after_text)
+            # The chunk currently on screen, assembled the one shared way (see
+            # core.reader.assemble_chunk_text): with chunking off this is a
+            # single word, and in a chunk only the first word keeps its ORP
+            # split and anchored highlight while the rest trail to its right in
+            # the after-label. Using the same assembler the font-fit measures
+            # keeps the drawn chunk and the measured chunk identical.
+            before, focus, after = assemble_chunk_text(self.session.current_chunk())
+            self.before_label.configure(text=before)
+            self.focus_label.configure(text=focus)
+            self.after_label.configure(text=after)
         self._position_word()
 
     def _place_physical(self, widget, *, x, y, anchor) -> None:
@@ -797,6 +900,10 @@ class ReaderDisplay(ctk.CTkFrame):
         return self.session is not None and not self.session.is_finished and not self._is_paused
 
     def _handle_row_resized(self, event=None) -> None:
+        # A wider or narrower row changes how much the font can fill, so refit
+        # before repositioning. The widest chunk is unchanged by a resize, so
+        # this only re-derives the render size, it does not re-scan the chunks.
+        self._apply_fit()
         self._position_word()
         self._update_guide_marks()
 
