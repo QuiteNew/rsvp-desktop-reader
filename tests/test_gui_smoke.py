@@ -467,6 +467,81 @@ def test_autofit_wires_into_the_detached_window(app):
     assert app.canvas._detached_window is None
 
 
+def test_scrollbar_hidden_and_centred_when_the_flash_fits(app, monkeypatch):
+    """When the widest chunk fits the reading row, the horizontal scrollbar is
+    packed away and the pan is reset to centred. The 'fits' case is forced (both
+    overflows zero) so the result does not hang on the withdrawn test window's
+    live width, which is unreliable off screen; the pixel arithmetic itself is
+    covered by the core scroll tests."""
+    _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 0.0, 400.0))
+    reader._pan_offset_px = 123.0          # a stale pan, as if left over from a wide chunk
+    reader._update_scrollbar()
+    assert reader._scrollbar_visible is False
+    assert reader._pan_offset_px == 0.0    # reset to centred
+    app.canvas.stop()
+
+
+def test_scrollbar_appears_and_pans_when_a_chunk_overflows(app, monkeypatch):
+    """When the widest chunk still spills past the row after fitting, the
+    scrollbar is shown and its Tk commands pan the flash. The overflow is forced
+    to fixed pixels so the glue is exercised without depending on the live
+    geometry: a 'moveto' to the far right reveals the right overflow (the most
+    negative pan), and unit scrolls step by SCROLL_UNIT_PX within the clamp. Ends
+    by forcing the fits case so the shared reader is left with no scrollbar."""
+    _load_reading_transcript(app)
+    reader = app.canvas.reader_display
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 60.0, 300.0))
+
+    reader._update_scrollbar()
+    assert reader._scrollbar_visible is True
+
+    # Drag the thumb fully right: reveals the right overflow, pan = -60.
+    reader._handle_scroll("moveto", "1.0")
+    assert abs(reader._pan_offset_px - (-60.0)) < 1e-6
+
+    # A unit scroll further right is clamped at that limit (nothing more to show).
+    reader._handle_scroll("scroll", "1", "units")
+    assert abs(reader._pan_offset_px - (-60.0)) < 1e-6
+
+    # Scrolling back the other way steps in by exactly one unit.
+    reader._handle_scroll("scroll", "-1", "units")
+    assert abs(reader._pan_offset_px - (-60.0 + reader.SCROLL_UNIT_PX)) < 1e-6
+
+    # Force the fits case to pack the scrollbar away before leaving.
+    monkeypatch.setattr(reader, "_pan_overflows", lambda: (0.0, 0.0, 300.0))
+    reader._update_scrollbar()
+    assert reader._scrollbar_visible is False
+    app.canvas.stop()
+
+
+def test_scrollbar_wires_into_the_detached_window(app, monkeypatch):
+    """The detached window runs the same horizontal scroll on its own reader:
+    forcing an overflow shows its scrollbar and a drag pans that reader. Forces
+    the fits case and reattaches at the end so the shared app is left clean."""
+    _load_reading_transcript(app)
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+
+    drd = detached.reader_display
+    monkeypatch.setattr(drd, "_pan_overflows", lambda: (40.0, 0.0, 300.0))
+    drd._update_scrollbar()
+    assert drd._scrollbar_visible is True
+
+    # Drag the thumb fully left: reveals the left overflow, pan = +40.
+    drd._handle_scroll("moveto", "0.0")
+    assert abs(drd._pan_offset_px - 40.0) < 1e-6
+
+    monkeypatch.setattr(drd, "_pan_overflows", lambda: (0.0, 0.0, 300.0))
+    drd._update_scrollbar()
+    assert drd._scrollbar_visible is False
+
+    app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+
+
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
     drag in between still fires on_drag_end, which commits _pending_value, so

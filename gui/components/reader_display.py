@@ -3,7 +3,8 @@ import time
 import customtkinter as ctk
 from core.reader import ReaderSession, assemble_chunk_text
 from core.colors import blend_colors
-from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, HEARTH_PAPER
+from core.scroll import scrollbar_fractions, pan_from_fraction, clamp_pan
+from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, HEARTH_PAPER
 
 class ReaderDisplay(ctk.CTkFrame):
     """Displays the flashing word, with the ORP letter rendered in a
@@ -91,6 +92,8 @@ class ReaderDisplay(ctk.CTkFrame):
                                     # flash sits just inside the edges rather than flush to them
     FIT_WIDEST_CANDIDATES = 12     # how many of the longest chunks (by character length) to
                                     # measure in real pixels when finding the widest one
+    SCROLL_UNIT_PX = 24            # how far one scrollbar "unit" (an arrow click or a wheel
+                                    # notch) slides the flash; a trough click pans a full row
 
     def __init__(self, master, on_position_changed=None, on_session_stats=None, on_progress=None):
         super().__init__(master, fg_color="transparent")
@@ -163,15 +166,35 @@ class ReaderDisplay(ctk.CTkFrame):
         # row. Only the render size ever changes, the chosen size is never
         # written back. _fit_widest is the (before, focus, after) of the widest
         # chunk and _fit_required_per_size its required width per unit of font
-        # size, both recomputed only when the chunks change (a load or a
-        # re-group). _fit_measure_label is an off-screen label used only to size
-        # a chunk in real pixels (winfo_reqwidth); it is never placed, so it
-        # never disturbs the three visible labels.
+        # size; _fit_left_reach_per_size / _fit_right_reach_per_size are how far
+        # that chunk reaches each side of the centre anchor, also per unit of
+        # font size, which the scrollbar uses to size its travel. All are
+        # recomputed only when the chunks change (a load or a re-group).
+        # _fit_measure_label is an off-screen label used only to size a chunk in
+        # real pixels (winfo_reqwidth); it is never placed, so it never disturbs
+        # the three visible labels.
         self._chosen_font_size = self.DEFAULT_FONT_SIZE
         self._fit_widest: tuple[str, str, str] | None = None
         self._fit_required_per_size: float | None = None
+        self._fit_left_reach_per_size: float | None = None
+        self._fit_right_reach_per_size: float | None = None
         self._fit_measure_font = ctk.CTkFont(family=FONT_HEADING, size=self.DEFAULT_FONT_SIZE)
         self._fit_measure_label = ctk.CTkLabel(self.word_row, text="", font=self._fit_measure_font)
+
+        # Horizontal pan. When the widest chunk still spills past the reading
+        # row even after the font has been shrunk to its floor, this pixel
+        # offset is added to the centre anchor so the flash can be slid left or
+        # right to bring the hidden part into view. Reset to centred (0) on each
+        # load. The scrollbar below drives it and is packed in only while a
+        # flash actually overflows; its travel is sized to the widest chunk, so
+        # a position set once comfortably holds for the whole session.
+        self._pan_offset_px = 0.0
+        self._scrollbar_visible = False
+        self._scrollbar = ctk.CTkScrollbar(
+            self, orientation="horizontal", command=self._handle_scroll,
+            button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
+            fg_color="transparent",
+        )
 
         # Not placed yet: _update_guide_marks() shows/positions them
         # only while a session is actively running.
@@ -223,8 +246,10 @@ class ReaderDisplay(ctk.CTkFrame):
         self._active_span_start = None
         if not start_paused:
             self._start_active_span()
+        self._pan_offset_px = 0.0
         self._recompute_fit_widest()
         self._apply_fit()
+        self._update_scrollbar()
         self._show_current_frame()
         self._schedule_next()
         self._update_guide_marks()
@@ -448,6 +473,7 @@ class ReaderDisplay(ctk.CTkFrame):
         self.session.set_chunking(enabled, size, mode, char_target)
         self._recompute_fit_widest()
         self._apply_fit()
+        self._update_scrollbar()
         self._show_current_frame()
         self._report_position()
         if self._is_running() and not self._scrubbing:
@@ -503,6 +529,7 @@ class ReaderDisplay(ctk.CTkFrame):
         not the widest chunk."""
         self._chosen_font_size = size
         self._apply_fit()
+        self._update_scrollbar()
         self._position_word()
         self._update_guide_marks()
 
@@ -596,6 +623,8 @@ class ReaderDisplay(ctk.CTkFrame):
         those few in real pixels, keeping the widest."""
         self._fit_widest = None
         self._fit_required_per_size = None
+        self._fit_left_reach_per_size = None
+        self._fit_right_reach_per_size = None
         if self.session is None:
             return
         texts = self.session.chunk_texts()
@@ -603,25 +632,31 @@ class ReaderDisplay(ctk.CTkFrame):
             return
         candidates = sorted(texts, key=lambda t: max(len(t[0]), len(t[2])), reverse=True)
         widest = None
+        widest_reaches = (0.0, 0.0)
         widest_width = -1.0
         for before, focus, after in candidates[:self.FIT_WIDEST_CANDIDATES]:
-            width = self._required_width_at(self._chosen_font_size, before, focus, after)
+            left_reach, right_reach = self._measure_reaches(self._chosen_font_size, before, focus, after)
+            width = 2 * max(left_reach, right_reach)
             if width > widest_width:
                 widest_width = width
                 widest = (before, focus, after)
+                widest_reaches = (left_reach, right_reach)
         if widest is None or self._chosen_font_size <= 0:
             return
         self._fit_widest = widest
         self._fit_required_per_size = widest_width / self._chosen_font_size
+        self._fit_left_reach_per_size = widest_reaches[0] / self._chosen_font_size
+        self._fit_right_reach_per_size = widest_reaches[1] / self._chosen_font_size
 
-    def _required_width_at(self, size: int, before: str, focus: str, after: str) -> float:
-        """The reading-row width a chunk needs at a given font size, in real
-        pixels. The flash is centred on the ORP letter, not on the chunk's
-        middle, so the binding side is whichever of the before part or the
-        trailing after part reaches further from that centre; the row must hold
-        twice that reach. Each part is measured on its own off-screen label, the
-        same way the three visible labels are sized, so the measurement matches
-        what gets drawn."""
+    def _measure_reaches(self, size: int, before: str, focus: str, after: str) -> tuple[float, float]:
+        """How far a chunk reaches left and right of the centre anchor at a given
+        font size, in real pixels. The flash is centred on the ORP letter, not on
+        the chunk's middle, so the left reach is the before part plus half the
+        focus letter and the right reach is the trailing after part plus half the
+        focus letter. The reading row must hold twice the larger of the two, and
+        each side's reach is what the scrollbar needs to know its overflow. Each
+        part is measured on its own off-screen label, the same way the three
+        visible labels are sized, so the measurement matches what gets drawn."""
         self._fit_measure_font.configure(size=size)
         widths = []
         for text in (before, focus, after):
@@ -629,7 +664,80 @@ class ReaderDisplay(ctk.CTkFrame):
             self._fit_measure_label.update_idletasks()
             widths.append(self._fit_measure_label.winfo_reqwidth())
         before_w, focus_w, after_w = widths
-        return 2 * max(before_w + focus_w / 2, after_w + focus_w / 2)
+        return before_w + focus_w / 2, after_w + focus_w / 2
+
+    # Horizontal scroll: a bottom scrollbar that pans the flash sideways when
+    # the widest chunk still overflows the row after the font has been fitted.
+
+    def _widest_reaches(self) -> tuple[float, float]:
+        """How far the widest chunk reaches left and right of the centre anchor
+        at the current render size, in real pixels. Scaled from the per-size
+        reaches cached by _recompute_fit_widest(), so it is pure arithmetic with
+        no measuring, cheap to call on every resize. Returns (0, 0) when there
+        is no widest chunk yet."""
+        left_per = self._fit_left_reach_per_size
+        right_per = self._fit_right_reach_per_size
+        if left_per is None or right_per is None:
+            return 0.0, 0.0
+        size = self.word_font.cget("size")
+        return left_per * size, right_per * size
+
+    def _pan_overflows(self) -> tuple[float, float, float]:
+        """The (overflow_left, overflow_right, viewport) that drive the pan: how
+        far the widest chunk spills past each edge of the reading row at the
+        current render size, and the row's usable width. Both overflows are 0
+        when the widest chunk fits, which is the usual case once the font has
+        been fitted; they go positive only when even the floor size still leaves
+        the chunk wider than the row."""
+        usable = self.word_row.winfo_width() - 2 * self.FIT_SIDE_MARGIN_PX
+        if usable <= 1:
+            return 0.0, 0.0, 0.0
+        left_reach, right_reach = self._widest_reaches()
+        half = usable / 2
+        return max(0.0, left_reach - half), max(0.0, right_reach - half), usable
+
+    def _update_scrollbar(self) -> None:
+        """Show the horizontal scrollbar only while the widest chunk still spills
+        past the reading row after fitting, size its thumb to how much overflows,
+        and keep the pan offset clamped to what there is to reveal. When nothing
+        overflows the pan is reset to centred and the scrollbar is removed, so it
+        never lingers once a narrower grouping or a smaller font makes everything
+        fit again."""
+        overflow_left, overflow_right, usable = self._pan_overflows()
+        if overflow_left + overflow_right <= 0:
+            self._pan_offset_px = 0.0
+            if self._scrollbar_visible:
+                self._scrollbar.pack_forget()
+                self._scrollbar_visible = False
+            return
+        self._pan_offset_px = clamp_pan(self._pan_offset_px, overflow_left, overflow_right)
+        first, last = scrollbar_fractions(usable, overflow_left, overflow_right, self._pan_offset_px)
+        self._scrollbar.set(first, last)
+        if not self._scrollbar_visible:
+            self._scrollbar.pack(side="bottom", fill="x", before=self.word_row)
+            self._scrollbar_visible = True
+
+    def _handle_scroll(self, *args) -> None:
+        """The scrollbar's Tk command. A drag sends ("moveto", fraction); an
+        arrow or trough click sends ("scroll", amount, "units"|"pages"). Both
+        become a new pan offset that slides the flash and re-syncs the thumb.
+        Scrolling right (a positive amount) reveals content that spilled off the
+        right, which is a leftward slide of the flash, i.e. a more negative pan."""
+        overflow_left, overflow_right, usable = self._pan_overflows()
+        if overflow_left + overflow_right <= 0:
+            return
+        if args and args[0] == "moveto":
+            self._pan_offset_px = pan_from_fraction(float(args[1]), usable, overflow_left, overflow_right)
+        elif args and args[0] == "scroll":
+            amount = int(args[1])
+            what = args[2] if len(args) > 2 else "units"
+            step = usable if what == "pages" else self.SCROLL_UNIT_PX
+            self._pan_offset_px = clamp_pan(self._pan_offset_px - amount * step, overflow_left, overflow_right)
+        else:
+            return
+        self._position_word()
+        self._update_guide_marks()
+        self._update_scrollbar()
 
     def _show_current_frame(self) -> None:
         if self.session is None:
@@ -715,7 +823,7 @@ class ReaderDisplay(ctk.CTkFrame):
         if row_width <= 1 or row_height <= 1:
             return  # not yet mapped/sized, nothing sensible to compute
 
-        anchor_x = row_width / 2
+        center_x = row_width / 2
         center_y = row_height / 2
         # Positive offset = up = smaller y.
         focus_y = center_y - self._highlight_offset_px
@@ -726,11 +834,14 @@ class ReaderDisplay(ctk.CTkFrame):
             # The normal anchor="e" placement below assumes an actual
             # focus_width to butt up against; with that width near 0 it
             # left the message sitting to the left of center instead of
-            # centered on it. Center it directly instead.
+            # centered on it. Center it directly instead. The pan offset
+            # is deliberately not applied: "(finished)" is short and never
+            # overflows, so it stays on the centre line rather than sliding
+            # with a pan left over from the last wide chunk.
             self.focus_label.place_forget()
             self.after_label.place_forget()
-            self._place_physical(self.before_label, x=anchor_x, y=center_y, anchor="center")
-            self._anchor_x = anchor_x
+            self._place_physical(self.before_label, x=center_x, y=center_y, anchor="center")
+            self._anchor_x = center_x
             self._focus_y = focus_y
             self._focus_half_height = 0
             self._row_width = row_width
@@ -739,6 +850,11 @@ class ReaderDisplay(ctk.CTkFrame):
             self._update_peripheral_context()
             return
 
+        # The live flash is anchored at the row centre plus the current pan, so
+        # a chunk too wide for the row can be slid sideways into view. The pan
+        # is 0 (centred) unless the widest chunk overflows and the user has
+        # dragged the scrollbar; see _update_scrollbar().
+        anchor_x = center_x + self._pan_offset_px
         focus_width = self.focus_label.winfo_reqwidth()
         focus_height = self.focus_label.winfo_reqheight()
 
@@ -904,6 +1020,7 @@ class ReaderDisplay(ctk.CTkFrame):
         # before repositioning. The widest chunk is unchanged by a resize, so
         # this only re-derives the render size, it does not re-scan the chunks.
         self._apply_fit()
+        self._update_scrollbar()
         self._position_word()
         self._update_guide_marks()
 
