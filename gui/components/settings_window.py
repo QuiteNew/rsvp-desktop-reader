@@ -1,8 +1,9 @@
 import sys
 
 import customtkinter as ctk
+from dataclasses import dataclass
 from tkinter import colorchooser, filedialog
-
+from core.settings_search import matches, query_words
 from core.settings_store import (
     AppSettings,
     WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
@@ -14,6 +15,19 @@ from core.settings_store import (
 from core.timing import format_duration
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
+@dataclass
+class _DefaultsItem:
+    """One entry of the Defaults tab, as the Settings search sees it. All of an
+    entry's widgets live inside its own transparent holder frame, so showing or
+    hiding the entry is one pack or forget of that holder and nothing inside is
+    touched. Searchable entries are settings, found by name, keywords and
+    description. The others (the grey notes and the reset row) have nothing to
+    search and are simply hidden while a search is active."""
+    holder: ctk.CTkFrame
+    searchable: bool
+    name: str = ""
+    keywords: str = ""
+    description: str = ""
 
 class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
@@ -88,6 +102,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.on_configure_chunking = on_configure_chunking
         self._data_directory = data_directory
         self._defaults_scroll = None  # set once the Defaults tab's scrollable frame exists
+        self._defaults_items = []  # the Defaults tab's entries, in display order; see _defaults_item()
 
         self.label_font = ctk.CTkFont(family=FONT_BODY, size=13)
         self.small_font = ctk.CTkFont(family=FONT_BODY, size=11)
@@ -301,61 +316,117 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Defaults tab ----
 
+    def _defaults_item(self, scroll, name="", keywords="", description="", searchable=True) -> ctk.CTkFrame:
+        """Starts one entry of the Defaults tab and returns its holder frame.
+        The caller builds that entry's widgets inside the holder and nowhere
+        else. The holder is not packed here: _layout_defaults() packs it, in
+        the order the entries were started, which is the order they show in.
+
+        name is the text the person sees for the setting, so that typing what
+        is on screen finds it. keywords are extra words that are not on screen
+        ("color", "crosshair"), and description is the explanation shown under
+        the setting. See core/settings_search.py for how the three are used.
+        Notes and the reset row pass searchable=False."""
+        holder = ctk.CTkFrame(scroll, fg_color="transparent")
+        self._defaults_items.append(_DefaultsItem(holder, searchable, name, keywords, description))
+        return holder
+
+    def _layout_defaults(self, query: str = "", include_description: bool = False) -> None:
+        """Shows the entries of the Defaults tab that fit the query, always in
+        their original order. A blank query shows everything, which is the tab
+        exactly as built. While a query is typed, the grey notes and the reset
+        row are hidden.
+
+        Every holder is forgotten and the visible ones are packed again, rather
+        than touching only the ones that changed: a widget packed again after
+        pack_forget() joins the end of its parent's packing list, so packing
+        in order from scratch is what keeps the order right. Only the holders
+        are packed and forgotten. The widgets inside them keep the padding they
+        were given when built, so nothing is scaled a second time on a
+        high-DPI screen (CTkBaseClass.pack scales padding on every call)."""
+        searching = bool(query_words(query))
+        for item in self._defaults_items:
+            item.holder.pack_forget()
+        for item in self._defaults_items:
+            if item.searchable:
+                visible = matches(query, item.name, item.keywords, item.description, include_description)
+            else:
+                visible = not searching
+            if visible:
+                item.holder.pack(fill="x")
+
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, peripheral_context_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
         self._defaults_scroll = scroll
 
-        ctk.CTkLabel(scroll, text="Applied to newly created transcripts only", text_color=COCOA_INK, font=self.small_font).pack(anchor="w", pady=(5, 15))
+        holder = self._defaults_item(scroll, searchable=False)
+        ctk.CTkLabel(holder, text="Applied to newly created transcripts only", text_color=COCOA_INK, font=self.small_font).pack(anchor="w", pady=(5, 15))
 
-        wpm_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        holder = self._defaults_item(scroll, "Speed", "wpm words per minute rate pace tempo fast slow")
+        wpm_row = ctk.CTkFrame(holder, fg_color="transparent")
         wpm_row.pack(fill="x", pady=6)
         ctk.CTkLabel(wpm_row, text="Speed", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
         self.default_wpm_label = ctk.CTkLabel(wpm_row, text=f"{wpm} WPM", width=70, text_color=COCOA_INK, font=self.label_font)
         self.default_wpm_label.pack(side="right")
         self.default_wpm_slider = self._styled_slider(
-            scroll, WPM_RANGE[0], WPM_RANGE[1], 90,
+            holder, WPM_RANGE[0], WPM_RANGE[1], 90,
             lambda v: self.default_wpm_label.configure(text=f"{int(v)} WPM"),
         )
         self.default_wpm_slider.set(wpm)
         self.default_wpm_slider.pack(fill="x", pady=(0, 10))
 
+        holder = self._defaults_item(scroll, "Font colour", "color text letters words")
         self.default_font_color = font_color
-        self.default_font_swatch = self._color_row(scroll, "Font colour", font_color, self._pick_default_font_color)
+        self.default_font_swatch = self._color_row(holder, "Font colour", font_color, self._pick_default_font_color)
 
+        holder = self._defaults_item(scroll, "Highlight colour", "color accent focus letter orp optimal recognition point")
         self.default_highlight_color = highlight_color
-        self.default_highlight_swatch = self._color_row(scroll, "Highlight colour", highlight_color, self._pick_default_highlight_color)
+        self.default_highlight_swatch = self._color_row(holder, "Highlight colour", highlight_color, self._pick_default_highlight_color)
 
+        holder = self._defaults_item(scroll, "Background colour", "color backdrop canvas reading area")
         self.default_background_color = background_color
-        self.default_background_swatch = self._color_row(scroll, "Background colour", background_color, self._pick_default_background_color)
+        self.default_background_swatch = self._color_row(holder, "Background colour", background_color, self._pick_default_background_color)
 
+        holder = self._defaults_item(scroll, "Word size", "font size text size px pixels bigger smaller larger zoom scale")
         self.default_font_size = font_size
-        size_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        size_row = ctk.CTkFrame(holder, fg_color="transparent")
         size_row.pack(fill="x", pady=6)
         ctk.CTkLabel(size_row, text="Word size", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
         self.default_font_size_label = ctk.CTkLabel(size_row, text=f"{font_size} px", width=70, text_color=COCOA_INK, font=self.label_font)
         self.default_font_size_label.pack(side="right")
         self.default_font_size_slider = self._styled_slider(
-            scroll, FONT_SIZE_RANGE[0], FONT_SIZE_RANGE[1], FONT_SIZE_RANGE[1] - FONT_SIZE_RANGE[0],
+            holder, FONT_SIZE_RANGE[0], FONT_SIZE_RANGE[1], FONT_SIZE_RANGE[1] - FONT_SIZE_RANGE[0],
             lambda v: (self.default_font_size_label.configure(text=f"{int(v)} px"), setattr(self, "default_font_size", int(v))),
         )
         self.default_font_size_slider.set(font_size)
         self.default_font_size_slider.pack(fill="x", pady=(0, 8))
 
+        holder = self._defaults_item(scroll, searchable=False)
         ctk.CTkLabel(
-            scroll, text="Changes for the WPM slider take effect after clicking Apply.",
+            holder, text="Changes for the WPM slider take effect after clicking Apply.",
             text_color=COCOA_INK, font=self.small_font,
         ).pack(anchor="w", pady=(0, 20))
 
-        self._styled_button(scroll, "Configure chunking…", self._handle_configure_chunking, width=180).pack(anchor="w", pady=(0, 5))
+        chunking_description = "Flash several words at once instead of one at a time, so your eyes move less across each flash. Opens a window where you can turn this on for the transcript open now or for new transcripts, pick a fixed number of words or an adaptive width, and set the size."
+        holder = self._defaults_item(
+            scroll, "Configure chunking",
+            "chunk chunks chunking group grouping words at a time several multiple phrase adaptive fixed",
+            chunking_description,
+        )
+        self._styled_button(holder, "Configure chunking…", self._handle_configure_chunking, width=180).pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
-            scroll,
-            text="Flash several words at once instead of one at a time, so your eyes move less across each flash. Opens a window where you can turn this on for the transcript open now or for new transcripts, pick a fixed number of words or an adaptive width, and set the size.",
+            holder,
+            text=chunking_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        step_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        holder = self._defaults_item(
+            scroll, "Increase the word size by this many pixels each time +/- is clicked",
+            "font size step increment plus minus buttons zoom change amount",
+        )
+        step_row = ctk.CTkFrame(holder, fg_color="transparent")
         step_row.pack(fill="x", pady=(0, 20))
         ctk.CTkLabel(
             step_row, text="Increase the word size by this many pixels each time +/- is clicked:",
@@ -366,7 +437,14 @@ class SettingsWindow(ctk.CTkToplevel):
         self.font_size_step_entry.insert(0, str(font_size_step))
         self.font_size_step_entry.pack(side="left", padx=(8, 0))
 
-        offset_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        low, high = HIGHLIGHT_OFFSET_RANGE
+        offset_description = f"Applies globally, to every transcript. Allowed range: {low} to {high}."
+        holder = self._defaults_item(
+            scroll, "Shift the highlighted letter vertically by this many pixels (positive = up, negative = down)",
+            "highlight position offset vertical move nudge up down focus letter orp",
+            offset_description,
+        )
+        offset_row = ctk.CTkFrame(holder, fg_color="transparent")
         offset_row.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(
             offset_row, text="Shift the highlighted letter vertically by this many pixels (positive = up, negative = down):",
@@ -377,13 +455,19 @@ class SettingsWindow(ctk.CTkToplevel):
         self.highlight_offset_entry.insert(0, str(highlight_offset_px))
         self.highlight_offset_entry.pack(side="left", padx=(8, 0))
 
-        low, high = HIGHLIGHT_OFFSET_RANGE
         ctk.CTkLabel(
-            scroll, text=f"Applies globally, to every transcript. Allowed range: {low} to {high}.",
+            holder, text=offset_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        thickness_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        low, high = GUIDE_MARK_THICKNESS_RANGE
+        thickness_description = f"Applies globally, to every transcript. Allowed range: {low} to {high}."
+        holder = self._defaults_item(
+            scroll, "Thickness of the vertical guide marks, in pixels",
+            "guide marks lines width stroke thick thin crosshair",
+            thickness_description,
+        )
+        thickness_row = ctk.CTkFrame(holder, fg_color="transparent")
         thickness_row.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(
             thickness_row, text="Thickness of the vertical guide marks, in pixels:",
@@ -394,80 +478,127 @@ class SettingsWindow(ctk.CTkToplevel):
         self.guide_mark_thickness_entry.insert(0, str(guide_mark_thickness_px))
         self.guide_mark_thickness_entry.pack(side="left", padx=(8, 0))
 
-        low, high = GUIDE_MARK_THICKNESS_RANGE
         ctk.CTkLabel(
-            scroll, text=f"Applies globally, to every transcript. Allowed range: {low} to {high}.",
+            holder, text=thickness_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        length_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        length_description = "Length of the vertical guide marks, as a percentage of the current word so they keep scaling with the Word Size setting above. Applies globally."
+        holder = self._defaults_item(
+            scroll, "Mark length",
+            "guide marks vertical lines height size percent percentage crosshair",
+            length_description,
+        )
+        length_row = ctk.CTkFrame(holder, fg_color="transparent")
         length_row.pack(fill="x", pady=6)
         ctk.CTkLabel(length_row, text="Mark length", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
         self.guide_mark_length_label = ctk.CTkLabel(length_row, text=f"{guide_mark_length_percent}%", width=70, text_color=COCOA_INK, font=self.label_font)
         self.guide_mark_length_label.pack(side="right")
         self.default_guide_mark_length_percent = guide_mark_length_percent
         self.guide_mark_length_slider = self._styled_slider(
-            scroll, GUIDE_MARK_LENGTH_PERCENT_RANGE[0], GUIDE_MARK_LENGTH_PERCENT_RANGE[1],
+            holder, GUIDE_MARK_LENGTH_PERCENT_RANGE[0], GUIDE_MARK_LENGTH_PERCENT_RANGE[1],
             GUIDE_MARK_LENGTH_PERCENT_RANGE[1] - GUIDE_MARK_LENGTH_PERCENT_RANGE[0],
             lambda v: (self.guide_mark_length_label.configure(text=f"{int(v)}%"), setattr(self, "default_guide_mark_length_percent", int(v))),
         )
         self.guide_mark_length_slider.set(guide_mark_length_percent)
         self.guide_mark_length_slider.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(
-            scroll,
-            text="Length of the vertical guide marks, as a percentage of the current word so they keep scaling with the Word Size setting above. Applies globally.",
+            holder,
+            text=length_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
+        mark_color_description = "Colour of the vertical guide marks above and below the highlighted letter. Applies globally, to every transcript."
+        holder = self._defaults_item(
+            scroll, "Mark colour",
+            "color guide marks lines vertical crosshair",
+            mark_color_description,
+        )
         self.default_guide_mark_color = guide_mark_color
-        self.guide_mark_color_swatch = self._color_row(scroll, "Mark colour", guide_mark_color, self._pick_guide_mark_color)
+        self.guide_mark_color_swatch = self._color_row(holder, "Mark colour", guide_mark_color, self._pick_guide_mark_color)
         ctk.CTkLabel(
-            scroll,
-            text="Colour of the vertical guide marks above and below the highlighted letter. Applies globally, to every transcript.",
+            holder,
+            text=mark_color_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        self.guide_mark_horizontal_switch = self._styled_switch(scroll, "Show horizontal guide lines")
+        horizontal_description = "Adds a fixed grey line above and below the vertical guide marks, sized close to the width of the reading area, to help keep your eyes centered while reading."
+        holder = self._defaults_item(
+            scroll, "Show horizontal guide lines",
+            "crosshair grey gray above below centered centred",
+            horizontal_description,
+        )
+        self.guide_mark_horizontal_switch = self._styled_switch(holder, "Show horizontal guide lines")
         (self.guide_mark_horizontal_switch.select() if guide_mark_horizontal_enabled else self.guide_mark_horizontal_switch.deselect())
         self.guide_mark_horizontal_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
-            scroll,
-            text="Adds a fixed grey line above and below the vertical guide marks, sized close to the width of the reading area, to help keep your eyes centered while reading.",
+            holder,
+            text=horizontal_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        self.length_pacing_switch = self._styled_switch(scroll, "Slow down for long words")
+        pacing_description = "Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies, since they don't stack. Applies globally, takes effect after clicking Apply."
+        holder = self._defaults_item(
+            scroll, "Slow down for long words",
+            "length long pacing pause delay timing longer pace speed",
+            pacing_description,
+        )
+        self.length_pacing_switch = self._styled_switch(holder, "Slow down for long words")
         (self.length_pacing_switch.select() if length_pacing_enabled else self.length_pacing_switch.deselect())
         self.length_pacing_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
-            scroll,
-            text="Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies, since they don't stack. Applies globally, takes effect after clicking Apply.",
+            holder,
+            text=pacing_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        self.warm_up_switch = self._styled_switch(scroll, "Ease in at the start of reading")
+        warm_up_description = "Starts each reading session at about half speed and builds up to your chosen speed over the first several words, so you settle in instead of being hit with full speed right away. It stacks with the pacing above. Applies globally, to the main and detached windows, and takes effect after clicking Apply."
+        holder = self._defaults_item(
+            scroll, "Ease in at the start of reading",
+            "warm up warmup warm-up ramp gradually slow start half speed build up begin",
+            warm_up_description,
+        )
+        self.warm_up_switch = self._styled_switch(holder, "Ease in at the start of reading")
         (self.warm_up_switch.select() if warm_up_enabled else self.warm_up_switch.deselect())
         self.warm_up_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
-            scroll,
-            text="Starts each reading session at about half speed and builds up to your chosen speed over the first several words, so you settle in instead of being hit with full speed right away. It stacks with the pacing above. Applies globally, to the main and detached windows, and takes effect after clicking Apply.",
+            holder,
+            text=warm_up_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        self.split_long_paragraphs_switch = self._styled_switch(scroll, "Split long paragraphs when normalizing")
+        split_description = "When you click Normalize, also break a long wall of text into paragraphs at sentence ends, so it's easier to read in the edit box. This only changes how the text is laid out for editing, never what gets read or the reading speed. Applies globally; takes effect the next time you click Normalize."
+        holder = self._defaults_item(
+            scroll, "Split long paragraphs when normalizing",
+            "normalize normalise paragraphs break wall of text sentences edit box layout",
+            split_description,
+        )
+        self.split_long_paragraphs_switch = self._styled_switch(holder, "Split long paragraphs when normalizing")
         (self.split_long_paragraphs_switch.select() if split_long_paragraphs_enabled else self.split_long_paragraphs_switch.deselect())
         self.split_long_paragraphs_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
-            scroll,
-            text="When you click Normalize, also break a long wall of text into paragraphs at sentence ends, so it's easier to read in the edit box. This only changes how the text is laid out for editing, never what gets read or the reading speed. Applies globally; takes effect the next time you click Normalize.",
+            holder,
+            text=split_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        self.resume_rewind_switch = self._styled_switch(scroll, "Rewind a few words when resuming")
+        low, high = RESUME_REWIND_WORDS_RANGE
+        rewind_description = (
+            "When you resume after pausing, reading first steps back this many words, "
+            "so you pick up with a little context instead of exactly where you stopped. "
+            f"Applies globally, to the main and detached windows. Allowed range: {low} to {high}. "
+            "Takes effect after clicking Apply, and only while the toggle above is on."
+        )
+        holder = self._defaults_item(
+            scroll, "Rewind a few words when resuming",
+            "back step back replay context resume pause words to rewind on resume",
+            rewind_description,
+        )
+        self.resume_rewind_switch = self._styled_switch(holder, "Rewind a few words when resuming")
         (self.resume_rewind_switch.select() if resume_rewind_enabled else self.resume_rewind_switch.deselect())
         self.resume_rewind_switch.pack(anchor="w", pady=(0, 5))
 
-        rewind_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        rewind_row = ctk.CTkFrame(holder, fg_color="transparent")
         rewind_row.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(
             rewind_row, text="Words to rewind on resume:",
@@ -478,58 +609,70 @@ class SettingsWindow(ctk.CTkToplevel):
         self.resume_rewind_words_entry.insert(0, str(resume_rewind_words))
         self.resume_rewind_words_entry.pack(side="left", padx=(8, 0))
 
-        low, high = RESUME_REWIND_WORDS_RANGE
         ctk.CTkLabel(
-            scroll,
-            text=(
-                "When you resume after pausing, reading first steps back this many words, "
-                "so you pick up with a little context instead of exactly where you stopped. "
-                f"Applies globally, to the main and detached windows. Allowed range: {low} to {high}. "
-                "Takes effect after clicking Apply, and only while the toggle above is on."
-            ),
+            holder,
+            text=rewind_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        self.scrub_pause_switch = self._styled_switch(scroll, "Pause after using the scrubber")
+        scrub_description = "When you drag the progress bar to a new spot and let go, reading pauses there, so you can get your bearings before pressing play. Turn this off to have reading keep going from the new spot if it was already playing. Applies globally, to the main and detached windows, and takes effect after clicking Apply."
+        holder = self._defaults_item(
+            scroll, "Pause after using the scrubber",
+            "scrub scrubber progress bar seek drag jump position slider stop",
+            scrub_description,
+        )
+        self.scrub_pause_switch = self._styled_switch(holder, "Pause after using the scrubber")
         (self.scrub_pause_switch.select() if scrub_pause_enabled else self.scrub_pause_switch.deselect())
         self.scrub_pause_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
-            scroll,
-            text="When you drag the progress bar to a new spot and let go, reading pauses there, so you can get your bearings before pressing play. Turn this off to have reading keep going from the new spot if it was already playing. Applies globally, to the main and detached windows, and takes effect after clicking Apply.",
+            holder,
+            text=scrub_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
-        self.peripheral_context_switch = self._styled_switch(scroll, "Show surrounding words")
+        peripheral_description = "Shows a dim line beneath the flashing word with the words just before and after it, so you keep a little sense of the sentence around what you're reading without your eyes leaving the centre. Applies globally, to the main and detached windows, and takes effect after clicking Apply."
+        holder = self._defaults_item(
+            scroll, "Show surrounding words",
+            "peripheral context ribbon sentence before after dim line neighbours neighbors nearby",
+            peripheral_description,
+        )
+        self.peripheral_context_switch = self._styled_switch(holder, "Show surrounding words")
         (self.peripheral_context_switch.select() if peripheral_context_enabled else self.peripheral_context_switch.deselect())
         self.peripheral_context_switch.pack(anchor="w", pady=(0, 5))
         ctk.CTkLabel(
-            scroll,
-            text="Shows a dim line beneath the flashing word with the words just before and after it, so you keep a little sense of the sentence around what you're reading without your eyes leaving the centre. Applies globally, to the main and detached windows, and takes effect after clicking Apply.",
+            holder,
+            text=peripheral_description,
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 20))
 
+        holder = self._defaults_item(scroll, searchable=False)
         ctk.CTkLabel(
-            scroll, text="Skip controls below apply immediately, to the current transcript and all future ones",
+            holder, text="Skip controls below apply immediately, to the current transcript and all future ones",
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 10))
 
-        skip_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        holder = self._defaults_item(scroll, "Skip amount", "skip jump forward backward words arrows buttons")
+        skip_row = ctk.CTkFrame(holder, fg_color="transparent")
         skip_row.pack(fill="x", pady=6)
         ctk.CTkLabel(skip_row, text="Skip amount", width=90, anchor="w", text_color=COCOA_INK, font=self.label_font).pack(side="left")
         self.skip_word_count_label = ctk.CTkLabel(skip_row, text=f"{skip_word_count} words", width=70, text_color=COCOA_INK, font=self.label_font)
         self.skip_word_count_label.pack(side="right")
         self.skip_word_count_slider = self._styled_slider(
-            scroll, SKIP_WORD_COUNT_RANGE[0], SKIP_WORD_COUNT_RANGE[1], SKIP_WORD_COUNT_RANGE[1] - SKIP_WORD_COUNT_RANGE[0],
+            holder, SKIP_WORD_COUNT_RANGE[0], SKIP_WORD_COUNT_RANGE[1], SKIP_WORD_COUNT_RANGE[1] - SKIP_WORD_COUNT_RANGE[0],
             self._handle_skip_word_count_slide,
         )
         self.skip_word_count_slider.set(skip_word_count)
         self.skip_word_count_slider.pack(fill="x", pady=(0, 10))
 
-        self.pause_on_skip_switch = self._styled_switch(scroll, "Pause playback when skipping", self._handle_pause_on_skip_toggle)
+        holder = self._defaults_item(scroll, "Pause playback when skipping", "skip jump stop halt play")
+        self.pause_on_skip_switch = self._styled_switch(holder, "Pause playback when skipping", self._handle_pause_on_skip_toggle)
         (self.pause_on_skip_switch.select() if pause_on_skip else self.pause_on_skip_switch.deselect())
         self.pause_on_skip_switch.pack(anchor="w", pady=(5, 15))
 
-        self._reset_row(scroll, self._handle_reset_defaults)
+        holder = self._defaults_item(scroll, searchable=False)
+        self._reset_row(holder, self._handle_reset_defaults)
+
+        self._layout_defaults()
 
     def _reset_row(self, tab, command) -> None:
         row = ctk.CTkFrame(tab, fg_color="transparent")
