@@ -631,6 +631,59 @@ def test_center_shortcut_reaches_the_main_and_detached_readers(app, monkeypatch)
     app.canvas._handle_reattach()
     assert app.canvas._detached_window is None
 
+def test_search_box_shows_the_clear_button_only_while_there_is_text(app):
+    """The shared search box: empty, it shows its hint and no X; with text it
+    shows the X and hides the hint; the X (clear) puts it back to empty."""
+    from gui.components.search_box import SearchBox
+
+    box = SearchBox(app)
+    box.pack()
+    app.update_idletasks()
+    try:
+        assert box.get() == ""
+        assert box._clear_button.winfo_manager() == ""
+        assert box._hint.winfo_manager() == "place"
+
+        box.variable.set("abc")
+        assert box.get() == "abc"
+        assert box._clear_button.winfo_manager() == "pack"
+        assert box._hint.winfo_manager() == ""
+
+        box.clear()
+        assert box.get() == ""
+        assert box._clear_button.winfo_manager() == ""
+        assert box._hint.winfo_manager() == "place"
+    finally:
+        box.destroy()
+
+
+def test_transcript_search_filters_and_the_clear_button_restores_the_list(app):
+    """The transcript list's search runs through the shared search box: typing
+    narrows the rows, a search that matches nothing shows the message, and
+    clearing brings every row back. Puts the real list back at the end."""
+    from types import SimpleNamespace
+
+    def fake(transcript_id, title):
+        return SimpleNamespace(id=transcript_id, title=title, times_read=0, total_time_spent_seconds=0)
+
+    body = app.list_body
+    body.render_transcripts([fake(1, "Alpha notes"), fake(2, "Beta notes")])
+    try:
+        assert len(body.entries_frame.winfo_children()) == 2
+
+        body._search_box.variable.set("alp")
+        assert len(body.entries_frame.winfo_children()) == 1
+
+        body._search_box.variable.set("zzz")
+        children = body.entries_frame.winfo_children()
+        assert len(children) == 1  # the "No transcripts match" message
+        assert children[0].cget("text") == "No transcripts match your search."
+
+        body._search_box.clear()
+        assert len(body.entries_frame.winfo_children()) == 2
+    finally:
+        body._search_box.variable.set("")
+        app._refresh_transcript_list()
 
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no

@@ -3,6 +3,7 @@ import tkinter.font as tkfont
 
 import customtkinter as ctk
 from gui.components.divider import Divider
+from gui.components.search_box import SearchBox
 from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
 
 
@@ -91,23 +92,19 @@ class TranscriptListBody(ctk.CTkFrame):
         sort_button.pack(side="right")
         self._sort_button = sort_button
 
-        # trace_add fires on every change to the entry's text: typing,
-        # pasting, cutting, or a programmatic .set(), unlike binding a
+        # The search box is the shared SearchBox (also used by the Settings
+        # window), a bordered entry with a small clear "X". Its text lives in
+        # a StringVar, and trace_add fires on every change to it: typing,
+        # pasting, cutting, the X, or a programmatic .set(), unlike binding a
         # key event, which would miss paste/cut/clear. render_transcripts()
         # (called by app.py on every add/delete/rename/move/space-switch)
         # already triggers its own _rerender(); this covers the other
         # two triggers, a changed search text or a changed sort mode,
         # neither of which needs new data from app.py at all.
-        self._search_var = tk.StringVar()
+        self._search_box = SearchBox(toolbar, placeholder_text="Search…")
+        self._search_box.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self._search_var = self._search_box.variable
         self._search_var.trace_add("write", lambda *_args: self._rerender())
-
-        entry_font = ctk.CTkFont(family=FONT_BODY, size=13)
-        search_entry = ctk.CTkEntry(
-            toolbar, textvariable=self._search_var, placeholder_text="Search…",
-            height=28, fg_color=HEARTH_PAPER, border_color=WARM_LINE, border_width=1,
-            text_color=COCOA_INK, font=entry_font,
-        )
-        search_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
         # Purely decorative: separates the search/sort toolbar above from
         # the scrollable list below so the two don't visually run

@@ -148,3 +148,33 @@ def center_icon(size: int = 12, color: str = "#FFFFFF") -> ctk.CTkImage:
     rgba = (*ImageColor.getrgb(color)[:3], 255)
     glyph = _draw_center_glyph(size * _PAGE_ICON_SOURCE_SCALE, rgba)
     return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
+
+def _draw_clear_glyph(size: int, color) -> Image.Image:
+    """A small "X": two diagonals with rounded ends, the usual clear mark for a
+    search box. Kept well inside its square so a 10px glyph has breathing room
+    in a 20px button."""
+    supersample = 4  # draw large, then downscale: gives smooth, anti-aliased edges
+    s = size * supersample
+    line_width = max(2, round(s * 0.14))
+
+    image = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    near, far = s * 0.27, s * 0.73
+    draw.line([(near, near), (far, far)], fill=color, width=line_width)
+    draw.line([(near, far), (far, near)], fill=color, width=line_width)
+
+    # PIL's lines have square ends; a small disc on each end rounds them.
+    cap = line_width / 2
+    for x, y in ((near, near), (far, far), (near, far), (far, near)):
+        draw.ellipse([x - cap, y - cap, x + cap, y + cap], fill=color)
+
+    return image.resize((size, size), Image.LANCZOS)
+
+
+def clear_icon(size: int = 10, color: str = "#888888") -> ctk.CTkImage:
+    """The search box's clear button icon, drawn in the given #RRGGBB colour
+    (the caller passes a grey that suits its theme)."""
+    rgba = (*ImageColor.getrgb(color)[:3], 255)
+    glyph = _draw_clear_glyph(size * _PAGE_ICON_SOURCE_SCALE, rgba)
+    return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
