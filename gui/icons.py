@@ -178,3 +178,34 @@ def clear_icon(size: int = 10, color: str = "#888888") -> ctk.CTkImage:
     rgba = (*ImageColor.getrgb(color)[:3], 255)
     glyph = _draw_clear_glyph(size * _PAGE_ICON_SOURCE_SCALE, rgba)
     return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
+
+
+
+def _draw_description_glyph(size: int, color) -> Image.Image:
+    """A few short lines of "text", the usual mark for a block of writing.
+    Used on the Settings search's "also search descriptions" toggle. The last
+    line is shorter so it reads as a paragraph rather than a menu."""
+    supersample = 4  # draw large, then downscale: gives smooth, anti-aliased edges
+    s = size * supersample
+    line_width = max(2, round(s * 0.085))
+
+    image = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    rows = ((0.16, 0.84, 0.26), (0.16, 0.84, 0.50), (0.16, 0.60, 0.74))  # x0, x1, y
+    cap = line_width / 2
+    for x0, x1, y in rows:
+        draw.line([(s * x0, s * y), (s * x1, s * y)], fill=color, width=line_width)
+        # PIL's lines have square ends; a small disc on each end rounds them.
+        for x in (x0, x1):
+            draw.ellipse([s * x - cap, s * y - cap, s * x + cap, s * y + cap], fill=color)
+
+    return image.resize((size, size), Image.LANCZOS)
+
+
+def description_icon(size: int = 16, color: str = "#000000") -> ctk.CTkImage:
+    """The Settings search's "search descriptions" toggle icon, drawn in the
+    given #RRGGBB colour (the caller passes its theme's ink colour)."""
+    rgba = (*ImageColor.getrgb(color)[:3], 255)
+    glyph = _draw_description_glyph(size * _PAGE_ICON_SOURCE_SCALE, rgba)
+    return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))

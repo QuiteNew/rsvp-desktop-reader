@@ -637,8 +637,6 @@ def test_search_box_shows_the_clear_button_only_while_there_is_text(app):
     from gui.components.search_box import SearchBox
 
     box = SearchBox(app)
-    box.pack()
-    app.update_idletasks()
     try:
         assert box.get() == ""
         assert box._clear_button.winfo_manager() == ""
@@ -652,7 +650,6 @@ def test_search_box_shows_the_clear_button_only_while_there_is_text(app):
         assert box._clear_button.winfo_manager() == ""
     finally:
         box.destroy()
-
 
 def test_transcript_search_filters_and_the_clear_button_restores_the_list(app):
     """The transcript list's search runs through the shared search box: typing
@@ -668,10 +665,10 @@ def test_transcript_search_filters_and_the_clear_button_restores_the_list(app):
     try:
         assert len(body.entries_frame.winfo_children()) == 2
 
-        body._search_box.variable.set("alp")
+        body._search_box.set_text("alp")
         assert len(body.entries_frame.winfo_children()) == 1
 
-        body._search_box.variable.set("zzz")
+        body._search_box.set_text("zzz")
         children = body.entries_frame.winfo_children()
         assert len(children) == 1  # the "No transcripts match" message
         assert children[0].cget("text") == "No transcripts match your search."
@@ -679,7 +676,7 @@ def test_transcript_search_filters_and_the_clear_button_restores_the_list(app):
         body._search_box.clear()
         assert len(body.entries_frame.winfo_children()) == 2
     finally:
-        body._search_box.variable.set("")
+        body._search_box.clear()
         app._refresh_transcript_list()
 
 def test_settings_search_filters_the_defaults_tab(app):
@@ -699,7 +696,7 @@ def test_settings_search_filters_the_defaults_tab(app):
         assert shown() == settings
         assert all(item.holder.winfo_manager() == "pack" for item in others)
 
-        window._defaults_search.variable.set("crosshair")
+        window._defaults_search.set_text("crosshair")
         assert shown() == [
             "Thickness of the vertical guide marks, in pixels",
             "Mark length",
@@ -708,12 +705,53 @@ def test_settings_search_filters_the_defaults_tab(app):
         ]
         assert all(item.holder.winfo_manager() == "" for item in others)
 
-        window._defaults_search.variable.set("zzzz")
+        window._defaults_search.set_text("zzzz")
         assert shown() == []
 
         window._defaults_search.clear()
         assert shown() == settings
         assert all(item.holder.winfo_manager() == "pack" for item in others)
+    finally:
+        window.destroy()
+
+def test_settings_search_descriptions_toggle_messages_and_reset_note(app):
+    """The descriptions toggle, the no-match message, and the reset note. With
+    the toggle off a description-only word finds nothing and shows the message;
+    turning it on finds the setting. A matching search hides the reset row and
+    shows a note in its place; clearing brings everything back."""
+    app._open_settings_window()
+    window = app._settings_window
+    try:
+        items = window._defaults_items
+
+        def shown():
+            return [i.name for i in items if i.searchable and i.holder.winfo_manager() == "pack"]
+
+        # "settle" appears only in the Ease-in setting's description.
+        window._defaults_search.set_text("settle")
+        assert shown() == []
+        assert window._defaults_no_match.winfo_manager() == "pack"
+        assert window._defaults_reset_note.winfo_manager() == ""
+
+        assert window._search_descriptions is False
+        window._toggle_search_descriptions()
+        assert window._search_descriptions is True
+        assert "Ease in at the start of reading" in shown()
+        assert window._defaults_no_match.winfo_manager() == ""
+
+        # Back off, then a search that matches by name hides the reset row (one
+        # of the non-searchable items) and shows the note in its place.
+        window._toggle_search_descriptions()
+        window._defaults_search.set_text("speed")
+        assert shown()
+        assert all(i.holder.winfo_manager() == "" for i in items if not i.searchable)
+        assert window._defaults_reset_note.winfo_manager() == "pack"
+        assert window._defaults_no_match.winfo_manager() == ""
+
+        window._defaults_search.clear()
+        assert window._defaults_reset_note.winfo_manager() == ""
+        assert shown() == [i.name for i in items if i.searchable]
+        assert all(i.holder.winfo_manager() == "pack" for i in items if not i.searchable)
     finally:
         window.destroy()
 

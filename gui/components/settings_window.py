@@ -14,6 +14,7 @@ from core.settings_store import (
 )
 from core.timing import format_duration
 from gui.components.search_box import SearchBox
+from gui.icons import description_icon
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 @dataclass
@@ -337,7 +338,8 @@ class SettingsWindow(ctk.CTkToplevel):
         """Shows the entries of the Defaults tab that fit the query, always in
         their original order. A blank query shows everything, which is the tab
         exactly as built. While a query is typed, the grey notes and the reset
-        row are hidden.
+        row are hidden; a small note takes the reset row's place, and if nothing
+        matches at all, a "no settings match" message is shown in their stead.
 
         Every holder is forgotten and the visible ones are packed again, rather
         than touching only the ones that changed: a widget packed again after
@@ -347,30 +349,71 @@ class SettingsWindow(ctk.CTkToplevel):
         were given when built, so nothing is scaled a second time on a
         high-DPI screen (CTkBaseClass.pack scales padding on every call)."""
         searching = bool(query_words(query))
+        self._defaults_no_match.pack_forget()
+        self._defaults_reset_note.pack_forget()
         for item in self._defaults_items:
             item.holder.pack_forget()
+        any_match = False
         for item in self._defaults_items:
             if item.searchable:
                 visible = matches(query, item.name, item.keywords, item.description, include_description)
+                if visible:
+                    any_match = True
             else:
                 visible = not searching
             if visible:
                 item.holder.pack(fill="x")
+        # The reset row is one of the hidden non-searchable items while
+        # searching; a short note takes its place so its absence is explained,
+        # unless nothing matched at all, when only the no-match message shows.
+        if searching and not any_match:
+            self._defaults_no_match.pack(anchor="w", pady=(5, 15))
+        elif searching:
+            self._defaults_reset_note.pack(anchor="w", pady=(20, 0))
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, peripheral_context_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
+
         # The search row sits above the list and belongs to this tab alone:
-        # the other tabs are short and are not searched. Typing re-lays out
-        # the list below through _layout_defaults() (see the trace at the end
-        # of this method), so the list changes live as you type.
-        search_row = ctk.CTkFrame(tab, fg_color="transparent")
+        # the other tabs are short and are not searched. Typing re-lays out the
+        # list below through _handle_defaults_search_changed, so the list
+        # changes live as you type. The row is a taupe strip (like the
+        # transcript list's toolbar) so the paper search box reads as a bright
+        # field against it, and it also holds the "search descriptions" toggle
+        # to the box's right.
+        self._search_descriptions = False
+        search_row = ctk.CTkFrame(tab, fg_color=WARM_TAUPE, corner_radius=8)
         search_row.pack(fill="x", padx=(0, 4), pady=(2, 8))
+
+        # Packed before the box, same reason as the transcript list's sort
+        # button: reserve the fixed-size control's slot on the right first so
+        # the box, which fills what is left, can never push it out of the row.
+        self._descriptions_icon = description_icon(16, COCOA_INK)
+        self._descriptions_button = ctk.CTkButton(
+            search_row, text="", image=self._descriptions_icon, width=28, height=28, corner_radius=8,
+            fg_color=HEARTH_PAPER, hover_color=WARM_LINE, border_width=1, border_color=WARM_LINE,
+            text_color=COCOA_INK, command=self._toggle_search_descriptions,
+        )
+        self._descriptions_button.pack(side="right", padx=(0, 8), pady=6)
+
         self._defaults_search = SearchBox(search_row, placeholder_text="Search settings…", on_change=self._handle_defaults_search_changed)
-        self._defaults_search.pack(side="left", fill="x", expand=True)
+        self._defaults_search.pack(side="left", fill="x", expand=True, padx=(8, 6), pady=6)
 
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
         self._defaults_scroll = scroll
+
+        # Shown by _layout_defaults() in place of the list, never at the same
+        # time as it: the no-match message when a search finds nothing, the
+        # reset note in the hidden reset row's place while a search has matches.
+        self._defaults_no_match = ctk.CTkLabel(
+            scroll, text="No settings match your search.",
+            text_color=COCOA_INK, font=self.small_font,
+        )
+        self._defaults_reset_note = ctk.CTkLabel(
+            scroll, text="Clear the search to show the reset button.",
+            text_color=COCOA_INK, font=self.small_font,
+        )
 
         holder = self._defaults_item(scroll, searchable=False)
         ctk.CTkLabel(holder, text="Applied to newly created transcripts only", text_color=COCOA_INK, font=self.small_font).pack(anchor="w", pady=(5, 15))
@@ -691,11 +734,22 @@ class SettingsWindow(ctk.CTkToplevel):
         keeping the old scroll offset would leave the first matches off screen.
         Reaches into CTkScrollableFrame's `_parent_canvas`, the same private
         attribute _redirect_scroll_to_defaults_frame() already uses."""
-        self._layout_defaults(self._defaults_search.get())
+        self._layout_defaults(self._defaults_search.get(), self._search_descriptions)
         try:
             self._defaults_scroll._parent_canvas.yview_moveto(0)
         except AttributeError:
             pass
+
+    def _toggle_search_descriptions(self) -> None:
+        """Turns searching inside each setting's description on or off and
+        shows the button's pressed state (solid ember on, pale off). Re-filters
+        at once, so a query already typed updates."""
+        self._search_descriptions = not self._search_descriptions
+        if self._search_descriptions:
+            self._descriptions_button.configure(fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER)
+        else:
+            self._descriptions_button.configure(fg_color=HEARTH_PAPER, hover_color=WARM_LINE)
+        self._handle_defaults_search_changed()
 
     def _reset_row(self, tab, command) -> None:
         row = ctk.CTkFrame(tab, fg_color="transparent")
