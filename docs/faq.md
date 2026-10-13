@@ -121,6 +121,19 @@ already there), or use the toggle in the Bookmarks popover. Bookmarks appear as
 small ticks under the progress bar and as rows in the popover. In the popover,
 single-click a row to jump to that word, and double-click it to rename it.
 
+### The words look smaller than my Word size, or a scrollbar appeared
+
+That is auto-fit. When the widest flash in a transcript, usually a multi-word
+group at a large Word size, would run past the edges of the reading area, the
+reader draws the words a little smaller so they fit. Your Word size setting is
+not changed, and the words return to full size when everything fits again, for
+example with a smaller group or a wider window. Auto-fit never goes below 60% of
+your Word size. If a flash is still too wide at that point, a horizontal
+scrollbar appears along the bottom so you can slide the words into view. The
+small button above it, or the **C** key, snaps them back to the centre. See
+[Wide flashes](usage.md#wide-flashes-auto-fit-and-the-scrollbar) for the full
+picture.
+
 ### Why can't I turn on focus mode in the detached window?
 
 On purpose. Focus mode hides the sidebar and app chrome, and the detached window
@@ -130,7 +143,8 @@ in the main window only.
 ### What are the keyboard shortcuts?
 
 Space to play or pause, left and right arrows to skip, R to restart, B to
-bookmark the current word, Esc to stop, and F for focus mode (main window only).
+bookmark the current word, C to centre the words after panning with the
+horizontal scrollbar, Esc to stop, and F for focus mode (main window only).
 Shortcuts are ignored while you are typing in a text field. The full table is on
 the [Usage](usage.md) page.
 

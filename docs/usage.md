@@ -236,7 +236,9 @@ There are two ways a group's size is decided:
   mode a group also never holds more than six words.
 
 Chunking is set per transcript, so different transcripts can read differently,
-and there are defaults that new transcripts start from.
+and there are defaults that new transcripts start from. A large group at a big
+Word size can be wider than the reading area, which the reader handles for you,
+see [Wide flashes](#wide-flashes-auto-fit-and-the-scrollbar) below.
 
 ### The quick control
 
@@ -264,6 +266,47 @@ Applying to the current transcript re-groups the live reader in place and keeps
 your spot; applying to the defaults only affects transcripts you create later.
 The bottom control band and this window stay in step, since both drive the same
 per-transcript settings.
+
+## Wide flashes: auto-fit and the scrollbar
+
+Sometimes a flash is wider than the reading area, most often when chunking is
+on at a large Word size, or when a transcript contains one very long word. The
+reader deals with this on its own, in two stages, and most of the time you will
+not notice either one.
+
+**Auto-fit** shrinks the words just enough that the widest flash in the whole
+transcript fits the reading area, with a small margin on each side. It measures
+the entire transcript up front rather than the flash on screen, so the size
+stays steady while you read instead of changing from flash to flash. Only what
+is drawn changes: your Word size setting, the +/- buttons, and the saved size
+are never touched, and the words return to full size as soon as everything fits
+again (a smaller group, a smaller Word size, or a wider window). The guide marks
+and the surrounding-words line follow the shrunken size. Auto-fit is always on,
+there is no setting for it.
+
+**The 60% floor.** Auto-fit never shrinks the words below 60% of your Word size.
+If the widest flash is still too wide at that size, the scrollbar takes over.
+
+**The scrollbar** appears along the bottom of the reading area only while
+something still overflows, and goes away again when nothing does. Drag it to
+slide the words left or right and bring the hidden part into view. Its travel
+covers only what is actually hidden, so there is no empty space to scroll into,
+and it is sized for the widest flash, so one position works for the whole
+session. While you are panned, the guide marks are hidden (they mark the fixed
+centre point, which is no longer where the focus letter sits), and the
+surrounding-words line slides along with the words.
+
+**The centre button** is a small square at the bottom left of the reading area,
+just above the scrollbar. Click it to snap the words back to the centre, or
+press **C**. The position is not saved: it starts centred every time a
+transcript is opened, and again whenever the scrollbar goes away.
+
+All of this works the same in the main window, the detached window, and the
+window that plays a selection.
+
+Panning moves the words, it cannot make a flash wider than the window fit in a
+single glance. If you keep seeing the scrollbar, the lasting fix is a smaller
+group, a lower adaptive width, or a smaller Word size.
 
 ## The detached window
 
@@ -293,6 +336,7 @@ a text field (the search box, a rename field, or the edit box).
 | Left / Right arrows | Skip backward / forward, by the skip word count set in Settings |
 | R | Restart |
 | B | Bookmark the current word (or remove the bookmark there) |
+| C | Snap the words back to the centre after panning with the horizontal scrollbar (see [Wide flashes](#wide-flashes-auto-fit-and-the-scrollbar)) |
 | Esc | Stop: ends the session and returns to the edit view. Works in both the main and detached windows |
 | F | Toggle focus mode (main window only) |
 

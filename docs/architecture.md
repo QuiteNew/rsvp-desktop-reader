@@ -70,6 +70,21 @@ of its own. The passage of time is the GUI's job.
   transcripts, Spaces, and settings between machines, deliberately leaving the
   machine-specific data path out of the bundle.
 
+### Display geometry
+
+`scroll.py` is the arithmetic behind the reader's horizontal scrollbar. When a
+flash is still wider than the reading row after the font has been fitted, the
+display pans by a pixel offset added to its centre anchor. `scroll.py` holds the
+pure pieces of that: how far the offset can travel, clamping it to that range,
+and converting between the pixel offset and the pair of fractions a scrollbar
+uses to size and place its thumb. It has no widgets in it, so it is tested
+without a display like the rest of the core.
+
+The core also owns how a flash's text is assembled. `reader.py` exposes the
+split of each chunk into its before, focus, and after parts, in one place, so
+that drawing a flash and measuring how wide the widest one is both use the same
+text.
+
 ## The GUI layer
 
 `gui/` is the CustomTkinter interface. It composes the windows, draws the
@@ -91,6 +106,15 @@ peripheral ribbon. This display widget is where the timing loop actually lives:
 it asks the session for the current word and its delay, shows the word, and
 schedules the next step with the toolkit's timer. The core computes how long;
 the GUI waits that long.
+
+The display also fits what it draws to the room it has. It measures the widest
+flash in the transcript in real pixels (again only when the grouping changes) and
+renders the font no larger than that flash allows, never below 60% of the chosen
+Word size. That is render-only: the saved size is never written back. If
+something still overflows at the floor, it shows a horizontal scrollbar, driven by
+the geometry in `core/scroll.py`, and a small button (and the C key) that returns
+the flash to the centre. Measuring pixels is the GUI's job, which is why the fit
+calculation lives here and only the pure arithmetic lives in the core.
 
 Around the reader sit the controls: the floating stop button, the toolbar with
 its play, restart, bookmarks, detach, and focus-mode actions and its time and
