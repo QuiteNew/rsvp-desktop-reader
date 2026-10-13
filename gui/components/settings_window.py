@@ -13,6 +13,7 @@ from core.settings_store import (
     RESUME_REWIND_WORDS_RANGE,
 )
 from core.timing import format_duration
+from gui.components.search_box import SearchBox
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 @dataclass
@@ -103,6 +104,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._data_directory = data_directory
         self._defaults_scroll = None  # set once the Defaults tab's scrollable frame exists
         self._defaults_items = []  # the Defaults tab's entries, in display order; see _defaults_item()
+        self._defaults_search = None  # the Defaults tab's SearchBox, once built
 
         self.label_font = ctk.CTkFont(family=FONT_BODY, size=13)
         self.small_font = ctk.CTkFont(family=FONT_BODY, size=11)
@@ -356,6 +358,15 @@ class SettingsWindow(ctk.CTkToplevel):
                 item.holder.pack(fill="x")
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, peripheral_context_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
+        # The search row sits above the list and belongs to this tab alone:
+        # the other tabs are short and are not searched. Typing re-lays out
+        # the list below through _layout_defaults() (see the trace at the end
+        # of this method), so the list changes live as you type.
+        search_row = ctk.CTkFrame(tab, fg_color="transparent")
+        search_row.pack(fill="x", padx=(0, 4), pady=(2, 8))
+        self._defaults_search = SearchBox(search_row, placeholder_text="Search settings…", on_change=self._handle_defaults_search_changed)
+        self._defaults_search.pack(side="left", fill="x", expand=True)
+
         scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=(0, 0))
 
@@ -673,6 +684,18 @@ class SettingsWindow(ctk.CTkToplevel):
         self._reset_row(holder, self._handle_reset_defaults)
 
         self._layout_defaults()
+
+    def _handle_defaults_search_changed(self) -> None:
+        """Re-lays out the Defaults list for the text now in the search box,
+        then returns it to the top: the list just got shorter or longer, so
+        keeping the old scroll offset would leave the first matches off screen.
+        Reaches into CTkScrollableFrame's `_parent_canvas`, the same private
+        attribute _redirect_scroll_to_defaults_frame() already uses."""
+        self._layout_defaults(self._defaults_search.get())
+        try:
+            self._defaults_scroll._parent_canvas.yview_moveto(0)
+        except AttributeError:
+            pass
 
     def _reset_row(self, tab, command) -> None:
         row = ctk.CTkFrame(tab, fg_color="transparent")

@@ -93,18 +93,15 @@ class TranscriptListBody(ctk.CTkFrame):
         self._sort_button = sort_button
 
         # The search box is the shared SearchBox (also used by the Settings
-        # window), a bordered entry with a small clear "X". Its text lives in
-        # a StringVar, and trace_add fires on every change to it: typing,
-        # pasting, cutting, the X, or a programmatic .set(), unlike binding a
-        # key event, which would miss paste/cut/clear. render_transcripts()
-        # (called by app.py on every add/delete/rename/move/space-switch)
-        # already triggers its own _rerender(); this covers the other
-        # two triggers, a changed search text or a changed sort mode,
-        # neither of which needs new data from app.py at all.
-        self._search_box = SearchBox(toolbar, placeholder_text="Search…")
+        # window), a bordered entry with a small clear "X". It reports every
+        # change to its text (typing, pasting, cutting, the X) through
+        # on_change; render_transcripts() (called by app.py on every
+        # add/delete/rename/move/space-switch) already triggers its own
+        # _rerender(). Between the two, a changed search text, a changed sort
+        # mode, and new data from app.py all re-derive the list, none of which
+        # app.py needs to know about.
+        self._search_box = SearchBox(toolbar, placeholder_text="Search…", on_change=self._rerender)
         self._search_box.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        self._search_var = self._search_box.variable
-        self._search_var.trace_add("write", lambda *_args: self._rerender())
 
         # Purely decorative: separates the search/sort toolbar above from
         # the scrollable list below so the two don't visually run
@@ -164,7 +161,7 @@ class TranscriptListBody(ctk.CTkFrame):
         directly whenever the search box or sort menu changes, since
         neither of those needs new data, just a different view of what's
         already here."""
-        search_text = self._search_var.get().strip().lower()
+        search_text = self._search_box.get().strip().lower()
         filtered = [t for t in self._all_transcripts if search_text in t.title.lower()]
 
         key_func, reverse = self.SORT_MODES[self._sort_label]

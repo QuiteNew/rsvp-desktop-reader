@@ -632,8 +632,8 @@ def test_center_shortcut_reaches_the_main_and_detached_readers(app, monkeypatch)
     assert app.canvas._detached_window is None
 
 def test_search_box_shows_the_clear_button_only_while_there_is_text(app):
-    """The shared search box: empty, it shows its hint and no X; with text it
-    shows the X and hides the hint; the X (clear) puts it back to empty."""
+    """The shared search box: empty, it shows no X; with text it shows the X;
+    the X (clear) puts it back to empty."""
     from gui.components.search_box import SearchBox
 
     box = SearchBox(app)
@@ -642,17 +642,14 @@ def test_search_box_shows_the_clear_button_only_while_there_is_text(app):
     try:
         assert box.get() == ""
         assert box._clear_button.winfo_manager() == ""
-        assert box._hint.winfo_manager() == "place"
 
-        box.variable.set("abc")
+        box.set_text("abc")
         assert box.get() == "abc"
-        assert box._clear_button.winfo_manager() == "pack"
-        assert box._hint.winfo_manager() == ""
+        assert box._clear_button.winfo_manager() == "place"
 
         box.clear()
         assert box.get() == ""
         assert box._clear_button.winfo_manager() == ""
-        assert box._hint.winfo_manager() == "place"
     finally:
         box.destroy()
 
@@ -684,6 +681,41 @@ def test_transcript_search_filters_and_the_clear_button_restores_the_list(app):
     finally:
         body._search_box.variable.set("")
         app._refresh_transcript_list()
+
+def test_settings_search_filters_the_defaults_tab(app):
+    """Typing in the Defaults tab's search box narrows the list live, in the
+    original order. Notes and the reset row are hidden while a search is active
+    and come back when it is cleared."""
+    app._open_settings_window()
+    window = app._settings_window
+    try:
+        items = window._defaults_items
+        settings = [item.name for item in items if item.searchable]
+        others = [item for item in items if not item.searchable]
+
+        def shown():
+            return [item.name for item in items if item.searchable and item.holder.winfo_manager() == "pack"]
+
+        assert shown() == settings
+        assert all(item.holder.winfo_manager() == "pack" for item in others)
+
+        window._defaults_search.variable.set("crosshair")
+        assert shown() == [
+            "Thickness of the vertical guide marks, in pixels",
+            "Mark length",
+            "Mark colour",
+            "Show horizontal guide lines",
+        ]
+        assert all(item.holder.winfo_manager() == "" for item in others)
+
+        window._defaults_search.variable.set("zzzz")
+        assert shown() == []
+
+        window._defaults_search.clear()
+        assert shown() == settings
+        assert all(item.holder.winfo_manager() == "pack" for item in others)
+    finally:
+        window.destroy()
 
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
