@@ -209,3 +209,42 @@ def description_icon(size: int = 16, color: str = "#000000") -> ctk.CTkImage:
     rgba = (*ImageColor.getrgb(color)[:3], 255)
     glyph = _draw_description_glyph(size * _PAGE_ICON_SOURCE_SCALE, rgba)
     return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
+
+
+def _draw_info_glyph(size: int, color) -> Image.Image:
+    """A lowercase "i": a round dot above a short stem, the usual mark for
+    an about/info button. Just the letter, not a circle around it; the
+    button itself supplies the round look via its own corner_radius, the
+    same way clear_icon's X does not draw a circle either."""
+    supersample = 4  # draw large, then downscale: gives smooth, anti-aliased edges
+    s = size * supersample
+    line_width = max(2, round(s * 0.14))
+    centre_x = s / 2
+
+    image = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    dot_radius = line_width * 0.62
+    dot_y = s * 0.26
+    draw.ellipse(
+        [centre_x - dot_radius, dot_y - dot_radius, centre_x + dot_radius, dot_y + dot_radius],
+        fill=color,
+    )
+
+    stem_top = s * 0.44
+    stem_bottom = s * 0.78
+    draw.line([(centre_x, stem_top), (centre_x, stem_bottom)], fill=color, width=line_width)
+    # Rounds the stem's lower end to match the dot's curve; the top end sits
+    # flush under the dot, so only the bottom needs a cap.
+    cap = line_width / 2
+    draw.ellipse([centre_x - cap, stem_bottom - cap, centre_x + cap, stem_bottom + cap], fill=color)
+
+    return image.resize((size, size), Image.LANCZOS)
+
+
+def info_icon(size: int = 14, color: str = "#888888") -> ctk.CTkImage:
+    """The Settings window's About button icon, drawn in the given #RRGGBB
+    colour (the caller passes a grey that suits its theme)."""
+    rgba = (*ImageColor.getrgb(color)[:3], 255)
+    glyph = _draw_info_glyph(size * _PAGE_ICON_SOURCE_SCALE, rgba)
+    return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
