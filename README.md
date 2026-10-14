@@ -248,6 +248,7 @@ Settings are organized into five tabs:
 - ~~Documentation and README reformatting~~ 
 - ~~Horizontal scrollbar in the reader display (reposition the flash left/right)~~
 - ~~Search functionality in settings~~
+- App version info
 
 
 ## License
