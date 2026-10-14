@@ -150,6 +150,15 @@ the [Usage](usage.md) page.
 
 ## Settings and appearance
 
+### How do I find a setting?
+
+The Defaults tab in Settings has a **Search settings...** box at the top. Type a
+word from the setting's name (or a related word like "colour" or "crosshair")
+and the list narrows as you type; the button beside the box also searches each
+setting's description when you turn it on. Clear the box with the **X** at its
+right to bring the full list, and the **Reset to Original Defaults** button,
+back.
+
 ### I changed the theme but nothing happened
 
 The Light / Dark / System theme takes effect the next time you launch the app,

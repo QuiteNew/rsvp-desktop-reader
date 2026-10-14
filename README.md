@@ -83,10 +83,12 @@ reading this way (including where it helps and where it does not), see [The scie
 - Deep customization: per-transcript font, highlight, and background
   colors; adjustable sidebar width and control-band height, including live
   drag-to-resize; a relocatable folder for where your data is stored
+- Searchable settings - the Defaults tab has a live search that filters by a
+  setting's name or, when you turn on the toggle beside it, its description
 - Light / Dark / System theme support, with reading colors that
   automatically follow the active theme unless you've customized them
 - Fully offline and self-contained - no browser, offline,
-  custom fonts bundled directly into the projectll
+  custom fonts bundled directly into the project
 
 ## The RSVP Technique
 
@@ -147,6 +149,7 @@ rsvp-desktop-reader/
 │   ├── timing.py            # Converts WPM into a per-word delay
 │   ├── reader.py            # ReaderSession: ties the above together
 │   ├── scroll.py            # Pure geometry for the reader's horizontal pan
+│   ├── settings_search.py   # Pure matching for the Settings search (name, keywords, description)
 │   ├── transcript_store.py  # In-memory store + persistence for transcripts/spaces
 │   ├── settings_store.py    # In-memory store + persistence for app settings
 │   ├── storage.py           # Low-level JSON read/write
@@ -170,6 +173,7 @@ rsvp-desktop-reader/
 │   ├── test_punctuation.py
 │   ├── test_reader.py
 │   ├── test_scroll.py
+│   ├── test_settings_search.py
 │   ├── test_settings_store.py
 │   ├── test_storage.py
 │   ├── test_timing.py
@@ -243,7 +247,7 @@ Settings are organized into five tabs:
 - ~~Numorous bug fixes~~
 - ~~Documentation and README reformatting~~ 
 - ~~Horizontal scrollbar in the reader display (reposition the flash left/right)~~
-- Search functionality in settings
+- ~~Search functionality in settings~~
 
 
 ## License

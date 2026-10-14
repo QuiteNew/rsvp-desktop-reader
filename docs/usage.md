@@ -155,9 +155,10 @@ never changes the transcript's saved text, position, or stats.
 ### Finding transcripts
 
 A **Search...** box above the list filters the current Space's transcripts by
-title (case-insensitive), it does not search the body text. Next to it, a sort
-button offers Title A to Z, Title Z to A, Date added newest or oldest first,
-Most read, and Most time spent reading.
+title (case-insensitive), it does not search the body text. A small **X** inside
+the right end of the box clears what you have typed. Next to it, a sort button
+offers Title A to Z, Title Z to A, Date added newest or oldest first, Most read,
+and Most time spent reading.
 
 ## The reader
 
@@ -345,6 +346,15 @@ a text field (the search box, a rename field, or the edit box).
 Open **Settings** from the top-right. Changes on most tabs are staged until you
 click **Apply** (with **Close** to dismiss), and a few act immediately, noted
 below. There are five tabs.
+
+A **Search settings...** box sits at the top of this tab and filters the
+controls below as you type. It matches a setting's name and some extra keywords
+(so "colour" finds the colour pickers and "crosshair" finds the guide-mark
+controls), in any order, and clears with the **X** inside its right end. The button next
+to the box also searches each setting's longer description when you turn it on.
+While a search is active the grey notes and the **Reset to Original Defaults**
+button are hidden, with a short line in their place; if nothing matches, the tab
+says so.
 
 ### Defaults
 
