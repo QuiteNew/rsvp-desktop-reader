@@ -755,6 +755,406 @@ def test_settings_search_descriptions_toggle_messages_and_reset_note(app):
     finally:
         window.destroy()
 
+# ---- Settings About button and About dialog ----
+#
+# These tests open and close real CustomTkinter windows, which is the most
+# delicate thing this suite does on Windows. Two rules keep them from taking
+# the interpreter down with them, and both are worth reading before adding
+# another test here.
+#
+# One Settings window is shared by nearly all of them, for the same reason the
+# module shares a single app (see the note at the top of this file): CTk is
+# built for a window being opened a handful of times over a session, not a
+# dozen times in a few seconds. Only the test that has to watch Settings being
+# built with particular colours makes its own.
+#
+# And every window is given time to finish starting up before anything touches
+# it, and time to finish tearing down afterwards. A CTkToplevel on Windows does
+# not come up in one go: its __init__ hides the window, recolours the titlebar
+# and calls update(), then leaves the rest to a string of timers, 5ms to put
+# the window back on screen, 10ms to restore focus, another 10ms from
+# resizable() to run the whole titlebar routine a second time, 200ms to set the
+# icon, 1000ms to settle its min and max size. Our own dialogs add an 80ms
+# reveal on top. In the app that sequence always completes, because the event
+# loop runs continuously between a person's clicks. In a test nothing runs the
+# loop unless we ask, so a window built and destroyed back to back is destroyed
+# halfway through its own startup, with Tk's window bookkeeping still mid-change
+# and the leftovers queued for whatever window is unlucky enough to call
+# update() next. _settle() is what asks, and it is why these tests briefly flash
+# real windows on screen while they run.
+
+
+def _all_widgets(root):
+    """root and every widget below it, depth first."""
+    found = [root]
+    for child in root.winfo_children():
+        found.extend(_all_widgets(child))
+    return found
+
+
+def _labels_by_text(root):
+    """Every CTkLabel under root, keyed by its text."""
+    import customtkinter as ctk
+
+    return {w.cget("text"): w for w in _all_widgets(root) if isinstance(w, ctk.CTkLabel)}
+
+
+def _find_button(root, text):
+    """The CTkButton under root with this text."""
+    import customtkinter as ctk
+
+    for widget in _all_widgets(root):
+        if isinstance(widget, ctk.CTkButton) and widget.cget("text") == text:
+            return widget
+    raise AssertionError(f"no button labelled {text!r}")
+
+
+def _settle(widget, milliseconds=250):
+    """Run Tk's event loop for a while, so everything already queued, timers
+    included, gets a chance to finish.
+
+    The default is long enough to cover a CTkToplevel's whole startup sequence
+    (see the note at the top of this block), so a window that has been settled
+    is one Tk has finished putting up and is safe to inspect or destroy."""
+    import time
+
+    end = time.monotonic() + milliseconds / 1000
+    while time.monotonic() < end:
+        widget.update()
+        time.sleep(0.005)
+
+
+def _cancel_pending_afters(window):
+    """Cancel whatever Tk timers `window`, or anything inside it, still has
+    queued. Only ever called on a settled window that is about to be destroyed,
+    so what is left is the long tail, mainly CTkToplevel's 1000ms min and max
+    size callback, that would otherwise fire against a freed widget.
+
+    Each timer is cancelled through the widget that scheduled it, found by
+    matching the timer's Tcl command name against that widget's own
+    _tclCommands list. That detail matters: after_cancel deletes the timer's
+    Tcl command and takes it off the calling widget's list, so cancelling
+    through any other widget deletes the command while leaving it on its
+    owner's list, and the owner then dies with "can't delete Tcl command" when
+    it is destroyed. Timers belonging to anything outside this window, such as
+    the main window's own widgets or CustomTkinter's DPI watcher, are left
+    alone for the same reason."""
+    owner_of = {}
+    for widget in _all_widgets(window):
+        for command_name in (getattr(widget, "_tclCommands", None) or ()):
+            owner_of[command_name] = widget
+
+    try:
+        pending = window.tk.splitlist(window.tk.call("after", "info"))
+    except Exception:
+        return
+    for after_id in pending:
+        try:
+            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
+        except Exception:
+            continue
+        owner = owner_of.get(command_name)
+        if owner is not None:
+            try:
+                owner.after_cancel(after_id)
+            except Exception:
+                pass
+
+
+def _close(application, window):
+    """Settle a window, then take it down and let the teardown drain. The
+    application is only needed for that last part, since by then the window
+    itself is gone and something live has to run the loop."""
+    _settle(window)
+    _cancel_pending_afters(window)
+    window.destroy()
+    _settle(application, 100)
+
+
+def _open_about(settings_window):
+    """Press the info button and return the About dialog it opened, settled and
+    ready to inspect."""
+    settings_window._info_button.invoke()
+    dialog = settings_window._about_dialog
+    _settle(dialog)
+    return dialog
+
+
+def _close_about(application, dialog, close=None):
+    """Close an About dialog the way a person would, with its own Close button
+    unless another way in is given, and let both the close and whatever it set
+    off in Settings finish."""
+    _cancel_pending_afters(dialog)
+    (close or _find_button(dialog, "Close").invoke)()
+    _settle(application, 150)
+
+
+def _contrast_ratio(color_a, color_b):
+    """WCAG contrast ratio between two "#RRGGBB" colours: 1.0 for identical
+    colours up to 21.0 for black on white. Order does not matter."""
+    def luminance(color):
+        channels = []
+        for start in (1, 3, 5):
+            value = int(color[start:start + 2], 16) / 255
+            channels.append(value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+    lighter, darker = sorted((luminance(color_a), luminance(color_b)), reverse=True)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _solid_colour(ctk_image):
+    """The average "#RRGGBB" of the fully opaque pixels of a CTkImage, which is
+    the colour a drawn glyph actually came out as."""
+    picture = ctk_image.cget("light_image")
+    pixels = [picture.getpixel((x, y)) for x in range(picture.width) for y in range(picture.height)]
+    solid = [pixel for pixel in pixels if pixel[3] == 255]
+    assert solid, "expected some fully opaque pixels"
+    red, green, blue = (round(sum(pixel[i] for pixel in solid) / len(solid)) for i in range(3))
+    return f"#{red:02X}{green:02X}{blue:02X}"
+
+
+@pytest.fixture(scope="module")
+def settings(app):
+    """One Settings window, built once and shared by the tests below, for the
+    reason given at the top of this block. Every test that uses it has to leave
+    it as it found it: no About dialog open, and its own attributes unchanged,
+    which is what the monkeypatch calls and the geometry restore below are for."""
+    app._open_settings_window()
+    window = app._settings_window
+    _settle(window)
+    try:
+        yield window
+    finally:
+        _close(app, window)
+
+
+def test_contrast_ratio_helper_matches_known_values():
+    assert _contrast_ratio("#000000", "#FFFFFF") == pytest.approx(21.0)
+    assert _contrast_ratio("#FFFFFF", "#000000") == pytest.approx(21.0)
+    assert _contrast_ratio("#777777", "#777777") == pytest.approx(1.0)
+    # The widely quoted WCAG example: #767676 on white is the lightest grey
+    # that still passes 4.5:1.
+    assert _contrast_ratio("#767676", "#FFFFFF") == pytest.approx(4.54, abs=0.01)
+
+
+def test_settings_info_button_opens_and_closes_the_about_dialog(app, settings):
+    from gui.components.about_dialog import AboutDialog
+
+    dialog = _open_about(settings)
+    assert isinstance(dialog, AboutDialog)
+    assert dialog.winfo_exists()
+    assert dialog.title() == "About"
+
+    _close_about(app, dialog)
+    assert not dialog.winfo_exists()
+    assert settings._about_dialog is None
+
+
+def test_about_dialog_shows_the_app_details_and_the_icon(app, settings):
+    from core.app_info import APP_NAME, APP_VERSION, LICENSE_NAME, REPO_URL
+
+    dialog = _open_about(settings)
+    try:
+        labels = _labels_by_text(dialog)
+        for expected in (
+            APP_NAME,
+            f"Version {APP_VERSION}",
+            f"Released under the {LICENSE_NAME} License",
+            REPO_URL.removeprefix("https://"),
+        ):
+            assert expected in labels
+
+        with_image = [label for label in labels.values() if label.cget("image") is not None]
+        assert len(with_image) == 1
+        assert with_image[0].cget("image").cget("size") == (96, 96)
+    finally:
+        _close_about(app, dialog)
+
+
+def test_about_link_opens_the_project_page_in_the_browser(app, settings, monkeypatch):
+    import webbrowser
+    from core.app_info import REPO_URL
+
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda url, *args, **kwargs: opened.append(url) or True)
+
+    dialog = _open_about(settings)
+    try:
+        assert dialog._link.cget("cursor") == "hand2"
+        # A click handler really is attached to the link, not just defined.
+        assert dialog._link._label.bind("<Button-1>")
+
+        dialog._open_repo()
+        assert opened == [REPO_URL]
+    finally:
+        _close_about(app, dialog)
+
+
+def test_pressing_the_info_button_twice_opens_one_about_dialog(app, settings):
+    from gui.components.about_dialog import AboutDialog
+
+    dialog = _open_about(settings)
+    try:
+        settings._info_button.invoke()
+        assert settings._about_dialog is dialog
+        assert sum(1 for w in settings.winfo_children() if isinstance(w, AboutDialog)) == 1
+    finally:
+        _close_about(app, dialog)
+
+
+def test_about_dialog_can_be_opened_again_after_any_kind_of_close(app, settings):
+    """Closed with its own button, with the window's close control, or
+    destroyed behind Settings' back (so its close hook never ran), the info
+    button must open a fresh dialog afterwards and never go dead."""
+    dialog = _open_about(settings)
+    _close_about(app, dialog)
+    assert settings._about_dialog is None
+
+    # The window manager's own close control, which the dialog routes through
+    # the same handler as its button.
+    dialog = _open_about(settings)
+    _close_about(app, dialog, lambda: dialog.tk.call(dialog.protocol("WM_DELETE_WINDOW")))
+    assert not dialog.winfo_exists()
+    assert settings._about_dialog is None
+
+    # Destroyed without going through the dialog's own handler at all, so
+    # Settings is never told. The info button still has to recover.
+    dialog = _open_about(settings)
+    _close_about(app, dialog, dialog.destroy)
+
+    replacement = _open_about(settings)
+    try:
+        assert replacement is not dialog
+        assert replacement.winfo_exists()
+    finally:
+        _close_about(app, replacement)
+
+
+def test_closing_the_about_dialog_hands_the_grab_back_to_settings(app, settings, monkeypatch):
+    """The dialog's own input grab replaces Settings', so when it closes,
+    Settings has to ask for its grab again (after a short delay). Checks the
+    hand-back is requested, not Tk's grab bookkeeping itself."""
+    calls = []
+    monkeypatch.setattr(settings, "_regrab_if_still_open", lambda: calls.append("regrab"))
+
+    dialog = _open_about(settings)
+    try:
+        _close_about(app, dialog)
+        assert calls == ["regrab"]
+    finally:
+        if dialog.winfo_exists():
+            _close_about(app, dialog)
+
+
+def test_about_dialog_colours_follow_the_palette(app, settings, monkeypatch):
+    """The dialog has to read well in both themes, not just the one the tests
+    happen to run in. Swaps in each full palette for the colours the dialog
+    imports, builds it, and checks its fill, its text colours and the contrast
+    of the two blended ones against the paper. The blends are computed from the
+    palette, so the dark dialog's greys and blues must also come out different
+    from the light one's, which a hard-coded value would not."""
+    from core.app_info import APP_NAME, APP_VERSION
+    import gui.components.about_dialog as about_module
+    from gui import theme
+
+    blended = {}
+    for palette_name, palette in (("light", theme.LIGHT_PALETTE), ("dark", theme.DARK_PALETTE)):
+        with monkeypatch.context() as patch:
+            for module_name, key in (
+                ("HEARTH_PAPER", "hearth_paper"), ("COCOA_INK", "cocoa_ink"), ("DUSK_BLUE", "dusk_blue"),
+                ("EMBER_GLOW", "ember_glow"), ("EMBER_GLOW_HOVER", "ember_glow_hover"),
+            ):
+                patch.setattr(about_module, module_name, palette[key])
+
+            # Built directly rather than through the info button, since the
+            # palette has to be in place before __init__ reads it. With no
+            # on_close it never touches the shared window's own dialog slot.
+            dialog = about_module.AboutDialog(settings)
+            _settle(dialog)
+            try:
+                paper, ink = palette["hearth_paper"], palette["cocoa_ink"]
+                labels = _labels_by_text(dialog)
+
+                assert dialog.cget("fg_color") == paper
+                assert labels[APP_NAME].cget("text_color") == ink
+                assert labels[f"Version {APP_VERSION}"].cget("text_color") == dialog._muted_color
+                assert labels[dialog._link.cget("text")].cget("text_color") == dialog._link_color
+                assert _contrast_ratio(dialog._muted_color, paper) >= 4.5
+                assert _contrast_ratio(dialog._link_color, paper) >= 4.5
+
+                close = _find_button(dialog, "Close")
+                assert close.cget("fg_color") == palette["ember_glow"]
+                assert close.cget("hover_color") == palette["ember_glow_hover"]
+                assert close.cget("text_color") == ink
+
+                blended[palette_name] = (dialog._muted_color, dialog._link_color)
+            finally:
+                _close_about(app, dialog, dialog.destroy)
+
+    assert blended["light"][0] != blended["dark"][0]
+    assert blended["light"][1] != blended["dark"][1]
+
+
+def test_info_button_colours_follow_the_palette(app, settings, monkeypatch):
+    """The info button's chip, hover chip and glyph colours come from the theme,
+    and the glyph stays visible against its chip in both palettes. This one
+    builds its own Settings windows, since the palette has to be in place
+    before Settings' __init__ draws the icons; the shared window is taken only
+    to put the app's own reference back afterwards."""
+    import gui.components.settings_window as settings_module
+    from gui import theme
+
+    for palette in (theme.LIGHT_PALETTE, theme.DARK_PALETTE):
+        with monkeypatch.context() as patch:
+            for module_name, key in (
+                ("COCOA_INK", "cocoa_ink"), ("WARM_TAUPE", "warm_taupe"), ("WARM_LINE", "warm_line"),
+            ):
+                patch.setattr(settings_module, module_name, palette[key])
+
+            app._open_settings_window()
+            window = app._settings_window
+            try:
+                _settle(window)
+                button = window._info_button
+                assert button.cget("fg_color") == palette["warm_taupe"]
+                assert button.cget("hover_color") == palette["warm_line"]
+                assert button.cget("image") is window._info_rest_icon
+
+                rest = _solid_colour(window._info_rest_icon)
+                hover = _solid_colour(window._info_hover_icon)
+                assert rest != hover
+                assert _contrast_ratio(rest, palette["warm_taupe"]) >= 3.0
+                assert _contrast_ratio(hover, palette["warm_line"]) >= 3.0
+            finally:
+                _close(app, window)
+                app._settings_window = settings
+
+
+def test_info_button_sits_above_the_tabs_at_the_right_edge(app, settings):
+    """Top right, in a strip of its own, so it can never cover a tab: its
+    bottom edge stays above the tab view's top edge, and it stays near the
+    right edge of the window, at the usual size and at the smallest the window
+    can be made."""
+    original_geometry = settings.geometry()
+    button = settings._info_button
+
+    def check_position():
+        settings.update()
+        assert button.winfo_rooty() + button.winfo_height() <= settings.tabview.winfo_rooty()
+        assert button.winfo_rootx() > settings.winfo_rootx() + settings.winfo_width() * 0.8
+        assert button.winfo_rootx() + button.winfo_width() <= settings.winfo_rootx() + settings.winfo_width()
+
+    try:
+        check_position()
+        settings.geometry("420x420")
+        _settle(settings, 150)
+        check_position()
+    finally:
+        settings.geometry(original_geometry)
+        _settle(settings, 150)
+
+
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
     drag in between still fires on_drag_end, which commits _pending_value, so

@@ -3,6 +3,7 @@ import sys
 import customtkinter as ctk
 from dataclasses import dataclass
 from tkinter import colorchooser, filedialog
+from core.colors import blend_colors
 from core.settings_search import matches, query_words
 from core.settings_store import (
     AppSettings,
@@ -13,8 +14,9 @@ from core.settings_store import (
     RESUME_REWIND_WORDS_RANGE,
 )
 from core.timing import format_duration
+from gui.components.about_dialog import AboutDialog
 from gui.components.search_box import SearchBox
-from gui.icons import description_icon
+from gui.icons import description_icon, info_icon
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 @dataclass
@@ -106,10 +108,13 @@ class SettingsWindow(ctk.CTkToplevel):
         self._defaults_scroll = None  # set once the Defaults tab's scrollable frame exists
         self._defaults_items = []  # the Defaults tab's entries, in display order; see _defaults_item()
         self._defaults_search = None  # the Defaults tab's SearchBox, once built
+        self._about_dialog = None  # the About popup while it is open, see _open_about()
 
         self.label_font = ctk.CTkFont(family=FONT_BODY, size=13)
         self.small_font = ctk.CTkFont(family=FONT_BODY, size=11)
         self.button_font = ctk.CTkFont(family=FONT_BODY, size=13)
+
+        self._build_info_button()
 
         self.tabview = ctk.CTkTabview(
             self,
@@ -123,7 +128,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK,
         )
 
-        self.tabview.pack(fill="both", expand=True, padx=(15, 0), pady=(15, 5))
+        self.tabview.pack(fill="both", expand=True, padx=(15, 0), pady=(4, 5))
 
         defaults_tab = self.tabview.add("Defaults")
         layout_tab = self.tabview.add("Layout")
@@ -236,6 +241,48 @@ class SettingsWindow(ctk.CTkToplevel):
         # currently holds the grab.
         if self.winfo_exists() and self.grab_current() is None:
             self.grab_set()
+
+    def _build_info_button(self) -> None:
+        """The small round "i" button at the top right that opens the About
+        popup. It gets a thin strip of its own above the tabs rather than
+        floating over the tab bar, so it can never sit on top of a tab however
+        wide or narrow the window is.
+
+        Same look and behaviour as the search box's clear button: a soft chip
+        that deepens on hover, with the glyph muted at rest and full ink on
+        hover. The muted shade is blended from the theme's own colours so it
+        reads on both the light and the dark chip."""
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=(15, 12), pady=(10, 0))
+
+        self._info_rest_icon = info_icon(16, blend_colors(COCOA_INK, WARM_TAUPE, 0.25))
+        self._info_hover_icon = info_icon(16, COCOA_INK)
+        self._info_button = ctk.CTkButton(
+            header, text="", image=self._info_rest_icon, width=24, height=24, corner_radius=12,
+            fg_color=WARM_TAUPE, hover_color=WARM_LINE, cursor="hand2", command=self._open_about,
+        )
+        self._info_button.pack(side="right")
+        self._info_button.bind("<Enter>", lambda _event: self._info_button.configure(image=self._info_hover_icon))
+        self._info_button.bind("<Leave>", lambda _event: self._info_button.configure(image=self._info_rest_icon))
+
+    def _open_about(self) -> None:
+        """Opens the About popup over this window, one at a time. The popup
+        takes its input grab a few milliseconds after it appears, so a quick
+        second click on the button could otherwise open another before the
+        first is in the way."""
+        if self._about_dialog is not None and self._about_dialog.winfo_exists():
+            self._about_dialog.lift()
+            self._about_dialog.focus_force()
+            return
+        self._about_dialog = AboutDialog(self, on_close=self._handle_about_closed)
+
+    def _handle_about_closed(self) -> None:
+        """The About popup is gone. Its own input grab replaced this window's,
+        and destroying it does not give that back, so take it again. The helper
+        checks that nothing else holds the grab first, and the short delay is
+        the same one _open_native_dialog() uses."""
+        self._about_dialog = None
+        self.after(50, self._regrab_if_still_open)
 
     def _set_entry_value(self, entry: ctk.CTkEntry, value) -> None:
         entry.delete(0, "end")
