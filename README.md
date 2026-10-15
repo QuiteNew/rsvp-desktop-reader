@@ -258,6 +258,7 @@ project on GitHub.
 - ~~Horizontal scrollbar in the reader display (reposition the flash left/right)~~
 - ~~Search functionality in settings~~
 - ~~App version info dialog~~
+- Automated tests and repo cleanup
 
 
 ## License
