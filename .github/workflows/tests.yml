@@ -1,0 +1,47 @@
+name: Tests
+
+# Runs the whole pytest suite on every push to main and every pull request.
+# The release workflow also calls this one before it builds anything, so a tag
+# can't produce a release from a commit whose tests are failing.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # The full history brings the release tags along. One test compares
+          # APP_VERSION with the newest tag, and it can only do that if it can
+          # see them.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install a virtual display
+        # The GUI tests need a screen to draw on, and the runner has none.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run the tests
+        run: xvfb-run -a --server-args="-screen 0 1280x1024x24" python -m pytest

@@ -15,7 +15,14 @@ permissions:
   contents: write
 
 jobs:
+  # Runs the same test workflow the pushes and pull requests use. The build
+  # below waits for it, so a failing test stops the release before anything
+  # gets built or uploaded.
+  test:
+    uses: ./.github/workflows/tests.yml
+
   build:
+    needs: test
     strategy:
       fail-fast: false
       matrix:
