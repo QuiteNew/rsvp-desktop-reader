@@ -251,14 +251,18 @@ class SettingsWindow(ctk.CTkToplevel):
         Same look and behaviour as the search box's clear button: a soft chip
         that deepens on hover, with the glyph muted at rest and full ink on
         hover. The muted shade is blended from the theme's own colours so it
-        reads on both the light and the dark chip."""
+        reads on both the light and the dark chip.
+
+        Kept deliberately small, a 20px chip with a 12px glyph, so it sits
+        quietly in the corner. The glyph is drawn in proportion to its size,
+        so a smaller one also has a thinner stroke."""
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=(15, 12), pady=(10, 0))
 
-        self._info_rest_icon = info_icon(16, blend_colors(COCOA_INK, WARM_TAUPE, 0.25))
-        self._info_hover_icon = info_icon(16, COCOA_INK)
+        self._info_rest_icon = info_icon(12, blend_colors(COCOA_INK, WARM_TAUPE, 0.25))
+        self._info_hover_icon = info_icon(12, COCOA_INK)
         self._info_button = ctk.CTkButton(
-            header, text="", image=self._info_rest_icon, width=24, height=24, corner_radius=12,
+            header, text="", image=self._info_rest_icon, width=20, height=20, corner_radius=10,
             fg_color=WARM_TAUPE, hover_color=WARM_LINE, cursor="hand2", command=self._open_about,
         )
         self._info_button.pack(side="right")
