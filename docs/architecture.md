@@ -87,6 +87,16 @@ text.
 
 ## The GUI layer
 
+### App identity
+
+`app_info.py` holds the app's name, version, license, and project link as plain
+constants, so the About dialog in Settings has one place to read them from and
+there is one place to change them. The version is bumped by hand just before a
+release is tagged, and a test fails if the repository already has a newer
+release tag than the one written there, which is the reminder to do it.
+
+### The GUI layer
+
 `gui/` is the CustomTkinter interface. It composes the windows, draws the
 reading canvas, and drives the clock that the core engine leaves to it.
 
@@ -131,8 +141,9 @@ Two small modules support the rest: `theme.py` holds the central design tokens
 (colors, fonts, and how the active theme is resolved), and `icons.py` draws the
 app's icons by hand rather than relying on font glyphs, which render
 inconsistently across platforms. The many dialogs (the add-transcript chooser,
-the create and move and delete dialogs, the Space dialogs, Settings, and the
-import dialogs) each live in their own component file under `gui/components/`.
+the create and move and delete dialogs, the Space dialogs, Settings, the About
+dialog, and the import dialogs) each live in their own component file under
+`gui/components/`.
 
 ## How a word reaches the screen
 

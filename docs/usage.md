@@ -345,7 +345,8 @@ a text field (the search box, a rename field, or the edit box).
 
 Open **Settings** from the top-right. Changes on most tabs are staged until you
 click **Apply** (with **Close** to dismiss), and a few act immediately, noted
-below. There are five tabs.
+below. There are five tabs, plus a small round **i** button in the top-right
+corner that opens the [About dialog](#the-about-dialog).
 
 A **Search settings...** box sits at the top of this tab and filters the
 controls below as you type. It matches a setting's name and some extra keywords
@@ -444,6 +445,18 @@ totals update when a reading session ends (clicking Stop, switching
 transcripts, detaching, or closing the app), not while you are simply paused,
 so if you want the latest numbers, stop or switch away first, then reopen
 Settings.
+
+### The About dialog
+
+The small round **i** button in the top-right corner of the Settings window
+opens an About dialog. It shows the app's icon, its name and version, the
+license it is released under, and a link to the project on GitHub; clicking
+the link opens the project page in your browser. That link is the only thing
+in the app that reaches outside it, and only when you click it. **Close**, or
+the window's own close button, takes you back to Settings.
+
+The version shown there is the one to quote when you report a problem, or to
+compare against the latest release on the project's Releases page.
 
 ### When changes take effect
 

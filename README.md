@@ -85,7 +85,9 @@ reading this way (including where it helps and where it does not), see [The scie
   drag-to-resize; a relocatable folder for where your data is stored
 - Searchable settings - the Defaults tab has a live search that filters by a
   setting's name or, when you turn on the toggle beside it, its description
-- Light / Dark / System theme support, with reading colors that
+- An About dialog behind the small round **i** button at the top right of
+  Settings, showing the app's version, its license, and a link to the project
+- Light / Dark / System theme support with reading colors that
   automatically follow the active theme unless you've customized them
 - Fully offline and self-contained - no browser, offline,
   custom fonts bundled directly into the project
@@ -150,6 +152,7 @@ rsvp-desktop-reader/
 │   ├── reader.py            # ReaderSession: ties the above together
 │   ├── scroll.py            # Pure geometry for the reader's horizontal pan
 │   ├── settings_search.py   # Pure matching for the Settings search (name, keywords, description)
+│   ├── app_info.py          # The app's name, version, license and project link, shown in the About dialog
 │   ├── transcript_store.py  # In-memory store + persistence for transcripts/spaces
 │   ├── settings_store.py    # In-memory store + persistence for app settings
 │   ├── storage.py           # Low-level JSON read/write
@@ -161,10 +164,12 @@ rsvp-desktop-reader/
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
 ├── tests/                   # Automated test suite covering core engine modules
 │   ├── conftest.py
+│   ├── test_app_info.py
 │   ├── test_chunking.py
 │   ├── test_colors.py
 │   ├── test_data_bundle.py
 │   ├── test_gui_smoke.py
+│   ├── test_icons.py
 │   ├── test_importers.py
 │   ├── test_models.py
 │   ├── test_normalizer.py
@@ -213,6 +218,10 @@ Settings are organized into five tabs:
   it's been read, words read, and time spent), updated when a session ends
   rather than while you're paused
 
+The small round **i** button at the top right of the Settings window opens an
+About dialog with the app's icon, name, version, license, and a link to the
+project on GitHub.
+
 ## Roadmap
 
 - ~~A real, finished Dark theme color palette (the underlying switching
@@ -248,7 +257,7 @@ Settings are organized into five tabs:
 - ~~Documentation and README reformatting~~ 
 - ~~Horizontal scrollbar in the reader display (reposition the flash left/right)~~
 - ~~Search functionality in settings~~
-- App version info dialog
+- ~~App version info dialog~~
 
 
 ## License

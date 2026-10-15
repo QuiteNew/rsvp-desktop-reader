@@ -159,6 +159,13 @@ setting's description when you turn it on. Clear the box with the **X** at its
 right to bring the full list, and the **Reset to Original Defaults** button,
 back.
 
+### Which version am I running?
+
+Open **Settings** and click the small round **i** button at the top right. The
+About dialog shows the version number, the license, and a link to the project
+page on GitHub, where the Releases section lists the newest version.
+*This is only for v3.3.0 onwards*
+
 ### I changed the theme but nothing happened
 
 The Light / Dark / System theme takes effect the next time you launch the app,
