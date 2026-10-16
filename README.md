@@ -11,6 +11,7 @@
 ![Offline](https://img.shields.io/badge/100%25%20offline-2E7D32?style=for-the-badge)
   [![Build & Release](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml)
   [![Docs](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml)
+  [![Tests](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/tests.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/tests.yml)
 
 A lightweight, fully offline speed-reading app that flashes transcript text
 one word at a time - eliminating eye movement so you can read faster without
@@ -136,6 +137,7 @@ For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs
 
 ````
 rsvp-desktop-reader/
+├── .github/workflows/       # GitHub Actions: tests, build & release, docs site
 ├── assets/
 │   ├── fonts/               # Bundled Fredoka & Quicksand font files
 │   └── icons/               # Custom made icon
@@ -185,6 +187,7 @@ rsvp-desktop-reader/
 │   ├── test_tokenizer.py
 │   └── test_transcript_store.py
 ├── main.py                  # Entry point
+├── RELEASING.md             # How a release is made, step by step
 └── requirements.txt         # Python dependencies
 ````
 <br>
@@ -258,7 +261,7 @@ project on GitHub.
 - ~~Horizontal scrollbar in the reader display (reposition the flash left/right)~~
 - ~~Search functionality in settings~~
 - ~~App version info dialog~~
-- Automated tests and repo cleanup
+- ~~Automated tests and repo cleanup~~
 
 
 ## License

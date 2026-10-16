@@ -175,3 +175,16 @@ suite does. The interface then gets a thin smoke-test layer on top to confirm
 the wiring holds. If the one-way dependency ever broke, that separation, and the
 testability that comes with it, would go with it. It is the rule most worth
 protecting in the codebase.
+
+## Tests and automation
+
+The suite runs in two places. On a development machine, `python -m pytest`
+runs all of it, the GUI smoke tests included. On GitHub, the Tests workflow
+runs the same suite on Linux for every push to `main` and every pull request,
+with a virtual display so the GUI tests have a screen to draw on.
+
+The release workflow runs that same workflow first and builds nothing unless
+it passes, so a tag can't turn a failing commit into a release. The steps for
+making a release are written down in
+[RELEASING.md](https://github.com/QuiteNew/rsvp-desktop-reader/blob/main/RELEASING.md)
+in the repository.
