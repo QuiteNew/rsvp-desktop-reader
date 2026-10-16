@@ -262,6 +262,7 @@ project on GitHub.
 - ~~Search functionality in settings~~
 - ~~App version info dialog~~
 - ~~Automated tests and repo cleanup~~
+- Setting profiles
 
 
 ## License
