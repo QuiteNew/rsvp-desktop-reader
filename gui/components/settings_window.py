@@ -15,6 +15,7 @@ from core.settings_store import (
 )
 from core.timing import format_duration
 from gui.components.about_dialog import AboutDialog
+from gui.components.profiles_tab import ProfilesTab
 from gui.components.search_box import SearchBox
 from gui.icons import description_icon, info_icon
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
@@ -35,10 +36,10 @@ class _DefaultsItem:
 
 class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
-    free-form drag-resize), where transcript data is stored, colour
-    theme, and per-transcript reading stats. Header height is a fixed
-    constant, not user-configurable; see gui/app.py. Theme changes take
-    effect on next launch, not live: every widget's color is set
+    free-form drag-resize), where transcript data is stored, colour theme,
+    saved reading profiles, and per-transcript reading stats. Header height
+    is a fixed constant, not user-configurable; see gui/app.py. Theme changes
+    take effect on next launch, not live: every widget's color is set
     explicitly at creation, so a live switch would mean reconfiguring the
     entire widget tree at once."""
 
@@ -67,6 +68,12 @@ class SettingsWindow(ctk.CTkToplevel):
         on_apply,
         on_export_requested,
         on_import_requested,
+        profile_names,
+        on_profile_save,
+        on_profile_update,
+        on_profile_apply,
+        on_profile_rename,
+        on_profile_delete,
         on_skip_word_count_changed=None,
         on_pause_on_skip_changed=None,
         on_configure_chunking=None,
@@ -101,6 +108,12 @@ class SettingsWindow(ctk.CTkToplevel):
         self.on_apply = on_apply
         self.on_export_requested = on_export_requested
         self.on_import_requested = on_import_requested
+        self.profile_names = profile_names
+        self.on_profile_save = on_profile_save
+        self.on_profile_update = on_profile_update
+        self.on_profile_apply = on_profile_apply
+        self.on_profile_rename = on_profile_rename
+        self.on_profile_delete = on_profile_delete
         self.on_skip_word_count_changed = on_skip_word_count_changed
         self.on_pause_on_skip_changed = on_pause_on_skip_changed
         self.on_configure_chunking = on_configure_chunking
@@ -134,6 +147,7 @@ class SettingsWindow(ctk.CTkToplevel):
         layout_tab = self.tabview.add("Layout")
         storage_tab = self.tabview.add("Storage")
         appearance_tab = self.tabview.add("Appearance")
+        profiles_tab = self.tabview.add("Profiles")
         stats_tab = self.tabview.add("Stats")
 
         self._build_defaults_tab(
@@ -148,6 +162,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
         self._build_appearance_tab(appearance_tab, appearance_mode)
+        self._build_profiles_tab(profiles_tab)
         self._build_stats_tab(stats_tab, transcripts)
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="#E74C3C", font=self.small_font)
@@ -1045,6 +1060,46 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
         ).pack(anchor="w", pady=(0, 10))
 
+    # ---- Profiles tab ----
+
+    def _build_profiles_tab(self, tab) -> None:
+        """Saved reading profiles (see gui/components/profiles_tab.py). The tab
+        does all of its own drawing and only calls back here for the three
+        things that belong to this window: running Apply first, the error line,
+        and the input grab.
+
+        Saving, updating and applying a profile all start with _handle_apply().
+        The other tabs copy their values in when the window opens and only write
+        them back on Apply, so without that a profile would miss anything that
+        hasn't been applied yet. After a profile has been applied the window
+        closes: its controls would otherwise still show the old values, and
+        pressing Apply later would quietly write those back over the profile."""
+        self.profiles_tab = ProfilesTab(
+            tab,
+            profile_names=self.profile_names,
+            on_prepare=self._handle_apply,
+            on_save=self.on_profile_save,
+            on_update=self.on_profile_update,
+            on_apply=self.on_profile_apply,
+            on_applied=self.destroy,
+            on_rename=self.on_profile_rename,
+            on_delete=self.on_profile_delete,
+            on_message=self._show_message,
+            on_popup_closed=self._handle_profile_popup_closed,
+        )
+        self.profiles_tab.pack(fill="both", expand=True, padx=(8, 4))
+
+    def _show_message(self, text: str) -> None:
+        """Put text on the red line at the bottom of the window, or clear it
+        when text is empty."""
+        self.error_label.configure(text=text)
+
+    def _handle_profile_popup_closed(self) -> None:
+        """A popup opened from the Profiles tab is gone. Its own input grab
+        replaced this window's, and destroying it does not give that back, so
+        take it again (the same hand-back as _handle_about_closed)."""
+        self.after(50, self._regrab_if_still_open)
+
     # ---- Stats tab ----
 
     def _build_stats_tab(self, tab, transcripts) -> None:
@@ -1116,7 +1171,12 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Apply ----
 
-    def _handle_apply(self) -> None:
+    def _handle_apply(self) -> bool:
+        """Check what is typed and chosen in the tabs and, if it is all fine,
+        hand it to the app to apply. Returns whether that happened. On a bad
+        value it shows the reason on the error line, applies nothing and returns
+        False. The Apply button ignores the result; the Profiles tab uses it to
+        stop when there is something to fix first."""
         entries = {
             "window_width": (self.window_width_entry, *WINDOW_WIDTH_RANGE),
             "window_height": (self.window_height_entry, *WINDOW_HEIGHT_RANGE),
@@ -1133,11 +1193,11 @@ class SettingsWindow(ctk.CTkToplevel):
             label = key.replace("_", " ").title()
             if not text.isdigit():
                 self.error_label.configure(text=f"{label} must be a whole number.")
-                return
+                return False
             number = int(text)
             if not (low <= number <= high):
                 self.error_label.configure(text=f"{label} must be between {low} and {high}.")
-                return
+                return False
             values[key] = number
 
         offset_text = self.highlight_offset_entry.get().strip()
@@ -1146,10 +1206,10 @@ class SettingsWindow(ctk.CTkToplevel):
         low, high = HIGHLIGHT_OFFSET_RANGE
         if offset_value is None:
             self.error_label.configure(text="Highlight Position must be a whole number.")
-            return
+            return False
         if not (low <= offset_value <= high):
             self.error_label.configure(text=f"Highlight Position must be between {low} and {high}.")
-            return
+            return False
         values["highlight_offset_px"] = offset_value
 
         values["freeform_resize_enabled"] = bool(self.freeform_switch.get())
@@ -1174,3 +1234,4 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self.error_label.configure(text="")
         self.on_apply(values)
+        return True

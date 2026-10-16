@@ -732,6 +732,12 @@ class RSVPApp(ctk.CTk):
             on_apply=self._handle_settings_applied,
             on_export_requested=self._handle_export_requested,
             on_import_requested=self._handle_import_requested,
+            profile_names=self._profile_names,
+            on_profile_save=self._save_profile,
+            on_profile_update=self._update_profile,
+            on_profile_apply=self._apply_profile,
+            on_profile_rename=self._rename_profile,
+            on_profile_delete=self._delete_profile,
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             on_configure_chunking=self._open_chunking_settings,
@@ -820,6 +826,10 @@ class RSVPApp(ctk.CTk):
         following = ("guide_mark_color",) if self.settings_store.guide_mark_color_is_default else ()
         return build_values(self._current_profile_settings(), following_theme=following)
 
+    def _profile_names(self) -> list[str]:
+        """The names of the saved profiles, in the order they were added."""
+        return [profile.name for profile in self.settings_store.profiles]
+
     def _save_profile(self, name: str) -> None:
         """Save the current settings as a new profile. Raises ProfileError, with
         a message that is fine to show, when the name can't be used."""
@@ -829,6 +839,15 @@ class RSVPApp(ctk.CTk):
         """Replace what an existing profile holds with the current settings.
         Raises ProfileError when there is no such profile."""
         self.settings_store.update_profile(name, self._snapshot_current_settings())
+
+    def _rename_profile(self, name: str, new_name: str) -> None:
+        """Give a profile a new name. Raises ProfileError when there is no such
+        profile or the new name can't be used."""
+        self.settings_store.rename_profile(name, new_name)
+
+    def _delete_profile(self, name: str) -> None:
+        """Delete a profile. Raises ProfileError when there is no such profile."""
+        self.settings_store.delete_profile(name)
 
     def _apply_profile(self, name: str) -> None:
         """Put a saved profile's settings to use, saving them and updating the

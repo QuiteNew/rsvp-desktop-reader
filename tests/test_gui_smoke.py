@@ -1461,6 +1461,458 @@ def test_applying_a_profile_reaches_a_detached_reader(profiles_sandbox):
     assert app.canvas._detached_window is None
 
 
+# ---- Profiles tab ----
+# The tab in the Settings window, driven the way a person would: typing into
+# Settings' controls, pressing the tab's buttons, filling in its popups. What
+# applying, saving and snapshotting do to the settings themselves is covered
+# above, so these are about the screen and what it hands to the app. Saving,
+# updating and applying all start by running Settings' Apply, so the tests
+# change the window's controls (never the store directly) before pressing them.
+#
+# These use the same shared Settings window as the About tests, and every
+# popup is given time to finish opening and closing (see _settle), for the
+# reasons in the note above those tests.
+
+
+def _read_controls(window):
+    """The few Settings controls these tests change, so they can be put back."""
+    return {
+        "thickness": window.guide_mark_thickness_entry.get(),
+        "warm_up": bool(window.warm_up_switch.get()),
+        "skip": window.skip_word_count_slider.get(),
+    }
+
+
+def _write_controls(window, saved):
+    window._set_entry_value(window.guide_mark_thickness_entry, saved["thickness"])
+    (window.warm_up_switch.select() if saved["warm_up"] else window.warm_up_switch.deselect())
+    window.skip_word_count_slider.set(saved["skip"])
+
+
+def _popup_of(tab):
+    """The popup the tab has just opened, settled and ready to use."""
+    popup = tab._popup
+    assert popup is not None and popup.winfo_exists()
+    _settle(popup)
+    return popup
+
+
+def _finish_popup(application, popup, action):
+    """Press a button in a Profiles tab popup, then let the popup close and
+    Settings take its grab back."""
+    _cancel_pending_afters(popup)
+    action()
+    _settle(application, 150)
+
+
+def _type_name(popup, text):
+    popup.name_entry.delete(0, "end")
+    popup.name_entry.insert(0, text)
+
+
+def _assert_popup_not_clipped(popup):
+    """A window that is shorter than what its content asks for silently cuts
+    the content off, so check there is room."""
+    popup.update()
+    assert popup.winfo_reqheight() <= popup.winfo_height()
+
+
+@pytest.fixture
+def profile_tab(app, settings, profiles_sandbox):
+    """The shared Settings window's Profiles tab, shown, with no profiles saved.
+    Afterwards it closes any popup left open, removes the profiles, puts the
+    controls these tests change back, and returns to the Defaults tab."""
+    tab = settings.profiles_tab
+    controls = _read_controls(settings)
+    settings.tabview.set("Profiles")
+    tab.refresh()
+    try:
+        yield tab
+    finally:
+        popup = tab._popup
+        if popup is not None and popup.winfo_exists():
+            _cancel_pending_afters(popup)
+            popup.destroy()
+            tab._popup = None
+        for profile in app.settings_store.profiles:
+            app.settings_store.delete_profile(profile.name)
+        tab.refresh()
+        _write_controls(settings, controls)
+        settings._show_message("")
+        settings.tabview.set("Defaults")
+        _settle(app, 100)
+
+
+def test_the_profiles_tab_sits_between_appearance_and_stats(settings):
+    assert settings.tabview._name_list == ["Defaults", "Layout", "Storage", "Appearance", "Profiles", "Stats"]
+
+
+def test_the_profiles_tab_says_what_a_profile_does_and_does_not_change(settings):
+    labels = _labels_by_text(settings.profiles_tab)
+    explanation = next(text for text in labels if text.startswith("A profile is"))
+    assert "never a transcript or your Defaults" in explanation
+    assert "spaces" in explanation
+    note = next(text for text in labels if text.startswith("Saving, updating or applying"))
+    assert "first applies" in note
+
+
+def test_an_empty_profiles_tab_says_so_and_has_nothing_to_act_on(profile_tab):
+    assert any(text.startswith("No profiles yet") for text in _labels_by_text(profile_tab.list_frame))
+    assert profile_tab.selected_name is None
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "disabled"
+
+
+def test_saved_profiles_are_listed_in_order_and_none_starts_selected(app, profile_tab):
+    app._save_profile("Fast skim")
+    app._save_profile("Careful read")
+    profile_tab.refresh()
+    assert list(profile_tab._rows) == ["Fast skim", "Careful read"]
+    assert profile_tab.selected_name is None
+    assert not any(text.startswith("No profiles yet") for text in _labels_by_text(profile_tab.list_frame))
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "disabled"
+
+
+def test_selecting_a_row_highlights_it_and_switches_the_buttons_on(app, profile_tab):
+    from gui.theme import EMBER_GLOW
+
+    app._save_profile("Fast skim")
+    app._save_profile("Careful read")
+    profile_tab.refresh()
+
+    profile_tab.select("Careful read")
+    assert profile_tab.selected_name == "Careful read"
+    assert profile_tab._rows["Careful read"].cget("fg_color") == EMBER_GLOW
+    assert profile_tab._rows["Fast skim"].cget("fg_color") == "transparent"
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "normal"
+
+    # Clicking a row does the same, and the highlight moves with it.
+    profile_tab._rows["Fast skim"].invoke()
+    assert profile_tab.selected_name == "Fast skim"
+    assert profile_tab._rows["Fast skim"].cget("fg_color") == EMBER_GLOW
+    assert profile_tab._rows["Careful read"].cget("fg_color") == "transparent"
+
+
+def test_the_selection_survives_a_refresh_and_goes_when_its_profile_does(app, profile_tab):
+    app._save_profile("Fast skim")
+    profile_tab.refresh()
+    profile_tab.select("Fast skim")
+    profile_tab.refresh()
+    assert profile_tab.selected_name == "Fast skim"
+
+    app._delete_profile("Fast skim")
+    profile_tab.refresh()
+    assert profile_tab.selected_name is None
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "disabled"
+
+
+def test_save_current_settings_as_applies_pending_changes_then_saves_them(app, settings, profile_tab):
+    store = app.settings_store
+    settings._set_entry_value(settings.guide_mark_thickness_entry, 4)
+    settings.warm_up_switch.select()
+
+    profile_tab.save_button.invoke()
+    popup = _popup_of(profile_tab)
+    assert popup.title() == "Save Profile"
+    _type_name(popup, "  My   skim ")
+    _finish_popup(app, popup, _find_button(popup, "Save").invoke)
+
+    # The name is tidied up, and the profile holds what was typed in Settings
+    # even though Apply was never pressed.
+    profile = store.get_profile("My skim")
+    assert profile is not None
+    assert profile.values["guide_mark_thickness_px"] == 4
+    assert profile.values["warm_up_enabled"] is True
+    # Which is because Apply ran first, so the app has those changes too.
+    assert store.guide_mark_thickness_px == 4
+    assert store.warm_up_enabled is True
+    assert list(profile_tab._rows) == ["My skim"]
+    assert profile_tab.selected_name == "My skim"
+    assert settings.error_label.cget("text") == ""
+
+
+def test_the_name_dialog_stays_open_on_a_bad_name_and_cancel_saves_nothing(app, settings, profile_tab, monkeypatch):
+    long_name = "W" * 30
+    app._save_profile(long_name)
+    profile_tab.refresh()
+    regrabs = []
+    monkeypatch.setattr(settings, "_regrab_if_still_open", lambda: regrabs.append("regrab"))
+
+    profile_tab.save_button.invoke()
+    popup = _popup_of(profile_tab)
+    _type_name(popup, long_name.lower())  # the same name, apart from its capitals
+    popup._handle_submit()
+    assert popup.winfo_exists()
+    assert "already a profile" in popup.error_label.cget("text")
+    _assert_popup_not_clipped(popup)
+
+    _type_name(popup, "")
+    popup._handle_submit()
+    assert popup.winfo_exists()
+    assert popup.error_label.cget("text") == "Give the profile a name."
+
+    _finish_popup(app, popup, _find_button(popup, "Cancel").invoke)
+    assert not popup.winfo_exists()
+    assert profile_tab._popup is None
+    assert [p.name for p in app.settings_store.profiles] == [long_name]
+    # Closing it handed the input grab back to Settings.
+    assert regrabs == ["regrab"]
+
+
+def test_pressing_save_twice_opens_one_name_dialog(app, profile_tab):
+    from gui.components.profile_name_dialog import ProfileNameDialog
+
+    profile_tab.save_button.invoke()
+    popup = _popup_of(profile_tab)
+    profile_tab.save_button.invoke()
+    assert profile_tab._popup is popup
+    toplevel = profile_tab.winfo_toplevel()
+    assert sum(isinstance(w, ProfileNameDialog) for w in toplevel.winfo_children()) == 1
+    _finish_popup(app, popup, _find_button(popup, "Cancel").invoke)
+
+
+def test_rename_starts_from_the_current_name_and_changes_only_the_name(app, profile_tab):
+    store = app.settings_store
+    store.add_profile("Fast skim", {"skip_word_count": 33, "warm_up_enabled": True})
+    store.add_profile("Careful read", {})
+    profile_tab.refresh()
+    profile_tab.select("Fast skim")
+
+    profile_tab.rename_button.invoke()
+    popup = _popup_of(profile_tab)
+    assert popup.title() == "Rename Profile"
+    assert popup.name_entry.get() == "Fast skim"
+
+    _type_name(popup, "careful READ")  # another profile's name
+    popup._handle_submit()
+    assert popup.winfo_exists()
+    assert "already a profile" in popup.error_label.cget("text")
+
+    _type_name(popup, "Quick skim")
+    _finish_popup(app, popup, _find_button(popup, "Rename").invoke)
+
+    assert [p.name for p in store.profiles] == ["Quick skim", "Careful read"]
+    assert store.get_profile("Quick skim").values == {"skip_word_count": 33, "warm_up_enabled": True}
+    assert profile_tab.selected_name == "Quick skim"
+    assert list(profile_tab._rows) == ["Quick skim", "Careful read"]
+
+
+def test_a_profile_can_be_renamed_to_change_only_its_capitals(app, profile_tab):
+    app._save_profile("Fast skim")
+    profile_tab.refresh()
+    profile_tab.select("Fast skim")
+
+    profile_tab.rename_button.invoke()
+    popup = _popup_of(profile_tab)
+    _type_name(popup, "fast SKIM")
+    _finish_popup(app, popup, _find_button(popup, "Rename").invoke)
+
+    assert [p.name for p in app.settings_store.profiles] == ["fast SKIM"]
+    assert profile_tab.selected_name == "fast SKIM"
+
+
+def test_renaming_a_profile_to_the_name_it_already_has_changes_nothing(app, settings, profile_tab):
+    app._save_profile("Fast skim")
+    profile_tab.refresh()
+    profile_tab._rename("Fast skim", "Fast skim")
+    assert [p.name for p in app.settings_store.profiles] == ["Fast skim"]
+    assert settings.error_label.cget("text") == ""
+
+
+def test_delete_asks_first_and_cancel_keeps_the_profile(app, profile_tab):
+    name = "W" * 30
+    app._save_profile(name)
+    profile_tab.refresh()
+    profile_tab.select(name)
+
+    profile_tab.delete_button.invoke()
+    popup = _popup_of(profile_tab)
+    assert popup.title() == "Delete Profile"
+    assert any(name in text for text in _labels_by_text(popup))
+    assert popup.confirm_button.cget("fg_color") == "#A33636"
+    _assert_popup_not_clipped(popup)
+
+    _finish_popup(app, popup, _find_button(popup, "Cancel").invoke)
+    assert app.settings_store.get_profile(name) is not None
+    assert profile_tab.selected_name == name
+    assert profile_tab._popup is None
+
+
+def test_confirming_delete_removes_the_profile_and_clears_the_selection(app, profile_tab):
+    app._save_profile("Fast skim")
+    app._save_profile("Careful read")
+    profile_tab.refresh()
+    profile_tab.select("Fast skim")
+
+    profile_tab.delete_button.invoke()
+    popup = _popup_of(profile_tab)
+    _finish_popup(app, popup, popup.confirm_button.invoke)
+
+    assert [p.name for p in app.settings_store.profiles] == ["Careful read"]
+    assert list(profile_tab._rows) == ["Careful read"]
+    assert profile_tab.selected_name is None
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "disabled"
+
+
+def test_update_asks_first_and_cancel_leaves_the_profile_as_it_was(app, settings, profile_tab):
+    name = "W" * 30
+    app._save_profile(name)
+    profile_tab.refresh()
+    profile_tab.select(name)
+    settings.warm_up_switch.select()
+
+    profile_tab.update_button.invoke()
+    popup = _popup_of(profile_tab)
+    assert popup.title() == "Update Profile"
+    assert any(name in text for text in _labels_by_text(popup))
+    _assert_popup_not_clipped(popup)
+    _finish_popup(app, popup, _find_button(popup, "Cancel").invoke)
+
+    assert app.settings_store.get_profile(name).values["warm_up_enabled"] is False
+
+
+def test_confirming_update_replaces_the_profile_with_the_settings_in_the_window(app, settings, profile_tab):
+    store = app.settings_store
+    app._save_profile("Mine")
+    profile_tab.refresh()
+    profile_tab.select("Mine")
+    assert store.get_profile("Mine").values["warm_up_enabled"] is False
+
+    settings.warm_up_switch.select()  # not applied yet
+    profile_tab.update_button.invoke()
+    popup = _popup_of(profile_tab)
+    _finish_popup(app, popup, popup.confirm_button.invoke)
+
+    assert store.get_profile("Mine").values["warm_up_enabled"] is True
+    assert [p.name for p in store.profiles] == ["Mine"]
+    assert profile_tab.selected_name == "Mine"
+
+
+def test_applying_a_profile_applies_pending_changes_first_then_the_profile_and_closes_settings(app, settings, profiles_sandbox):
+    store = app.settings_store
+    store.add_profile("Careful", {"skip_word_count": 9, "warm_up_enabled": True})
+    wpm_before = store.default_wpm
+
+    # Its own window, since applying closes it.
+    app._open_settings_window()
+    window = app._settings_window
+    try:
+        _settle(window)
+        window.default_wpm_slider.set(333)       # not a profile setting
+        window.skip_word_count_slider.set(40)    # one the profile sets too
+        chosen_wpm = int(window.default_wpm_slider.get())
+        assert chosen_wpm != wpm_before
+
+        window.profiles_tab.select("Careful")
+        _cancel_pending_afters(window)
+        window.profiles_tab.apply_button.invoke()
+        _settle(app, 150)
+
+        assert not window.winfo_exists()
+        assert store.default_wpm == chosen_wpm   # applied first, as if Apply had been pressed
+        assert store.skip_word_count == 9        # and the profile wins for what it holds
+        assert store.warm_up_enabled is True
+        assert app.canvas._skip_word_count == 9
+        assert app.canvas._warm_up_enabled is True
+    finally:
+        if window.winfo_exists():
+            _close(app, window)
+        app._settings_window = settings
+        store.set_defaults(
+            wpm_before, store.default_font_color, store.default_highlight_color,
+            store.default_background_color, store.default_font_size,
+        )
+
+
+def test_a_bad_value_in_settings_stops_save_update_and_apply_and_is_reported(app, settings, profile_tab):
+    store = app.settings_store
+    store.add_profile("Fast skim", {"skip_word_count": 9})
+    profile_tab.refresh()
+    profile_tab.select("Fast skim")
+    skip_before = store.skip_word_count
+
+    settings._set_entry_value(settings.guide_mark_thickness_entry, "abc")
+    for button in (profile_tab.save_button, profile_tab.update_button, profile_tab.apply_button):
+        settings._show_message("")
+        button.invoke()
+        assert profile_tab._popup is None
+        assert "must be a whole number" in settings.error_label.cget("text")
+
+    assert settings.winfo_exists()            # applying did not close it
+    assert store.skip_word_count == skip_before
+    assert [p.name for p in store.profiles] == ["Fast skim"]
+
+
+def test_a_profile_that_has_gone_missing_is_reported_and_the_list_is_rebuilt(app, settings, profile_tab):
+    app._save_profile("Mine")
+    profile_tab.refresh()
+    profile_tab.select("Mine")
+    app.settings_store.delete_profile("Mine")  # gone behind the tab's back
+
+    profile_tab.apply_button.invoke()
+
+    assert settings.error_label.cget("text") == 'There is no profile called "Mine".'
+    assert profile_tab.selected_name is None
+    assert list(profile_tab._rows) == []
+    assert settings.winfo_exists()
+
+
+def test_profile_buttons_do_nothing_while_nothing_is_selected(app, settings, profile_tab):
+    app._save_profile("Fast skim")
+    profile_tab.refresh()
+    before = app._current_profile_settings()
+
+    for handler in (
+        profile_tab._handle_apply_clicked, profile_tab._handle_update_clicked,
+        profile_tab._handle_rename_clicked, profile_tab._handle_delete_clicked,
+    ):
+        handler()
+
+    assert profile_tab._popup is None
+    assert settings.winfo_exists()
+    assert app._current_profile_settings() == before
+
+
+def test_the_profiles_tab_fits_the_smallest_settings_window(app, settings, profile_tab):
+    """At the smallest size Settings can be made, the tab must not ask for so
+    much room that the tab view grows over the error line and the Close and
+    Apply buttons below it (a scrollable list asks for a lot of height unless
+    told otherwise), and its text must wrap inside the tab instead of running
+    off the side. Only the window's own children are measured against each
+    other, since widgets nested inside frames report no size until the window
+    is really on screen.
+
+    The window is made small first and the Profiles tab shown after, which is
+    what happens when someone opens a small Settings window and clicks the tab.
+    The other order does not show the problem: a tab that is already showing
+    when the window shrinks never lays out over what is below it."""
+    app._save_profile("Fast skim")
+    app._save_profile("Careful read")
+    profile_tab.refresh()
+    original_geometry = settings.geometry()
+    try:
+        settings.tabview.set("Defaults")
+        settings.geometry("420x420")
+        _settle(settings, 250)
+        settings.tabview.set("Profiles")
+        _settle(settings, 250)
+
+        tabview_bottom = settings.tabview.winfo_y() + settings.tabview.winfo_height()
+        assert tabview_bottom <= settings.error_label.winfo_y()
+        assert profile_tab.winfo_reqheight() <= settings.tabview.tab("Profiles").winfo_height()
+
+        import customtkinter as ctk
+        for label in (w for w in _all_widgets(profile_tab) if isinstance(w, ctk.CTkLabel)):
+            assert label.winfo_reqwidth() <= profile_tab.winfo_width()
+    finally:
+        settings.geometry(original_geometry)
+        _settle(settings, 150)
+
+
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
     drag in between still fires on_drag_end, which commits _pending_value, so
