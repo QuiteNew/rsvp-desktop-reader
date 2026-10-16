@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 
+from core.profiles import Profile, ProfileError, clean_name, clean_profile_list, name_problem, sanitize_values
 from core.storage import DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
 
 SETTINGS_DIR = DEFAULT_DATA_DIR
@@ -85,6 +86,10 @@ class AppSettings:
                                                # peripheral vision keeps the thread of the sentence. Off by
                                                # default. See gui/components/reader_display.py's
                                                # set_peripheral_context().
+    profiles: list = field(default_factory=list)  # saved reading profiles, each a plain dict with a "name" and a
+                                                   # "values" dict (see core/profiles.py). Kept as dicts so
+                                                   # they go to settings.json and into export bundles as they
+                                                   # are. Use SettingsStore's profile methods, not this list.
 
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
@@ -114,6 +119,10 @@ class SettingsStore:
                 data["guide_mark_color_is_default"] = (
                     data.get("guide_mark_color", AppSettings.guide_mark_color) == AppSettings.guide_mark_color
                 )
+            # Clean the saved profiles instead of trusting them. A bad entry
+            # is dropped on its own, so one damaged profile can't make the
+            # whole load fail and reset every other setting to its default.
+            data["profiles"] = clean_profile_list(data.get("profiles"))
             return AppSettings(**data)
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
@@ -154,8 +163,18 @@ class SettingsStore:
         import mode. There's no "Expand"/merge equivalent for settings,
         since they're scalar preferences like a single WPM default or window
         size, not a collection, so there's nothing sensible to merge.
-        "Expand" imports leave settings untouched entirely."""
+        "Expand" imports leave settings untouched entirely.
+
+        Profiles are the one exception to "replace everything". A bundle
+        that carries a "profiles" list replaces this machine's profiles like
+        any other setting. A bundle exported before profiles existed has no
+        such key, and for that one the profiles already on this machine are
+        kept, so importing an old backup doesn't wipe them out."""
         merged = {**settings, "data_directory": self._settings.data_directory}
+        if "profiles" in settings:
+            merged["profiles"] = clean_profile_list(settings["profiles"])
+        else:
+            merged["profiles"] = self._settings.profiles
         self._settings = AppSettings(**merged)
         self._save()
 
@@ -425,3 +444,81 @@ class SettingsStore:
         if self._settings.guide_mark_color_is_default and self._settings.guide_mark_color != color:
             self._settings.guide_mark_color = color
             self._save()
+
+    # ---- Reading profiles ----
+    # The saved profiles live in AppSettings.profiles as plain dicts. These
+    # methods are the only way in or out. Each change saves straight away,
+    # like the other discrete actions here, and any problem with a name or a
+    # missing profile raises ProfileError with a message that is fine to show
+    # the user as it is. Names are matched without regard to case.
+
+    @property
+    def profiles(self) -> list[Profile]:
+        """Every saved profile, in the order they were added. These are
+        copies, so changing one doesn't touch what is stored."""
+        return [Profile(item["name"], dict(item["values"])) for item in self._settings.profiles]
+
+    def get_profile(self, name: str) -> Profile | None:
+        """The profile with this name, or None when there isn't one."""
+        index = self._profile_index(name)
+        if index is None:
+            return None
+        item = self._settings.profiles[index]
+        return Profile(item["name"], dict(item["values"]))
+
+    def add_profile(self, name: str, values: dict) -> Profile:
+        """Save a new profile. The name is tidied up first and has to be free
+        (see core/profiles.py's name_problem()). Entries in values that a
+        profile can't hold are dropped, see sanitize_values()."""
+        problem = name_problem(name, self._profile_names())
+        if problem:
+            raise ProfileError(problem)
+        profile = Profile(clean_name(name), sanitize_values(values))
+        self._settings.profiles.append(profile.to_dict())
+        self._save()
+        return profile
+
+    def update_profile(self, name: str, values: dict) -> Profile:
+        """Replace the settings held by an existing profile, keeping its name
+        and its place in the list."""
+        index = self._require_profile(name)
+        profile = Profile(self._settings.profiles[index]["name"], sanitize_values(values))
+        self._settings.profiles[index] = profile.to_dict()
+        self._save()
+        return profile
+
+    def rename_profile(self, name: str, new_name: str) -> Profile:
+        """Give an existing profile a new name. Changing only the capitals of
+        its own name is fine."""
+        index = self._require_profile(name)
+        current = self._settings.profiles[index]["name"]
+        problem = name_problem(new_name, self._profile_names(), own_name=current)
+        if problem:
+            raise ProfileError(problem)
+        profile = Profile(clean_name(new_name), dict(self._settings.profiles[index]["values"]))
+        self._settings.profiles[index] = profile.to_dict()
+        self._save()
+        return profile
+
+    def delete_profile(self, name: str) -> None:
+        index = self._require_profile(name)
+        del self._settings.profiles[index]
+        self._save()
+
+    def _profile_names(self) -> list[str]:
+        return [item["name"] for item in self._settings.profiles]
+
+    def _profile_index(self, name: str) -> int | None:
+        wanted = clean_name(name).casefold()
+        if not wanted:
+            return None
+        for index, item in enumerate(self._settings.profiles):
+            if item["name"].casefold() == wanted:
+                return index
+        return None
+
+    def _require_profile(self, name: str) -> int:
+        index = self._profile_index(name)
+        if index is None:
+            raise ProfileError(f'There is no profile called "{name}".')
+        return index
