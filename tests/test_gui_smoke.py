@@ -1155,6 +1155,312 @@ def test_info_button_sits_above_the_tabs_at_the_right_edge(app, settings):
         _settle(settings, 150)
 
 
+# ---- Reading profiles ----
+# Saving, snapshotting and applying a profile through the real app: the store
+# and the live reader both have to end up holding the profile's values. The
+# rules themselves (clamping, the guide mark colour, what a profile may hold)
+# are tested without a window in test_profile_apply.py and test_profiles.py.
+
+# A profile that differs from the fresh-install default on every setting.
+_PROFILE_VALUES = {
+    "highlight_offset_px": 2,
+    "guide_mark_horizontal_enabled": True,
+    "guide_mark_thickness_px": 4,
+    "guide_mark_length_percent": 50,
+    "guide_mark_color": "#112233",
+    "length_pacing_enabled": True,
+    "warm_up_enabled": True,
+    "resume_rewind_enabled": True,
+    "resume_rewind_words": 5,
+    "peripheral_context_enabled": True,
+    "skip_word_count": 30,
+    "pause_on_skip": True,
+}
+
+
+def _put_profile_settings_back(application, values, follows_theme):
+    """Write a set of app-wide settings straight back through the store, so a
+    test leaves the shared app as it found it. Deliberately not done with
+    _apply_profile(), so a broken apply can't hide behind its own cleanup."""
+    store = application.settings_store
+    store.set_highlight_offset_px(values["highlight_offset_px"])
+    store.set_guide_mark_horizontal_enabled(values["guide_mark_horizontal_enabled"])
+    store.set_guide_mark_thickness_px(values["guide_mark_thickness_px"])
+    store.set_guide_mark_length_percent(values["guide_mark_length_percent"])
+    store.restore_guide_mark_color(values["guide_mark_color"], follows_theme)
+    store.set_length_pacing_enabled(values["length_pacing_enabled"])
+    store.set_warm_up_enabled(values["warm_up_enabled"])
+    store.set_resume_rewind(values["resume_rewind_enabled"], values["resume_rewind_words"])
+    store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
+    store.set_skip_behavior(values["skip_word_count"], values["pause_on_skip"])
+    canvas = application.canvas
+    canvas.set_highlight_offset(values["highlight_offset_px"])
+    canvas.set_guide_mark_horizontal_enabled(values["guide_mark_horizontal_enabled"])
+    canvas.set_guide_mark_thickness(values["guide_mark_thickness_px"])
+    canvas.set_guide_mark_length_percent(values["guide_mark_length_percent"])
+    canvas.set_guide_mark_color(values["guide_mark_color"])
+    canvas.set_length_pacing_enabled(values["length_pacing_enabled"])
+    canvas.set_warm_up_enabled(values["warm_up_enabled"])
+    canvas.set_resume_rewind(values["resume_rewind_enabled"], values["resume_rewind_words"])
+    canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
+    canvas.set_skip_word_count(values["skip_word_count"])
+    canvas.set_pause_on_skip(values["pause_on_skip"])
+
+
+@pytest.fixture
+def profiles_sandbox(app):
+    """Hands a test the shared app with no profiles saved, and puts the
+    app-wide settings and the profile list back afterwards."""
+    store = app.settings_store
+    before = app._current_profile_settings()
+    follows_before = store.guide_mark_color_is_default
+    for profile in store.profiles:
+        store.delete_profile(profile.name)
+    try:
+        yield app
+    finally:
+        for profile in store.profiles:
+            store.delete_profile(profile.name)
+        _put_profile_settings_back(app, before, follows_before)
+
+
+def test_applying_a_profile_changes_every_app_wide_setting(profiles_sandbox):
+    app = profiles_sandbox
+    app.settings_store.add_profile("Everything", dict(_PROFILE_VALUES))
+    app._apply_profile("Everything")
+
+    # Saved in the store...
+    assert app._current_profile_settings() == _PROFILE_VALUES
+    # ...and live in the reader, without a restart.
+    canvas = app.canvas
+    assert canvas._highlight_offset_px == 2
+    assert canvas._guide_mark_horizontal_enabled is True
+    assert canvas._guide_mark_thickness_px == 4
+    assert canvas._guide_mark_length_percent == 50
+    assert canvas._guide_mark_color == "#112233"
+    assert canvas._length_pacing_enabled is True
+    assert canvas._warm_up_enabled is True
+    assert canvas._resume_rewind_enabled is True
+    assert canvas._resume_rewind_words == 5
+    assert canvas._peripheral_context_enabled is True
+    assert canvas._skip_word_count == 30
+    assert canvas._pause_on_skip is True
+    reader = canvas.reader_display
+    assert reader._highlight_offset_px == 2
+    assert reader._guide_mark_thickness_px == 4
+    assert reader._resume_rewind_words == 5
+    assert reader._peripheral_context_enabled is True
+
+
+def test_an_applied_profile_is_written_to_settings_json(profiles_sandbox):
+    import json
+
+    app = profiles_sandbox
+    app.settings_store.add_profile("Everything", dict(_PROFILE_VALUES))
+    app._apply_profile("Everything")
+
+    saved = json.loads(app.settings_store._settings_file.read_text(encoding="utf-8"))
+    for key, value in _PROFILE_VALUES.items():
+        assert saved[key] == value, key
+    assert saved["guide_mark_color_is_default"] is False
+
+
+def test_applying_a_profile_leaves_transcripts_and_defaults_alone(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    transcript = app.store.add_transcript(
+        "Profile bystander", app.store.current_space,
+        wpm=450, font_color="#445566", highlight_color="#778899", background_color="#AABBCC",
+        font_size=44, chunking_enabled=True, chunk_size=3,
+    )
+    transcript_before = dict(vars(transcript))
+    defaults = ("default_wpm", "default_font_color", "default_highlight_color", "default_background_color",
+                "default_font_size", "default_chunking_enabled", "default_chunk_size",
+                "default_chunk_mode", "default_chunk_char_target", "appearance_mode",
+                "window_width", "sidebar_width", "scrub_pause_enabled")
+    defaults_before = {key: getattr(store, key) for key in defaults}
+
+    store.add_profile("Everything", dict(_PROFILE_VALUES))
+    app._apply_profile("Everything")
+
+    assert vars(transcript) == transcript_before
+    assert {key: getattr(store, key) for key in defaults} == defaults_before
+
+
+def test_a_profile_that_holds_only_some_settings_leaves_the_rest_as_they_are(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    _put_profile_settings_back(app, {**_PROFILE_VALUES, "skip_word_count": 12, "pause_on_skip": True}, False)
+
+    store.add_profile("Only skip", {"skip_word_count": 7})
+    app._apply_profile("Only skip")
+
+    # The skip amount changed, and the pause switch that shares its setter
+    # kept the value it had.
+    assert store.skip_word_count == 7
+    assert store.pause_on_skip is True
+    assert app.canvas._skip_word_count == 7
+    assert app.canvas._pause_on_skip is True
+    assert store.guide_mark_thickness_px == 4
+    assert store.resume_rewind_words == 5
+
+
+def test_a_number_outside_the_allowed_range_is_clamped_when_applied(profiles_sandbox):
+    from core.settings_store import SKIP_WORD_COUNT_RANGE, GUIDE_MARK_THICKNESS_RANGE
+
+    app = profiles_sandbox
+    app.settings_store.add_profile("Too much", {"skip_word_count": 999, "guide_mark_thickness_px": 1})
+    app._apply_profile("Too much")
+
+    assert app.settings_store.skip_word_count == SKIP_WORD_COUNT_RANGE[1]
+    assert app.canvas._skip_word_count == SKIP_WORD_COUNT_RANGE[1]
+    assert app.settings_store.guide_mark_thickness_px == GUIDE_MARK_THICKNESS_RANGE[0]
+    assert app.canvas._guide_mark_thickness_px == GUIDE_MARK_THICKNESS_RANGE[0]
+
+
+def test_a_profile_that_followed_the_theme_gets_the_themes_guide_colour_back(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    store.restore_guide_mark_color("#AABBCC", False)  # picked by hand, so not following
+
+    store.add_profile("Themed", {"guide_mark_color": None})
+    app._apply_profile("Themed")
+
+    assert store.guide_mark_color == app._theme_guide_mark_color()
+    assert store.guide_mark_color_is_default is True
+    assert app.canvas._guide_mark_color == app._theme_guide_mark_color()
+
+
+def test_a_guide_colour_picked_by_hand_stops_following_even_when_it_matches_the_theme(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    theme_colour = app._theme_guide_mark_color()
+    store.restore_guide_mark_color(theme_colour, True)
+
+    store.add_profile("Hand picked", {"guide_mark_color": theme_colour})
+    app._apply_profile("Hand picked")
+
+    assert store.guide_mark_color == theme_colour
+    assert store.guide_mark_color_is_default is False
+
+
+def test_applying_a_profile_that_does_not_exist_raises_and_changes_nothing(profiles_sandbox):
+    from core.profiles import ProfileError
+
+    app = profiles_sandbox
+    before = app._current_profile_settings()
+    with pytest.raises(ProfileError) as caught:
+        app._apply_profile("Nope")
+    assert "Nope" in str(caught.value)
+    assert app._current_profile_settings() == before
+
+
+def test_the_theme_guide_colour_is_the_one_the_theme_defines(app):
+    # Checked against the theme's own constants rather than against the app,
+    # so swapping the Light and Dark colours would be caught here.
+    from gui.theme import CTK_APPEARANCE_MODE, DARK_READING_GUIDE_MARK_COLOR, LIGHT_READING_GUIDE_MARK_COLOR
+
+    expected = DARK_READING_GUIDE_MARK_COLOR if CTK_APPEARANCE_MODE == "Dark" else LIGHT_READING_GUIDE_MARK_COLOR
+    assert app._theme_guide_mark_color() == expected
+
+
+def test_the_snapshot_holds_every_profile_setting(profiles_sandbox):
+    from core.profiles import PROFILE_KEYS
+
+    assert set(profiles_sandbox._snapshot_current_settings()) == set(PROFILE_KEYS)
+
+
+def test_the_snapshot_stores_a_guide_colour_that_follows_the_theme_as_none(profiles_sandbox):
+    app = profiles_sandbox
+    app.settings_store.restore_guide_mark_color(app._theme_guide_mark_color(), True)
+    assert app._snapshot_current_settings()["guide_mark_color"] is None
+
+
+def test_the_snapshot_stores_a_guide_colour_picked_by_hand_as_that_colour(profiles_sandbox):
+    app = profiles_sandbox
+    app.settings_store.restore_guide_mark_color("#AABBCC", False)
+    assert app._snapshot_current_settings()["guide_mark_color"] == "#AABBCC"
+
+
+def test_saving_then_applying_a_profile_brings_the_settings_back(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    _put_profile_settings_back(app, _PROFILE_VALUES, False)
+    app._save_profile("Mine")
+    assert store.get_profile("Mine").values == _PROFILE_VALUES
+
+    # Change everything the profile holds, then bring it back.
+    other = {**_PROFILE_VALUES, "highlight_offset_px": -1, "guide_mark_horizontal_enabled": False,
+             "guide_mark_thickness_px": 2, "guide_mark_length_percent": 20, "guide_mark_color": "#FFEEDD",
+             "length_pacing_enabled": False, "warm_up_enabled": False, "resume_rewind_enabled": False,
+             "resume_rewind_words": 1, "peripheral_context_enabled": False, "skip_word_count": 3,
+             "pause_on_skip": False}
+    _put_profile_settings_back(app, other, False)
+    assert app._current_profile_settings() == other
+
+    app._apply_profile("Mine")
+    assert app._current_profile_settings() == _PROFILE_VALUES
+
+
+def test_a_profile_saved_while_following_the_theme_keeps_following_when_applied(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    store.restore_guide_mark_color(app._theme_guide_mark_color(), True)
+    app._save_profile("Following")
+    assert store.get_profile("Following").values["guide_mark_color"] is None
+
+    store.restore_guide_mark_color("#AABBCC", False)
+    app._apply_profile("Following")
+    assert store.guide_mark_color == app._theme_guide_mark_color()
+    assert store.guide_mark_color_is_default is True
+
+
+def test_saving_a_profile_under_a_name_that_is_taken_raises_and_adds_nothing(profiles_sandbox):
+    from core.profiles import ProfileError
+
+    app = profiles_sandbox
+    app._save_profile("Mine")
+    with pytest.raises(ProfileError):
+        app._save_profile("mine")
+    assert [p.name for p in app.settings_store.profiles] == ["Mine"]
+
+
+def test_updating_a_profile_replaces_its_settings_and_keeps_its_name(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    _put_profile_settings_back(app, _PROFILE_VALUES, False)
+    app._save_profile("Mine")
+
+    _put_profile_settings_back(app, {**_PROFILE_VALUES, "skip_word_count": 9}, False)
+    app._update_profile("Mine")
+
+    assert [p.name for p in store.profiles] == ["Mine"]
+    assert store.get_profile("Mine").values["skip_word_count"] == 9
+
+
+def test_updating_a_profile_that_does_not_exist_raises(profiles_sandbox):
+    from core.profiles import ProfileError
+
+    with pytest.raises(ProfileError):
+        profiles_sandbox._update_profile("Nope")
+
+
+def test_applying_a_profile_reaches_a_detached_reader(profiles_sandbox):
+    app = profiles_sandbox
+    _load_reading_transcript(app)
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+    try:
+        app.settings_store.add_profile("Everything", dict(_PROFILE_VALUES))
+        app._apply_profile("Everything")
+        assert detached.reader_display._guide_mark_thickness_px == 4
+        assert detached.reader_display._highlight_offset_px == 2
+    finally:
+        app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+
+
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
     drag in between still fires on_drag_end, which commits _pending_value, so

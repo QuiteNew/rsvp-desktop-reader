@@ -30,6 +30,8 @@ from gui.theme import (
 )
 from core.transcript_store import TranscriptStore
 from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE
+from core.profiles import PROFILE_KEYS, ProfileError, build_values
+from core.profile_apply import plan_profile
 from core import data_bundle
 from core import importers
 from core.tokenizer import tokenize
@@ -377,8 +379,14 @@ class RSVPApp(ctk.CTk):
         font_color, highlight_color, background_color = self._current_theme_reading_colors()
         self.store.resync_default_reading_colors(font_color, highlight_color, background_color)
 
-        guide_mark_color = DARK_READING_GUIDE_MARK_COLOR if CTK_APPEARANCE_MODE == "Dark" else LIGHT_READING_GUIDE_MARK_COLOR
-        self.settings_store.resync_guide_mark_color_default(guide_mark_color)
+        self.settings_store.resync_guide_mark_color_default(self._theme_guide_mark_color())
+
+    def _theme_guide_mark_color(self) -> str:
+        """The guide mark colour the current appearance mode gives. Shared by
+        the startup resync and by applying a reading profile, so a profile that
+        was following the theme lands on exactly the colour a restart would
+        have given it."""
+        return DARK_READING_GUIDE_MARK_COLOR if CTK_APPEARANCE_MODE == "Dark" else LIGHT_READING_GUIDE_MARK_COLOR
 
     def _create_transcript(self, title: str, space: str):
         """Shared by _handle_new_transcript() (the blank "+" flow) and
@@ -793,6 +801,92 @@ class RSVPApp(ctk.CTk):
         self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
 
         self.settings_store.set_appearance_mode(values["appearance_mode"])
+
+    # ---- Reading profiles ----
+    # A profile is a snapshot of the app-wide settings in PROFILE_KEYS (see
+    # core/profiles.py). Applying one goes through the same store setters and
+    # live canvas calls that Settings' Apply uses, so it takes effect straight
+    # away. It never touches a transcript or the Defaults that new transcripts
+    # start from.
+
+    def _current_profile_settings(self) -> dict:
+        """The app-wide settings a profile holds, as they are saved right now."""
+        return {key: getattr(self.settings_store, key) for key in PROFILE_KEYS}
+
+    def _snapshot_current_settings(self) -> dict:
+        """What a profile saved at this moment would hold. A guide mark colour
+        that is still following the Light/Dark theme is stored as None, so
+        applying the profile later doesn't freeze it against the theme."""
+        following = ("guide_mark_color",) if self.settings_store.guide_mark_color_is_default else ()
+        return build_values(self._current_profile_settings(), following_theme=following)
+
+    def _save_profile(self, name: str) -> None:
+        """Save the current settings as a new profile. Raises ProfileError, with
+        a message that is fine to show, when the name can't be used."""
+        self.settings_store.add_profile(name, self._snapshot_current_settings())
+
+    def _update_profile(self, name: str) -> None:
+        """Replace what an existing profile holds with the current settings.
+        Raises ProfileError when there is no such profile."""
+        self.settings_store.update_profile(name, self._snapshot_current_settings())
+
+    def _apply_profile(self, name: str) -> None:
+        """Put a saved profile's settings to use, saving them and updating the
+        open reader (and the detached window, if there is one) in place.
+
+        core/profile_apply.py decides the values: numbers are clamped to the
+        ranges Settings enforces, anything the profile doesn't hold keeps its
+        current value, and the guide mark colour is resolved against the
+        current theme. This method only writes the result out. The paired
+        setters (skip behaviour, resume rewind) need both of their values,
+        which the plan always provides.
+
+        Raises ProfileError when there is no profile with this name."""
+        profile = self.settings_store.get_profile(name)
+        if profile is None:
+            raise ProfileError(f'There is no profile called "{name}".')
+
+        plan = plan_profile(
+            profile.values,
+            self._current_profile_settings(),
+            self.settings_store.guide_mark_color_is_default,
+            self._theme_guide_mark_color(),
+        )
+        values = plan.values
+
+        self.settings_store.set_highlight_offset_px(values["highlight_offset_px"])
+        self.canvas.set_highlight_offset(values["highlight_offset_px"])
+
+        self.settings_store.set_guide_mark_horizontal_enabled(values["guide_mark_horizontal_enabled"])
+        self.canvas.set_guide_mark_horizontal_enabled(values["guide_mark_horizontal_enabled"])
+
+        self.settings_store.set_guide_mark_thickness_px(values["guide_mark_thickness_px"])
+        self.canvas.set_guide_mark_thickness(values["guide_mark_thickness_px"])
+
+        self.settings_store.set_guide_mark_length_percent(values["guide_mark_length_percent"])
+        self.canvas.set_guide_mark_length_percent(values["guide_mark_length_percent"])
+
+        # restore_guide_mark_color, not set_guide_mark_color: only the former
+        # can turn "follows the theme" back on, or mark a colour as picked by
+        # hand when it happens to match the current one.
+        self.settings_store.restore_guide_mark_color(values["guide_mark_color"], plan.guide_mark_follows_theme)
+        self.canvas.set_guide_mark_color(values["guide_mark_color"])
+
+        self.settings_store.set_length_pacing_enabled(values["length_pacing_enabled"])
+        self.canvas.set_length_pacing_enabled(values["length_pacing_enabled"])
+
+        self.settings_store.set_warm_up_enabled(values["warm_up_enabled"])
+        self.canvas.set_warm_up_enabled(values["warm_up_enabled"])
+
+        self.settings_store.set_resume_rewind(values["resume_rewind_enabled"], values["resume_rewind_words"])
+        self.canvas.set_resume_rewind(values["resume_rewind_enabled"], values["resume_rewind_words"])
+
+        self.settings_store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
+        self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
+
+        self.settings_store.set_skip_behavior(values["skip_word_count"], values["pause_on_skip"])
+        self.canvas.set_skip_word_count(values["skip_word_count"])
+        self.canvas.set_pause_on_skip(values["pause_on_skip"])
 
     def _open_chunking_settings(self) -> None:
         """Opens the chunking window from the Settings "Configure chunking"
