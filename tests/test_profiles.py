@@ -3,8 +3,10 @@ settings a profile holds, what counts as a valid value, and what makes a good
 name.
 
 The first group guards the list of keys against the real settings classes, so
-renaming a setting in AppSettings or Transcript fails here instead of quietly
-leaving a profile that no longer applies to anything."""
+renaming a setting in AppSettings fails here instead of quietly leaving a
+profile that no longer applies to anything. It also guards the line the feature
+draws: a profile holds app-wide settings only, never anything that belongs to a
+transcript or to the Defaults for new transcripts."""
 
 import dataclasses
 
@@ -13,9 +15,8 @@ import pytest
 from core import profiles
 from core.models import Transcript
 from core.profiles import (
-    CHUNK_MODES, GLOBAL_KEYS, MAX_NAME_LENGTH, PER_TRANSCRIPT_KEYS, PROFILE_KEYS,
-    THEME_COLOR_KEYS, Profile, build_values, clean_name, clean_profile_list,
-    global_part, name_problem, per_transcript_part, profile_from_dict,
+    MAX_NAME_LENGTH, PROFILE_KEYS, THEME_COLOR_KEYS, Profile, build_values,
+    clean_name, clean_profile_list, name_problem, profile_from_dict,
     sanitize_values, value_is_valid,
 )
 from core.settings_store import AppSettings
@@ -29,38 +30,19 @@ def _transcript_fields():
     return {f.name for f in dataclasses.fields(Transcript)}
 
 
-def _complete_values():
-    """A full, valid set of profile values, built from the real defaults."""
+def _real_settings():
+    """The app-wide settings as they are on a fresh install."""
     settings = AppSettings()
-    transcript = Transcript(id=1, title="t", space="s")
-    return build_values(
-        {key: getattr(settings, key) for key in GLOBAL_KEYS},
-        {key: getattr(transcript, key) for key in PER_TRANSCRIPT_KEYS},
-    )
+    return {key: getattr(settings, key) for key in PROFILE_KEYS}
 
 
-# ---- The key lists agree with the real settings ----
+# ---- The key list agrees with the real settings ----
 
 def test_every_key_is_listed_once():
     assert len(PROFILE_KEYS) == len(set(PROFILE_KEYS))
 
-def test_per_transcript_and_global_keys_do_not_overlap():
-    assert not set(PER_TRANSCRIPT_KEYS) & set(GLOBAL_KEYS)
-
-def test_profile_keys_are_the_two_groups_together():
-    assert set(PROFILE_KEYS) == set(PER_TRANSCRIPT_KEYS) | set(GLOBAL_KEYS)
-
-def test_global_keys_are_real_app_settings_fields():
-    assert set(GLOBAL_KEYS) <= _app_settings_fields()
-
-def test_per_transcript_keys_are_real_transcript_fields():
-    assert set(PER_TRANSCRIPT_KEYS) <= _transcript_fields()
-
-def test_every_per_transcript_key_has_an_app_wide_default():
-    # Applying a profile also sets what new transcripts start from, which is
-    # AppSettings.default_<key> for each of these.
-    for key in PER_TRANSCRIPT_KEYS:
-        assert f"default_{key}" in _app_settings_fields(), key
+def test_every_key_is_a_real_app_settings_field():
+    assert set(PROFILE_KEYS) <= _app_settings_fields()
 
 def test_theme_colour_keys_are_profile_keys():
     assert set(THEME_COLOR_KEYS) <= set(PROFILE_KEYS)
@@ -68,13 +50,19 @@ def test_theme_colour_keys_are_profile_keys():
 def test_the_real_defaults_are_all_valid_values():
     # If a default ever changes to a kind of value the profile rules don't
     # accept, this fails instead of the profile silently dropping it.
-    settings = AppSettings()
-    transcript = Transcript(id=1, title="t", space="s")
-    for key in GLOBAL_KEYS:
-        assert value_is_valid(key, getattr(settings, key)), key
-    for key in PER_TRANSCRIPT_KEYS:
-        assert value_is_valid(key, getattr(transcript, key)), key
-        assert value_is_valid(key, getattr(settings, f"default_{key}")), key
+    for key, value in _real_settings().items():
+        assert value_is_valid(key, value), key
+
+def test_a_profile_never_holds_anything_that_belongs_to_a_transcript():
+    assert not set(PROFILE_KEYS) & _transcript_fields()
+
+def test_a_profile_never_holds_a_default_for_new_transcripts():
+    assert not [key for key in PROFILE_KEYS if key.startswith("default_")]
+
+def test_speed_look_and_chunking_are_not_part_of_a_profile():
+    for key in ("wpm", "font_color", "highlight_color", "background_color", "font_size",
+                "chunking_enabled", "chunk_size", "chunk_mode", "chunk_char_target"):
+        assert key not in PROFILE_KEYS, key
 
 def test_layout_theme_and_storage_settings_are_not_part_of_a_profile():
     for key in ("window_width", "window_height", "sidebar_width", "bottom_band_height",
@@ -133,15 +121,15 @@ def test_renaming_onto_another_profiles_name_is_still_rejected():
 # ---- value_is_valid ----
 
 def test_whole_numbers_are_valid_for_number_settings():
-    assert value_is_valid("wpm", 300)
+    assert value_is_valid("skip_word_count", 10)
     assert value_is_valid("highlight_offset_px", -2)
 
 def test_a_bool_is_not_a_valid_number():
-    assert not value_is_valid("wpm", True)
+    assert not value_is_valid("skip_word_count", True)
 
 def test_a_float_or_a_string_is_not_a_valid_number():
-    assert not value_is_valid("wpm", 300.0)
-    assert not value_is_valid("wpm", "300")
+    assert not value_is_valid("skip_word_count", 10.0)
+    assert not value_is_valid("skip_word_count", "10")
 
 def test_true_and_false_are_valid_for_switches():
     assert value_is_valid("pause_on_skip", True)
@@ -151,136 +139,106 @@ def test_a_number_is_not_a_valid_switch_value():
     assert not value_is_valid("pause_on_skip", 1)
 
 def test_hex_colours_are_valid_in_either_case():
-    assert value_is_valid("font_color", "#3B2E27")
-    assert value_is_valid("font_color", "#3b2e27")
+    assert value_is_valid("guide_mark_color", "#3B2E27")
+    assert value_is_valid("guide_mark_color", "#3b2e27")
 
 def test_malformed_colours_are_not_valid():
     for bad in ("3B2E27", "#3B2E2", "#3B2E277", "#GGGGGG", "red", "", 123):
-        assert not value_is_valid("font_color", bad), bad
+        assert not value_is_valid("guide_mark_color", bad), bad
 
 def test_none_is_valid_for_theme_colours_only():
     for key in THEME_COLOR_KEYS:
         assert value_is_valid(key, None), key
-    assert not value_is_valid("wpm", None)
+    assert not value_is_valid("skip_word_count", None)
     assert not value_is_valid("pause_on_skip", None)
-
-def test_chunk_mode_must_be_one_of_the_known_modes():
-    for mode in CHUNK_MODES:
-        assert value_is_valid("chunk_mode", mode)
-    assert not value_is_valid("chunk_mode", "turbo")
-    assert not value_is_valid("chunk_mode", None)
 
 def test_an_unknown_key_is_never_valid():
     assert not value_is_valid("window_width", 1000)
+    assert not value_is_valid("wpm", 300)
 
 
 # ---- sanitize_values ----
 
 def test_sanitize_keeps_valid_values_unchanged():
-    values = _complete_values()
+    values = _real_settings()
     assert sanitize_values(values) == values
 
 def test_sanitize_drops_unknown_keys():
-    cleaned = sanitize_values({"wpm": 300, "window_width": 1000, "made_up": 1})
-    assert cleaned == {"wpm": 300}
+    cleaned = sanitize_values({"skip_word_count": 10, "window_width": 1000, "made_up": 1, "wpm": 300})
+    assert cleaned == {"skip_word_count": 10}
 
 def test_sanitize_drops_values_of_the_wrong_kind():
-    cleaned = sanitize_values({"wpm": "fast", "pause_on_skip": 1, "font_color": "red", "font_size": 40})
-    assert cleaned == {"font_size": 40}
+    cleaned = sanitize_values({"skip_word_count": "many", "pause_on_skip": 1,
+                               "guide_mark_color": "red", "resume_rewind_words": 4})
+    assert cleaned == {"resume_rewind_words": 4}
 
 def test_sanitize_keeps_none_for_a_theme_colour_but_not_for_anything_else():
-    cleaned = sanitize_values({"font_color": None, "wpm": None})
-    assert cleaned == {"font_color": None}
+    cleaned = sanitize_values({"guide_mark_color": None, "skip_word_count": None})
+    assert cleaned == {"guide_mark_color": None}
 
 def test_sanitize_of_something_that_is_not_a_dict_is_empty():
     for junk in (None, [], "text", 5):
         assert sanitize_values(junk) == {}
 
 def test_sanitize_returns_keys_in_profile_order():
-    values = {"skip_word_count": 5, "wpm": 400}
-    assert list(sanitize_values(values)) == ["wpm", "skip_word_count"]
+    values = {"pause_on_skip": True, "highlight_offset_px": 1}
+    assert list(sanitize_values(values)) == ["highlight_offset_px", "pause_on_skip"]
 
 def test_sanitize_does_not_change_the_dict_it_was_given():
-    values = {"wpm": "fast", "font_size": 40}
+    values = {"skip_word_count": "many", "resume_rewind_words": 4}
     sanitize_values(values)
-    assert values == {"wpm": "fast", "font_size": 40}
+    assert values == {"skip_word_count": "many", "resume_rewind_words": 4}
 
 
 # ---- build_values ----
 
 def test_build_values_holds_every_profile_key():
-    assert set(_complete_values()) == set(PROFILE_KEYS)
+    assert set(build_values(_real_settings())) == set(PROFILE_KEYS)
 
-def test_build_values_takes_each_key_from_the_right_input():
-    values = build_values(
-        {key: "global" for key in GLOBAL_KEYS},
-        {key: "transcript" for key in PER_TRANSCRIPT_KEYS},
-    )
-    assert all(values[key] == "global" for key in GLOBAL_KEYS)
-    assert all(values[key] == "transcript" for key in PER_TRANSCRIPT_KEYS)
+def test_build_values_takes_each_value_from_the_input():
+    given = {key: index for index, key in enumerate(PROFILE_KEYS)}
+    assert build_values(given) == given
 
-def test_build_values_stores_none_for_colours_that_follow_the_theme():
-    settings = AppSettings()
-    transcript = Transcript(id=1, title="t", space="s")
-    values = build_values(
-        {key: getattr(settings, key) for key in GLOBAL_KEYS},
-        {key: getattr(transcript, key) for key in PER_TRANSCRIPT_KEYS},
-        following_theme=("font_color", "guide_mark_color"),
-    )
-    assert values["font_color"] is None
+def test_build_values_ignores_keys_that_are_not_part_of_a_profile():
+    # A whole settings dict can be passed in without filtering it first.
+    given = {**_real_settings(), "window_width": 1234, "default_wpm": 999}
+    assert set(build_values(given)) == set(PROFILE_KEYS)
+
+def test_build_values_stores_none_for_a_colour_that_follows_the_theme():
+    values = build_values(_real_settings(), following_theme=("guide_mark_color",))
     assert values["guide_mark_color"] is None
-    assert values["highlight_color"] == transcript.highlight_color  # picked by hand: kept
+
+def test_build_values_keeps_a_colour_that_was_picked_by_hand():
+    settings = {**_real_settings(), "guide_mark_color": "#112233"}
+    assert build_values(settings)["guide_mark_color"] == "#112233"
 
 def test_build_values_rejects_a_following_key_that_is_not_a_colour():
-    settings = AppSettings()
-    transcript = Transcript(id=1, title="t", space="s")
     with pytest.raises(ValueError):
-        build_values(
-            {key: getattr(settings, key) for key in GLOBAL_KEYS},
-            {key: getattr(transcript, key) for key in PER_TRANSCRIPT_KEYS},
-            following_theme=("wpm",),
-        )
+        build_values(_real_settings(), following_theme=("skip_word_count",))
 
 def test_build_values_raises_when_an_input_is_missing_a_key():
-    settings = AppSettings()
-    global_values = {key: getattr(settings, key) for key in GLOBAL_KEYS}
+    incomplete = _real_settings()
+    del incomplete["skip_word_count"]
     with pytest.raises(KeyError):
-        build_values(global_values, {})
-
-
-# ---- The two parts ----
-
-def test_global_part_and_per_transcript_part_split_the_values_cleanly():
-    values = _complete_values()
-    assert set(global_part(values)) == set(GLOBAL_KEYS)
-    assert set(per_transcript_part(values)) == set(PER_TRANSCRIPT_KEYS)
-
-def test_the_parts_only_include_keys_the_profile_actually_has():
-    values = {"wpm": 400, "skip_word_count": 5}
-    assert per_transcript_part(values) == {"wpm": 400}
-    assert global_part(values) == {"skip_word_count": 5}
-
-def test_the_parts_of_an_empty_profile_are_empty():
-    assert global_part({}) == {}
-    assert per_transcript_part({}) == {}
+        build_values(incomplete)
 
 
 # ---- Profile and loading ----
 
 def test_profile_to_dict_gives_a_copy_of_the_values():
-    profile = Profile("Fast skim", {"wpm": 600})
+    profile = Profile("Fast skim", {"skip_word_count": 25})
     saved = profile.to_dict()
-    saved["values"]["wpm"] = 1
-    assert profile.values == {"wpm": 600}
+    saved["values"]["skip_word_count"] = 1
+    assert profile.values == {"skip_word_count": 25}
     assert saved["name"] == "Fast skim"
 
 def test_profile_from_dict_rebuilds_a_saved_profile():
-    profile = profile_from_dict({"name": "  Fast   skim ", "values": {"wpm": 600}})
-    assert profile == Profile("Fast skim", {"wpm": 600})
+    profile = profile_from_dict({"name": "  Fast   skim ", "values": {"skip_word_count": 25}})
+    assert profile == Profile("Fast skim", {"skip_word_count": 25})
 
 def test_profile_from_dict_drops_bad_entries_inside_the_values():
-    profile = profile_from_dict({"name": "A", "values": {"wpm": 600, "font_color": "red"}})
-    assert profile.values == {"wpm": 600}
+    profile = profile_from_dict({"name": "A", "values": {"skip_word_count": 25, "guide_mark_color": "red"}})
+    assert profile.values == {"skip_word_count": 25}
 
 def test_profile_from_dict_rejects_unusable_entries():
     assert profile_from_dict("text") is None
@@ -291,25 +249,31 @@ def test_profile_from_dict_rejects_unusable_entries():
     assert profile_from_dict({"name": "A"}) is None
 
 def test_clean_profile_list_keeps_good_profiles_in_order():
-    raw = [{"name": "B", "values": {"wpm": 200}}, {"name": "A", "values": {"wpm": 300}}]
+    raw = [{"name": "B", "values": {"skip_word_count": 20}}, {"name": "A", "values": {"skip_word_count": 30}}]
     assert clean_profile_list(raw) == raw
 
 def test_clean_profile_list_skips_unusable_entries():
-    raw = ["junk", None, {"name": "Good", "values": {"wpm": 300}}, {"name": "", "values": {}}]
-    assert clean_profile_list(raw) == [{"name": "Good", "values": {"wpm": 300}}]
+    raw = ["junk", None, {"name": "Good", "values": {"skip_word_count": 30}}, {"name": "", "values": {}}]
+    assert clean_profile_list(raw) == [{"name": "Good", "values": {"skip_word_count": 30}}]
 
 def test_clean_profile_list_keeps_the_first_of_two_names_that_differ_only_in_case():
-    raw = [{"name": "Fast", "values": {"wpm": 600}}, {"name": "FAST", "values": {"wpm": 100}}]
-    assert clean_profile_list(raw) == [{"name": "Fast", "values": {"wpm": 600}}]
+    raw = [{"name": "Fast", "values": {"skip_word_count": 40}}, {"name": "FAST", "values": {"skip_word_count": 10}}]
+    assert clean_profile_list(raw) == [{"name": "Fast", "values": {"skip_word_count": 40}}]
 
 def test_clean_profile_list_of_something_that_is_not_a_list_is_empty():
     for junk in (None, {}, "text", 5):
         assert clean_profile_list(junk) == []
 
 def test_clean_profile_list_returns_plain_dicts():
-    cleaned = clean_profile_list([{"name": "A", "values": {"wpm": 300}}])
+    cleaned = clean_profile_list([{"name": "A", "values": {"skip_word_count": 30}}])
     assert type(cleaned[0]) is dict
     assert type(cleaned[0]["values"]) is dict
+
+def test_clean_profile_list_drops_settings_that_used_to_be_allowed():
+    # Profiles saved by the first draft of this feature could hold speed, font
+    # size and so on. They are ignored now, and the rest of the profile loads.
+    raw = [{"name": "Old", "values": {"wpm": 600, "font_size": 28, "skip_word_count": 25}}]
+    assert clean_profile_list(raw) == [{"name": "Old", "values": {"skip_word_count": 25}}]
 
 def test_profile_error_is_a_value_error():
     assert issubclass(profiles.ProfileError, ValueError)

@@ -11,7 +11,7 @@ import json
 import pytest
 
 from core import data_bundle
-from core.profiles import GLOBAL_KEYS, PER_TRANSCRIPT_KEYS, MAX_NAME_LENGTH, ProfileError
+from core.profiles import MAX_NAME_LENGTH, PROFILE_KEYS, ProfileError
 from core.settings_store import AppSettings, SettingsStore
 from core.transcript_store import TranscriptStore
 
@@ -22,19 +22,17 @@ def store(tmp_path):
 
 
 def _fast():
-    return {"wpm": 600, "font_size": 28, "skip_word_count": 20}
+    return {"skip_word_count": 25, "warm_up_enabled": True, "length_pacing_enabled": True}
 
 
 def _careful():
-    return {"wpm": 220, "font_size": 40, "pause_on_skip": True}
+    return {"skip_word_count": 5, "pause_on_skip": True, "resume_rewind_words": 4}
 
 
 def _full_values():
     """Every key a profile can hold, taken from the real defaults."""
     settings = AppSettings()
-    values = {key: getattr(settings, f"default_{key}") for key in PER_TRANSCRIPT_KEYS}
-    values.update({key: getattr(settings, key) for key in GLOBAL_KEYS})
-    return values
+    return {key: getattr(settings, key) for key in PROFILE_KEYS}
 
 
 def _settings_json(directory):
@@ -73,8 +71,12 @@ def test_profiles_keep_the_order_they_were_added_in(store):
     assert [p.name for p in store.profiles] == ["B", "A"]
 
 def test_add_profile_drops_values_a_profile_cannot_hold(store):
-    profile = store.add_profile("Odd", {"wpm": 300, "window_width": 1000, "font_color": "red"})
-    assert profile.values == {"wpm": 300}
+    profile = store.add_profile("Odd", {"skip_word_count": 12, "window_width": 1000, "guide_mark_color": "red"})
+    assert profile.values == {"skip_word_count": 12}
+
+def test_add_profile_drops_settings_that_belong_to_a_transcript(store):
+    profile = store.add_profile("Odd", {"skip_word_count": 12, "wpm": 600, "font_size": 28})
+    assert profile.values == {"skip_word_count": 12}
 
 def test_add_profile_rejects_an_empty_name(store):
     with pytest.raises(ProfileError):
@@ -95,8 +97,8 @@ def test_add_profile_rejects_a_duplicate_name_whatever_its_case(store):
     assert store.profiles[0].values == _fast()
 
 def test_add_profile_stores_none_for_a_colour_that_follows_the_theme(store):
-    profile = store.add_profile("Themed", {"font_color": None, "wpm": 300})
-    assert profile.values == {"font_color": None, "wpm": 300}
+    profile = store.add_profile("Themed", {"guide_mark_color": None, "skip_word_count": 12})
+    assert profile.values == {"guide_mark_color": None, "skip_word_count": 12}
 
 
 # ---- get_profile and the copies the store hands out ----
@@ -116,15 +118,15 @@ def test_get_profile_returns_none_for_an_unknown_name(store):
 
 def test_changing_a_returned_profile_does_not_change_the_store(store):
     store.add_profile("Fast skim", _fast())
-    store.get_profile("Fast skim").values["wpm"] = 1
-    store.profiles[0].values["wpm"] = 2
-    assert store.get_profile("Fast skim").values["wpm"] == 600
+    store.get_profile("Fast skim").values["skip_word_count"] = 1
+    store.profiles[0].values["skip_word_count"] = 2
+    assert store.get_profile("Fast skim").values["skip_word_count"] == 25
 
 def test_changing_the_values_given_to_add_profile_does_not_change_the_store(store):
     values = _fast()
     store.add_profile("Fast skim", values)
-    values["wpm"] = 1
-    assert store.get_profile("Fast skim").values["wpm"] == 600
+    values["skip_word_count"] = 1
+    assert store.get_profile("Fast skim").values["skip_word_count"] == 25
 
 
 # ---- update_profile ----
@@ -132,21 +134,21 @@ def test_changing_the_values_given_to_add_profile_does_not_change_the_store(stor
 def test_update_profile_replaces_the_values_and_keeps_name_and_place(store):
     store.add_profile("Fast skim", _fast())
     store.add_profile("Careful read", _careful())
-    updated = store.update_profile("fast skim", {"wpm": 700})
+    updated = store.update_profile("fast skim", {"skip_word_count": 30})
     assert updated.name == "Fast skim"
     assert [p.name for p in store.profiles] == ["Fast skim", "Careful read"]
-    assert store.get_profile("Fast skim").values == {"wpm": 700}
+    assert store.get_profile("Fast skim").values == {"skip_word_count": 30}
 
 def test_update_profile_leaves_other_profiles_alone(store):
     store.add_profile("Fast skim", _fast())
     store.add_profile("Careful read", _careful())
-    store.update_profile("Fast skim", {"wpm": 700})
+    store.update_profile("Fast skim", {"skip_word_count": 30})
     assert store.get_profile("Careful read").values == _careful()
 
 def test_update_profile_drops_values_a_profile_cannot_hold(store):
     store.add_profile("Fast skim", _fast())
-    store.update_profile("Fast skim", {"wpm": "fast", "font_size": 30})
-    assert store.get_profile("Fast skim").values == {"font_size": 30}
+    store.update_profile("Fast skim", {"skip_word_count": "many", "resume_rewind_words": 6})
+    assert store.get_profile("Fast skim").values == {"resume_rewind_words": 6}
 
 def test_update_profile_of_an_unknown_name_raises(store):
     with pytest.raises(ProfileError):
@@ -230,6 +232,13 @@ def test_profile_changes_do_not_touch_other_settings(store):
     after = {key: getattr(store, key) for key in before}
     assert after == before
 
+def test_saving_a_profile_does_not_change_the_live_app_wide_settings(store):
+    # Saving only records values. Putting them to use is a separate step.
+    before = {key: getattr(store, key) for key in PROFILE_KEYS}
+    store.add_profile("Fast skim", _fast())
+    store.update_profile("Fast skim", _careful())
+    assert {key: getattr(store, key) for key in PROFILE_KEYS} == before
+
 def test_saving_other_settings_does_not_touch_profiles(store):
     store.add_profile("Fast skim", _fast())
     store.set_window_size(1200, 800)
@@ -247,7 +256,7 @@ def test_profiles_are_written_to_settings_json(store, tmp_path):
 def test_every_kind_of_change_is_saved_straight_away(store, tmp_path):
     store.add_profile("Fast skim", _fast())
     store.add_profile("Careful read", _careful())
-    store.update_profile("Fast skim", {"wpm": 700})
+    store.update_profile("Fast skim", {"skip_word_count": 30})
     store.rename_profile("Careful read", "Slow")
     store.delete_profile("Fast skim")
     assert _settings_json(tmp_path)["profiles"] == [{"name": "Slow", "values": _careful()}]
@@ -255,11 +264,11 @@ def test_every_kind_of_change_is_saved_straight_away(store, tmp_path):
 def test_profiles_survive_a_restart(tmp_path):
     first = SettingsStore(settings_directory=str(tmp_path))
     first.add_profile("Fast skim", _fast())
-    first.add_profile("Themed", {"font_color": None, "wpm": 300})
+    first.add_profile("Themed", {"guide_mark_color": None, "skip_word_count": 12})
     again = SettingsStore(settings_directory=str(tmp_path))
     assert [p.name for p in again.profiles] == ["Fast skim", "Themed"]
     assert again.get_profile("Fast skim").values == _fast()
-    assert again.get_profile("Themed").values == {"font_color": None, "wpm": 300}
+    assert again.get_profile("Themed").values == {"guide_mark_color": None, "skip_word_count": 12}
 
 def test_a_complete_profile_survives_a_restart_unchanged(tmp_path):
     first = SettingsStore(settings_directory=str(tmp_path))
@@ -282,7 +291,7 @@ def _write_settings(directory, **fields):
 def test_a_bad_profile_entry_is_skipped_and_the_rest_still_load(tmp_path):
     _write_settings(tmp_path, default_wpm=450, profiles=[
         "junk",
-        {"name": "Good", "values": {"wpm": 300}},
+        {"name": "Good", "values": {"skip_word_count": 12}},
         {"name": "", "values": {}},
         {"name": "No values"},
     ])
@@ -300,19 +309,27 @@ def test_a_damaged_profile_does_not_reset_the_other_settings(tmp_path):
 
 def test_invalid_values_inside_a_saved_profile_are_dropped_on_load(tmp_path):
     _write_settings(tmp_path, profiles=[
-        {"name": "Mixed", "values": {"wpm": 300, "font_color": "red", "made_up": 1, "pause_on_skip": 1}},
+        {"name": "Mixed", "values": {"skip_word_count": 12, "guide_mark_color": "red",
+                                     "made_up": 1, "pause_on_skip": 1}},
     ])
     loaded = SettingsStore(settings_directory=str(tmp_path))
-    assert loaded.get_profile("Mixed").values == {"wpm": 300}
+    assert loaded.get_profile("Mixed").values == {"skip_word_count": 12}
+
+def test_a_profile_saved_by_the_first_draft_loses_its_transcript_settings_on_load(tmp_path):
+    _write_settings(tmp_path, profiles=[
+        {"name": "Old", "values": {"wpm": 600, "font_size": 28, "skip_word_count": 25}},
+    ])
+    loaded = SettingsStore(settings_directory=str(tmp_path))
+    assert loaded.get_profile("Old").values == {"skip_word_count": 25}
 
 def test_names_that_differ_only_in_case_keep_the_first_on_load(tmp_path):
     _write_settings(tmp_path, profiles=[
-        {"name": "Fast", "values": {"wpm": 600}},
-        {"name": "FAST", "values": {"wpm": 100}},
+        {"name": "Fast", "values": {"skip_word_count": 40}},
+        {"name": "FAST", "values": {"skip_word_count": 10}},
     ])
     loaded = SettingsStore(settings_directory=str(tmp_path))
     assert [p.name for p in loaded.profiles] == ["Fast"]
-    assert loaded.get_profile("fast").values == {"wpm": 600}
+    assert loaded.get_profile("fast").values == {"skip_word_count": 40}
 
 
 # ---- Export and import bundles ----
@@ -339,16 +356,16 @@ def test_export_settings_includes_the_profiles(store):
 def test_the_exported_profiles_are_a_copy(store):
     store.add_profile("Fast skim", _fast())
     exported = store.export_settings()
-    exported["profiles"][0]["values"]["wpm"] = 1
-    assert store.get_profile("Fast skim").values["wpm"] == 600
+    exported["profiles"][0]["values"]["skip_word_count"] = 1
+    assert store.get_profile("Fast skim").values["skip_word_count"] == 25
 
 def test_a_replace_import_brings_the_profiles_across(stores):
     (src_ts, src_ss), (dst_ts, dst_ss) = stores
     src_ss.add_profile("Fast skim", _fast())
-    src_ss.add_profile("Themed", {"font_color": None})
+    src_ss.add_profile("Themed", {"guide_mark_color": None})
     data_bundle.apply_bundle_replace(_bundle_through_json(src_ts, src_ss), dst_ts, dst_ss)
     assert [p.name for p in dst_ss.profiles] == ["Fast skim", "Themed"]
-    assert dst_ss.get_profile("Themed").values == {"font_color": None}
+    assert dst_ss.get_profile("Themed").values == {"guide_mark_color": None}
 
 def test_a_replace_import_overwrites_the_profiles_already_there(stores):
     (src_ts, src_ss), (dst_ts, dst_ss) = stores
@@ -385,12 +402,12 @@ def test_a_damaged_profile_in_a_bundle_is_cleaned_on_import(stores):
     (src_ts, src_ss), (dst_ts, dst_ss) = stores
     bundle = _bundle_through_json(src_ts, src_ss)
     bundle["settings"]["profiles"] = [
-        {"name": "Good", "values": {"wpm": 300, "font_color": "red"}},
+        {"name": "Good", "values": {"skip_word_count": 12, "guide_mark_color": "red"}},
         "junk",
     ]
     data_bundle.apply_bundle_replace(bundle, dst_ts, dst_ss)
     assert [p.name for p in dst_ss.profiles] == ["Good"]
-    assert dst_ss.get_profile("Good").values == {"wpm": 300}
+    assert dst_ss.get_profile("Good").values == {"skip_word_count": 12}
 
 def test_imported_profiles_are_saved_to_disk(stores, tmp_path):
     (src_ts, src_ss), (dst_ts, dst_ss) = stores

@@ -1,46 +1,32 @@
-"""Reading profiles: named snapshots of the settings that decide how the
-reader feels, so something like "Fast skim" and "Careful read" can be
+"""Reading profiles: named snapshots of the app-wide settings that decide how
+the reader feels, so something like "Fast skim" and "Careful read" can be
 switched between in one go.
 
 This is the pure part. It knows which settings a profile holds, what a valid
 value for each one looks like, and what makes a good profile name. It has no
 GUI in it and no store. core/settings_store.py keeps the saved profiles and
-imports the rules from here, and the code that applies a profile to the
-running app builds on the split helpers at the bottom.
+imports the rules from here.
 
-A profile holds two kinds of setting. Some exist twice, once on every
-Transcript and once as an app-wide default that new transcripts start from
-(WPM, the reading colours, font size and chunking). The others exist once,
-app wide (the guide marks, the pacing options, skip behaviour). Applying a
-profile touches both kinds, which is why they are listed separately below.
+A profile only holds app-wide settings: the guide marks, the pacing options,
+resume rewind, peripheral context and skip behaviour. It never holds anything
+that belongs to a transcript (speed, colours, font size, chunking) and never
+the Defaults that new transcripts start from. Keeping different texts apart is
+what spaces are for.
 
 Left out on purpose: window and layout sizes, the data directory, the
 Light/Dark/System mode, and settings that are about editing or the scrubber
-rather than how the reader reads. Because the list is short and named here,
-a profile saved by one version still loads in another. A key that is missing
-from a saved profile simply means "leave that setting alone"."""
+rather than how the reader reads. Because the list is short and named here, a
+profile saved by one version still loads in another. A key that is missing from
+a saved profile simply means "leave that setting alone"."""
 
 import re
 from dataclasses import dataclass, field
 
 MAX_NAME_LENGTH = 30
 
-# Settings that exist on every Transcript and also as an app-wide default,
-# stored in AppSettings as "default_<key>", which new transcripts start from.
-PER_TRANSCRIPT_KEYS = (
-    "wpm",
-    "font_color",
-    "highlight_color",
-    "background_color",
-    "font_size",
-    "chunking_enabled",
-    "chunk_size",
-    "chunk_mode",
-    "chunk_char_target",
-)
-
-# Settings that exist once, app wide, under the same name in AppSettings.
-GLOBAL_KEYS = (
+# Every setting a profile can hold. Each one is a field of AppSettings with the
+# same name.
+PROFILE_KEYS = (
     "highlight_offset_px",
     "guide_mark_horizontal_enabled",
     "guide_mark_thickness_px",
@@ -55,27 +41,14 @@ GLOBAL_KEYS = (
     "pause_on_skip",
 )
 
-PROFILE_KEYS = PER_TRANSCRIPT_KEYS + GLOBAL_KEYS
-
-# Colours that can follow the Light/Dark theme. A profile stores None for one
-# of these when it was still following the theme at the moment the profile was
+# Colours that can follow the Light/Dark theme. A profile stores None for one of
+# these when it was still following the theme at the moment the profile was
 # saved, and a "#RRGGBB" value only for a colour that was picked by hand.
-# Without that, applying a profile would freeze the colours against the
-# theme. See the "follows the theme" flags on Transcript and AppSettings.
-THEME_COLOR_KEYS = ("font_color", "highlight_color", "background_color", "guide_mark_color")
-
-CHUNK_MODES = ("fixed", "adaptive")
+# Without that, applying a profile would freeze the colour against the theme.
+# See guide_mark_color_is_default on AppSettings.
+THEME_COLOR_KEYS = ("guide_mark_color",)
 
 _KINDS = {
-    "wpm": "int",
-    "font_color": "color",
-    "highlight_color": "color",
-    "background_color": "color",
-    "font_size": "int",
-    "chunking_enabled": "bool",
-    "chunk_size": "int",
-    "chunk_mode": "chunk_mode",
-    "chunk_char_target": "int",
     "highlight_offset_px": "int",
     "guide_mark_horizontal_enabled": "bool",
     "guide_mark_thickness_px": "int",
@@ -152,10 +125,9 @@ def name_problem(name, existing_names, own_name=None) -> str | None:
 
 def value_is_valid(key: str, value) -> bool:
     """Whether value is something a profile may hold for this key. This checks
-    the kind of value only (a whole number, a true/false, a "#RRGGBB" colour,
-    one of the chunk modes). It does not check ranges: those live with the
-    settings in core/settings_store.py, and are applied when a profile is
-    applied."""
+    the kind of value only (a whole number, a true/false, a "#RRGGBB" colour).
+    It does not check ranges: those live with the settings in
+    core/settings_store.py, and are applied when a profile is applied."""
     kind = _KINDS.get(key)
     if kind is None:
         return False
@@ -168,8 +140,6 @@ def value_is_valid(key: str, value) -> bool:
         return isinstance(value, int) and not isinstance(value, bool)
     if kind == "color":
         return isinstance(value, str) and _HEX_COLOR.fullmatch(value) is not None
-    if kind == "chunk_mode":
-        return value in CHUNK_MODES
     return False
 
 
@@ -183,39 +153,23 @@ def sanitize_values(values) -> dict:
     return {key: values[key] for key in PROFILE_KEYS if key in values and value_is_valid(key, values[key])}
 
 
-def build_values(global_values, per_transcript_values, following_theme=()) -> dict:
+def build_values(settings_values, following_theme=()) -> dict:
     """Take a snapshot of the current settings as a profile's values.
 
-    global_values holds the app-wide settings, keyed by GLOBAL_KEYS.
-    per_transcript_values holds the per-transcript ones, keyed by
-    PER_TRANSCRIPT_KEYS, read from the open transcript, or from the
-    app-wide defaults when nothing is open. following_theme names the colour
-    keys that are still following the theme, which are stored as None.
+    settings_values holds the app-wide settings, keyed by the names in
+    PROFILE_KEYS. Other keys in it are ignored, so a whole settings dict can be
+    passed in. following_theme names the colour keys that are still following
+    the theme, which are stored as None.
 
-    Every key has to be present in the inputs. A missing one raises
+    Every key in PROFILE_KEYS has to be present. A missing one raises
     KeyError, since that would mean the caller and this module disagree about
     what a profile holds."""
-    values = {}
-    for key in PER_TRANSCRIPT_KEYS:
-        values[key] = per_transcript_values[key]
-    for key in GLOBAL_KEYS:
-        values[key] = global_values[key]
+    values = {key: settings_values[key] for key in PROFILE_KEYS}
     for key in following_theme:
         if key not in THEME_COLOR_KEYS:
             raise ValueError(f"{key!r} is not a colour that can follow the theme")
         values[key] = None
     return values
-
-
-def global_part(values: dict) -> dict:
-    """The app-wide settings in a profile's values."""
-    return {key: values[key] for key in GLOBAL_KEYS if key in values}
-
-
-def per_transcript_part(values: dict) -> dict:
-    """The settings in a profile's values that apply to a transcript and to the
-    defaults new transcripts start from."""
-    return {key: values[key] for key in PER_TRANSCRIPT_KEYS if key in values}
 
 
 # ---- Loading saved profiles ----
