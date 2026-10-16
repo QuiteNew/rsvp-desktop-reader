@@ -279,6 +279,13 @@ class SettingsStore:
         return self._settings.guide_mark_color
 
     @property
+    def guide_mark_color_is_default(self) -> bool:
+        """Whether guide_mark_color is still following the Light/Dark theme
+        (True), or was picked by hand (False). A reading profile needs this
+        to know what to store for the guide-mark colour."""
+        return self._settings.guide_mark_color_is_default
+
+    @property
     def split_long_paragraphs_enabled(self) -> bool:
         return self._settings.split_long_paragraphs_enabled
 
@@ -433,6 +440,17 @@ class SettingsStore:
         if color != self._settings.guide_mark_color:
             self._settings.guide_mark_color_is_default = False
         self._settings.guide_mark_color = color
+        self._save()
+
+    def restore_guide_mark_color(self, color: str, follows_theme: bool) -> None:
+        """Set guide_mark_color and whether it follows the theme in one go,
+        for putting back a colour that was recorded earlier (a reading
+        profile). set_guide_mark_color() can't do this: it only ever turns
+        following off, and only when the colour actually changes. A profile
+        has to be able to turn following back on, and to mark a colour as
+        picked by hand even when it happens to match the current one."""
+        self._settings.guide_mark_color = color
+        self._settings.guide_mark_color_is_default = follows_theme
         self._save()
 
     def resync_guide_mark_color_default(self, color: str) -> None:

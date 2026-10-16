@@ -333,6 +333,31 @@ class TranscriptStore:
             t.background_color = color
             self._save()
 
+    def restore_transcript_reading_colors(self, transcript_id: int, colors: dict) -> None:
+        """Set some or all of a transcript's reading colours, together with
+        whether each one follows the Light/Dark theme, for putting back colours
+        that were recorded earlier (a reading profile).
+
+        colors maps "font_color", "highlight_color" and "background_color" to a
+        (color, follows_theme) pair, and any of the three can be left out to
+        keep what the transcript has. The set_transcript_*_color() methods
+        above can't do this job: they only ever turn following off, and only
+        when the colour actually changes. A profile has to be able to turn
+        following back on, and to mark a colour as picked by hand even when it
+        happens to match the current one.
+
+        Raises ValueError, before changing anything, for any other key."""
+        unknown = set(colors) - {"font_color", "highlight_color", "background_color"}
+        if unknown:
+            raise ValueError(f"Not a reading colour: {', '.join(sorted(unknown))}")
+        t = self._find_transcript(transcript_id)
+        if t is None or not colors:
+            return
+        for name, (color, follows_theme) in colors.items():
+            setattr(t, name, color)
+            setattr(t, f"{name}_is_default", follows_theme)
+        self._save()
+
     def resync_default_reading_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         """Update every transcript whose reading colors are still tracking
         the app-wide default (font_color_is_default etc., see
