@@ -166,6 +166,52 @@ About dialog shows the version number, the license, and a link to the project
 page on GitHub, where the Releases section lists the newest version.
 *This is only for v3.3.0 onwards*
 
+### What is a reading profile, and how do I use one?
+
+A profile is a saved set of reader settings, so you can switch between ways of
+reading in one click. Set things up the way you like in Settings, open the
+**Profiles** tab, click **Save current settings as...** and give it a name. Later,
+select it in the list and press **Apply**. It takes effect straight away and
+Settings closes. A profile holds the guide marks, pacing, rewind on resume,
+surrounding words, skipping, the +/- step, the scrubber and paragraph switches,
+and the Speed and Word size sliders. The full list is under
+[Profiles](usage.md#profiles) on the Usage page.
+
+### I applied a profile, but my open transcript's speed and size did not change
+
+On purpose. A profile's Speed and Word size are the two sliders at the top of
+the Defaults tab, which only decide where *new* transcripts start. Applying a
+profile never touches a transcript, so the one you have open keeps its own speed
+and size. To change those for the transcript you are reading, use the control
+band at the bottom of the window. Open Settings after applying and you will see
+the sliders on the Defaults tab have moved.
+
+### I applied a profile, but my colours did not change
+
+Profiles leave colours alone, and chunking too, so applying one never repaints
+your reader. The only colour a profile carries is the guide mark colour. If you
+want different colours for different texts, set them per transcript from the
+control band, or keep those texts in separate [Spaces](usage.md#spaces).
+
+### An older profile does not move Speed, Word size, the step or the switches
+
+Profiles saved before those five settings joined do not hold them, and a
+profile only changes what it holds, so applying one leaves them as they are.
+Select the profile, set Settings the way you want, and press **Update** once to
+bring them in.
+
+### If I change a setting afterwards, does the saved profile change?
+
+No. A profile is a snapshot. Changing a setting later leaves the saved profile
+as it was, and applying a profile copies its values in. To bring a profile up to
+date, set things the way you want and press **Update**.
+
+### Do my profiles come along when I move to another computer?
+
+Yes. Profiles are saved in `settings.json`, so **Export Data** carries them in
+the bundle. On the other machine, **Replace** brings them in with the rest of the
+settings, and **Expand** leaves your settings, profiles included, as they are.
+
 ### I changed the theme but nothing happened
 
 The Light / Dark / System theme takes effect the next time you launch the app,

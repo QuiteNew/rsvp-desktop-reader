@@ -140,6 +140,12 @@ A flat object, one key per setting. Defaults shown.
 | `guide_mark_color` | `#3B2E27` | Mark color. |
 | `guide_mark_color_is_default` | true | Whether the mark color still follows the theme default. |
 
+**Reading profiles**
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `profiles` | `[]` | The saved reading profiles, in the order they were added. Each is the object below. |
+
 **Normalize, storage, and appearance**
 
 | Field | Default | Meaning |
@@ -147,6 +153,44 @@ A flat object, one key per setting. Defaults shown.
 | `split_long_paragraphs_enabled` | false | Whether Normalize also splits long prose into paragraphs. |
 | `data_directory` | `~/.rsvp_reader` | Where `data.json` is written. |
 | `appearance_mode` | `light` | Theme: `light`, `dark`, or `system`. |
+
+### A reading profile
+
+Each entry in `profiles` is an object with a name and the settings it holds:
+
+```json
+{
+  "name": "Fast skim",
+  "values": { "skip_word_count": 25, "length_pacing_enabled": false, "guide_mark_color": null }
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | string | The profile's name: at most 30 characters, and unique without regard to capitals. |
+| `values` | object | The settings it holds, keyed by the same names as in `settings.json`. |
+
+A profile can hold these settings: `highlight_offset_px`,
+`guide_mark_horizontal_enabled`, `guide_mark_thickness_px`,
+`guide_mark_length_percent`, `guide_mark_color`, `length_pacing_enabled`,
+`warm_up_enabled`, `resume_rewind_enabled`, `resume_rewind_words`,
+`peripheral_context_enabled`, `skip_word_count`, `pause_on_skip`,
+`default_wpm`, `default_font_size`, `font_size_step`,
+`split_long_paragraphs_enabled` and `scrub_pause_enabled`. It never holds a
+transcript's own values, the Defaults colours, the chunking defaults, the window
+and layout sizes, the data directory, or the theme.
+
+- A setting that is missing from `values` means "leave that setting alone" when
+  the profile is applied. That is how a profile saved before a setting joined
+  the list keeps working.
+- `guide_mark_color` is `null` when the colour was still following the Light /
+  Dark theme at the moment the profile was saved, and a `"#RRGGBB"` value only
+  when it was picked by hand.
+- Numbers are pulled back into the range the Settings window allows when the
+  profile is applied, so a hand-edited value cannot push a setting out of range.
+- A malformed entry is skipped when the file is loaded, an unknown or invalid
+  key inside a profile is ignored, and when two profiles share a name (ignoring
+  capitals) the first one is kept.
 
 ## The export bundle
 
@@ -164,14 +208,17 @@ by default named `rsvp-reader-export.json`, with this shape:
 - `data` is exactly the contents of `data.json`.
 - `settings` is everything from `settings.json` **except `data_directory`**,
   which is left out on purpose: it is a machine-specific path that would be
-  meaningless, or wrong, on another computer.
+  meaningless, or wrong, on another computer. Your saved reading profiles are
+  part of it.
 - `bundle_format` is the format version, currently `1`. A bundle from a
   different format version is refused rather than misread.
 
 Importing (under Storage, then **Import Data**) offers two modes:
 
 - **Replace** wipes everything on this machine and replaces it with the
-  bundle's transcripts, Spaces, and settings. Your local `data_directory` is
+  bundle's transcripts, Spaces, and settings, profiles included. Your local
+  `data_directory` is kept. A bundle exported before profiles existed has no
+  profiles in it, and for that one the profiles already on this machine are
   kept.
 - **Expand** adds the bundle's transcripts and Spaces to what you already have
   and leaves your settings untouched. There is no settings merge, since

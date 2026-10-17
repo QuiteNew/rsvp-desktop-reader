@@ -88,6 +88,11 @@ reading this way (including where it helps and where it does not), see [The scie
   setting's name or, when you turn on the toggle beside it, its description
 - An About dialog behind the small round **i** button at the top right of
   Settings, showing the app's version, its license, and a link to the project
+- Reading profiles - save how the reader feels (guide marks, pacing, rewind on
+  resume, surrounding words, skipping, the +/- step, the scrubber and paragraph
+  switches, and the Speed and Word size defaults) under a name, and switch
+  between them from Settings in one click. Applying a profile never touches your
+  transcripts, your colours or your chunking
 - Light / Dark / System theme support with reading colors that
   automatically follow the active theme unless you've customized them
 - Fully offline and self-contained - no browser, offline,
@@ -127,7 +132,7 @@ including the per-platform Tkinter look at [docs/installation.md](docs/installat
 4. Adjust speed and colors for the current transcript from the control
    band at the bottom of the window.
 5. Open **Settings** (top-right) for new-transcript defaults, layout
-   sizing, where your data is stored, and theme.
+   sizing, where your data is stored, theme, and saved reading profiles.
 <br>
 
 For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs/usage.md).
@@ -154,6 +159,8 @@ rsvp-desktop-reader/
 │   ├── reader.py            # ReaderSession: ties the above together
 │   ├── scroll.py            # Pure geometry for the reader's horizontal pan
 │   ├── settings_search.py   # Pure matching for the Settings search (name, keywords, description)
+│   ├── profiles.py          # Reading profiles: which settings a profile holds, name rules, loading saved ones
+│   ├── profile_apply.py     # Works out what applying a profile does (clamping, guide mark colour vs. theme)
 │   ├── app_info.py          # The app's name, version, license and project link, shown in the About dialog
 │   ├── transcript_store.py  # In-memory store + persistence for transcripts/spaces
 │   ├── settings_store.py    # In-memory store + persistence for app settings
@@ -177,12 +184,16 @@ rsvp-desktop-reader/
 │   ├── test_normalizer.py
 │   ├── test_orp.py
 │   ├── test_parser.py
+│   ├── test_profile_apply.py
+│   ├── test_profiles.py
 │   ├── test_punctuation.py
 │   ├── test_reader.py
 │   ├── test_scroll.py
 │   ├── test_settings_search.py
 │   ├── test_settings_store.py
+│   ├── test_settings_store_profiles.py
 │   ├── test_storage.py
+│   ├── test_theme_following_colours.py
 │   ├── test_timing.py
 │   ├── test_tokenizer.py
 │   └── test_transcript_store.py
@@ -204,7 +215,7 @@ and the CustomTkinter `gui/`, see [docs/architecture.md](docs/architecture.md) *
 
 ## Settings and Configuration
 
-Settings are organized into five tabs:
+Settings are organized into six tabs:
 
 - **Defaults** - speed, colors, and skip behavior applied to newly created
   transcripts (skip settings apply live to whatever you're currently
@@ -217,6 +228,14 @@ Settings are organized into five tabs:
   to replace what's here or add to it
 - **Appearance** - Light / Dark / System theme (takes effect on next
   launch, not live)
+- **Profiles** - save the current reader settings under a name, then apply,
+  update, rename or delete them later. A profile holds the guide marks,
+  pacing, rewind on resume, surrounding words, skipping, the +/- step, the
+  scrubber and paragraph switches, and the Speed and Word size sliders.
+  Applying one takes effect straight away, and never changes a transcript,
+  your colours or chunking (Speed and Word size only set where new
+  transcripts start). Profiles are saved with your settings, so Export and
+  Import carry them along
 - **Stats** - read-only reading totals for each transcript (how many times
   it's been read, words read, and time spent), updated when a session ends
   rather than while you're paused
@@ -262,7 +281,9 @@ project on GitHub.
 - ~~Search functionality in settings~~
 - ~~App version info dialog~~
 - ~~Automated tests and repo cleanup~~
-- Setting profiles
+- ~~Setting profiles~~
+- Dyslexia-friendly font and letter spacing
+- Bionic Reading
 
 
 ## License

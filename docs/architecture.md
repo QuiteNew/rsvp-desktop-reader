@@ -65,10 +65,42 @@ of its own. The passage of time is the GUI's job.
   throttle so rapid updates do not hammer the disk, and an explicit flush forces
   a write when a session ends.
 - `settings_store.py` does the same for application settings: the new-transcript
-  defaults, layout sizes, data location, and theme.
+  defaults, layout sizes, data location, theme, and the saved reading profiles.
 - `data_bundle.py` builds and applies the single-file export used to move
   transcripts, Spaces, and settings between machines, deliberately leaving the
   machine-specific data path out of the bundle.
+
+### Reading profiles
+
+A reading profile is a named snapshot of the app-wide settings, and the two
+pieces of logic behind it are both pure.
+
+`profiles.py` holds the rules. It lists which settings a profile may hold (the
+guide marks, pacing, rewind, surrounding words, skipping, the +/- step, the
+scrubber and paragraph switches, and the Speed and Word size defaults), checks
+that a value is the right kind for its setting, and decides what makes a good
+name: trimmed, at most 30 characters, unique without regard to capitals. It also
+loads saved profiles forgivingly. A damaged entry is dropped, an unknown or
+invalid key inside a profile is ignored, and a key that is missing from a
+profile means "leave that setting alone". That last rule is what keeps a profile
+saved by an older version working after a newer version adds a setting. What a
+profile does not hold is as deliberate as what it does: no transcript values, no
+Defaults colours, no chunking, no layout, data location or theme.
+
+`profile_apply.py` works out what applying a profile does, without doing it.
+Given the profile's values and the current settings, it hands back the complete
+set of values the app should end up with: numbers are clamped to the same ranges
+the Settings window enforces, anything the profile does not hold is filled in
+from the current settings, and the guide mark colour is resolved against the
+theme. A profile stores nothing for a guide mark colour that was still following
+the Light / Dark theme when it was saved (it stores a null for it), so applying
+it gives the current theme's colour and keeps it following, while a colour
+picked by hand is applied as picked. `SettingsStore` keeps a flag for that
+distinction and a setter, `restore_guide_mark_color`, that can turn it back on.
+
+The saved profiles themselves are a list in `settings.json`, managed through
+`SettingsStore`'s add, update, rename and delete methods, so the export bundle
+carries them without any extra code.
 
 ### Display geometry
 
@@ -136,6 +168,18 @@ with its own session and its own copies of the relevant settings, kept in sync
 with the main window. It can do almost everything the main reader can, including
 its own skipping buttons, and deliberately cannot enter focus mode, since it has
 no chrome to hide.
+
+Reading profiles reach the screen through the Profiles tab of the Settings
+window, `gui/components/profiles_tab.py`, with a name popup and a confirm popup
+beside it. The tab only deals with what is on screen: it knows nothing about the
+stores, and everything real goes through callbacks that `gui/app.py` hands it.
+Applying a profile in `RSVPApp` asks `profile_apply.py` for the plan, then writes
+it out through the same store setters and live canvas calls that Settings' Apply
+uses, so it takes effect without a restart. Because the Settings window copies
+every value into its controls when it opens, and its Apply writes them back, the
+window closes after a profile is applied, and saving or updating a profile runs
+the window's own Apply first. Otherwise a later Apply would put the old values
+back over the profile.
 
 Two small modules support the rest: `theme.py` holds the central design tokens
 (colors, fonts, and how the active theme is resolved), and `icons.py` draws the

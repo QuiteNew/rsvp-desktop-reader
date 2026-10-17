@@ -2,8 +2,8 @@
 
 This guide covers everything in RSVP Desktop Reader: how the reading itself
 works, organizing transcripts into Spaces, getting text in and editing it,
-the reader and its controls, the detached window, the keyboard shortcuts, and
-every setting.
+the reader and its controls, the detached window, the keyboard shortcuts, every
+setting, and saved reading profiles.
 
 ## How the reading works
 
@@ -345,8 +345,9 @@ a text field (the search box, a rename field, or the edit box).
 
 Open **Settings** from the top-right. Changes on most tabs are staged until you
 click **Apply** (with **Close** to dismiss), and a few act immediately, noted
-below. There are five tabs, plus a small round **i** button in the top-right
-corner that opens the [About dialog](#the-about-dialog).
+below. The Profiles tab has no Apply button of its own, see
+[Profiles](#profiles). There are six tabs, plus a small round **i** button in
+the top-right corner that opens the [About dialog](#the-about-dialog).
 
 A **Search settings...** box sits at the top of this tab and filters the
 controls below as you type. It matches a setting's name and some extra keywords
@@ -437,6 +438,76 @@ from the theme, so they will not automatically match Light or Dark. Adjust them
 under Defaults, or per transcript from the control band at the bottom of the
 window.
 
+### Profiles
+
+A profile is a saved set of reader settings, so you can switch between ways of
+reading in one go, say a quick, light skim and a slower, careful read, instead
+of changing a handful of controls by hand each time.
+
+**What a profile holds.** These Defaults-tab settings:
+
+- the guide marks: **Highlight vertical offset**, **Guide-mark thickness**,
+  **Mark length**, **Mark colour**, and **Show horizontal guide lines**
+- pacing: **Slow down for long words** and **Ease in at the start of reading**
+- **Rewind a few words when resuming**, and how many words to rewind
+- **Show surrounding words**
+- **Skip amount** and **Pause playback when skipping**
+- **Word-size step** for the +/- buttons
+- **Pause after using the scrubber** and **Split long paragraphs when
+  normalizing**
+- **Speed** and **Word size**, the two sliders at the top of the Defaults tab
+
+**What it never changes.** Applying a profile never touches a transcript: not
+its text, its position, or its own speed and size. It does not change your
+Defaults colours (font, highlight and background), the chunking settings, the
+layout, the data folder, or the Light / Dark theme. Speed and Word size are the
+Defaults sliders, so they only decide where the next *new* transcript starts.
+The transcript you have open keeps the speed and size it already has. To keep
+different texts apart, use [Spaces](#spaces).
+
+The guide mark colour is remembered with one extra detail: if it was still
+following the Light / Dark theme when you saved the profile, the profile keeps
+following it, and applying it later gives you the current theme's colour. A
+colour you picked by hand is applied exactly as picked.
+
+**The tab.** At the top is a short explanation, then a **Save current settings
+as...** button, then the list of your profiles. Click a profile to select it,
+and click it again to unselect it. Four buttons under the list work on the
+selected profile and stay greyed out while nothing is selected:
+
+- **Apply** puts the profile's settings to use. It takes effect straight away,
+  with no restart, in the reader you have open and in the detached window. The
+  Settings window then closes, so that when you open it again every tab shows
+  the new values.
+- **Update** replaces what the profile holds with the settings you are using
+  now, after a confirmation. The old settings cannot be brought back.
+- **Rename** changes the profile's name.
+- **Delete** removes the profile, after a confirmation.
+
+A name can be up to 30 characters, and two profiles cannot share a name,
+ignoring capitals. Extra spaces are tidied up. There is no limit on how many
+profiles you can keep, and the list scrolls when it gets long.
+
+**Saving, updating and applying start by applying your changes.** If you
+changed something on another tab and have not pressed **Apply** yet, saving,
+updating or applying a profile first applies those changes, and a value that
+cannot be used (a number that is not a whole number, say) stops the action and
+is reported under the tabs. That is why the window's own **Apply** button is
+hidden on this tab: you do not need it here.
+
+A profile is a snapshot, not a live link. Changing a setting later does not
+change the saved profile, and applying a profile copies its values in. To bring
+a profile up to date, set things the way you want and press **Update**.
+
+**Older profiles.** A profile only changes the settings it holds. Profiles saved
+before the Speed, Word size, +/- step, scrubber and paragraph settings joined do
+not hold those five, so applying them leaves those settings as they are. Select
+the profile and press **Update** once to bring them in.
+
+**Export and Import.** Profiles are saved in `settings.json`, so **Export Data**
+carries them to another machine. **Replace** brings them in with the rest of
+the settings, and **Expand** leaves your settings, profiles included, as they are.
+
 ### Stats
 
 A read-only summary, one card per transcript across all Spaces, showing how
@@ -463,4 +534,8 @@ compare against the latest release on the project's Releases page.
 - **Immediately:** the Skip amount and Pause-when-skipping controls, and the
   Export and Import buttons (Import then closes the app).
 - **On Apply:** everything else on Defaults, Layout, and Storage.
+- **When you use a button on the Profiles tab:** saving, updating, renaming and
+  deleting a profile are saved at once, and applying one takes effect at once
+  and closes Settings. Saving, updating and applying first apply any pending
+  changes from the other tabs.
 - **Next launch:** the Appearance theme.
