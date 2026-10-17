@@ -20,6 +20,11 @@ from gui.components.search_box import SearchBox
 from gui.icons import description_icon, info_icon
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
+# The tab where this window's own Apply button is hidden: the Profiles tab's
+# buttons apply whatever is pending first, so a second Apply would only be in
+# the way (see _update_apply_button()).
+PROFILES_TAB_NAME = "Profiles"
+
 @dataclass
 class _DefaultsItem:
     """One entry of the Defaults tab, as the Settings search sees it. All of an
@@ -139,6 +144,7 @@ class SettingsWindow(ctk.CTkToplevel):
             segmented_button_unselected_color=WARM_TAUPE,
             segmented_button_unselected_hover_color=WARM_LINE,
             text_color=COCOA_INK,
+            command=self._handle_tab_changed,
         )
 
         self.tabview.pack(fill="both", expand=True, padx=(15, 0), pady=(4, 5))
@@ -147,7 +153,7 @@ class SettingsWindow(ctk.CTkToplevel):
         layout_tab = self.tabview.add("Layout")
         storage_tab = self.tabview.add("Storage")
         appearance_tab = self.tabview.add("Appearance")
-        profiles_tab = self.tabview.add("Profiles")
+        profiles_tab = self.tabview.add(PROFILES_TAB_NAME)
         stats_tab = self.tabview.add("Stats")
 
         self._build_defaults_tab(
@@ -175,11 +181,13 @@ class SettingsWindow(ctk.CTkToplevel):
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
             font=self.button_font, command=self.destroy,
         ).pack(side="left")
-        ctk.CTkButton(
+        # Kept on self so it can be hidden while the Profiles tab is showing.
+        self.apply_button = ctk.CTkButton(
             button_row, text="Apply", width=90, corner_radius=10,
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
             font=self.button_font, command=self._handle_apply,
-        ).pack(side="right")
+        )
+        self.apply_button.pack(side="right")
 
         self.lift()
         self.transient(master)
@@ -233,6 +241,29 @@ class SettingsWindow(ctk.CTkToplevel):
             last_bbox = current_bbox
         self.attributes("-alpha", 1)
 
+
+    def _handle_tab_changed(self) -> None:
+        """Runs when someone clicks a tab. CustomTkinter only calls this for a
+        click, not when code switches tabs with tabview.set(), which is fine
+        here because nothing in the app does that."""
+        self._update_apply_button()
+
+    def _update_apply_button(self) -> None:
+        """Show this window's Apply button on every tab except Profiles, where
+        it would only be a second way to do what the tab's own buttons already
+        do (they apply any pending changes first, see _build_profiles_tab()).
+        Close is packed on the left of the same row, so the row keeps its height
+        and nothing moves when the button comes and goes.
+
+        The button is packed again with the same side it was first given. It has
+        no padding, so there is nothing for CustomTkinter to scale a second
+        time on a high-DPI screen."""
+        showing = self.apply_button.winfo_manager() == "pack"
+        if self.tabview.get() == PROFILES_TAB_NAME:
+            if showing:
+                self.apply_button.pack_forget()
+        elif not showing:
+            self.apply_button.pack(side="right")
 
     def _open_native_dialog(self, dialog_fn, **kwargs):
         self.grab_release()
@@ -1071,9 +1102,11 @@ class SettingsWindow(ctk.CTkToplevel):
         Saving, updating and applying a profile all start with _handle_apply().
         The other tabs copy their values in when the window opens and only write
         them back on Apply, so without that a profile would miss anything that
-        hasn't been applied yet. After a profile has been applied the window
-        closes: its controls would otherwise still show the old values, and
-        pressing Apply later would quietly write those back over the profile."""
+        hasn't been applied yet. That is also why this window's own Apply button
+        is hidden on this tab (see _update_apply_button()). After a profile has
+        been applied the window closes: its controls would otherwise still show
+        the old values, and pressing Apply later would quietly write those back
+        over the profile."""
         self.profiles_tab = ProfilesTab(
             tab,
             profile_names=self.profile_names,

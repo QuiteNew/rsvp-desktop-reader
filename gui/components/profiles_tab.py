@@ -18,10 +18,11 @@ EXPLANATION = (
 
 # Saving, updating or applying a profile starts by applying whatever has been
 # changed in the other tabs (see ProfilesTab's on_prepare). This says so up
-# front, so it doesn't come as a surprise.
+# front, so it doesn't come as a surprise. The Settings window hides its own
+# Apply button on this tab, so the note doesn't point at it.
 APPLY_FIRST_NOTE = (
     "Saving, updating or applying a profile first applies any changes you've "
-    "made in Settings, the same as pressing Apply."
+    "made in the other tabs."
 )
 
 # Wide enough to read comfortably, narrow enough for the smallest the Settings
@@ -37,6 +38,9 @@ class ProfilesTab(ctk.CTkFrame):
     """The Profiles tab of the Settings window: a short explanation, a button
     to save the current settings as a new profile, the list of saved profiles,
     and buttons to apply, update, rename or delete the one that is selected.
+
+    Clicking a row selects its profile, and clicking the selected row again
+    unselects it, which switches the four action buttons back off.
 
     This class only deals with what is on screen. It knows nothing about stores
     or the reader, everything real goes through the callbacks it is given, which
@@ -160,10 +164,26 @@ class ProfilesTab(ctk.CTkFrame):
         self._show_selection()
 
     def select(self, name) -> None:
-        """Select the profile with this name (what clicking its row does)."""
+        """Select the profile with this name. Always selects, even if it is
+        already the selected one; a click on a row goes through
+        _handle_row_clicked() instead, which can also unselect."""
         if name in self._rows:
             self._selected = name
             self._show_selection()
+
+    def deselect(self) -> None:
+        """Unselect whatever is selected, so nothing is, and the action buttons
+        switch off. Harmless when nothing is selected."""
+        self._selected = None
+        self._show_selection()
+
+    def _handle_row_clicked(self, name: str) -> None:
+        """A click on a row. Clicking the selected row again unselects it,
+        anything else selects the row clicked."""
+        if name == self._selected:
+            self.deselect()
+        else:
+            self.select(name)
 
     def _add_row(self, name: str) -> None:
         """One row of the list, a button that selects its profile. Its own
@@ -173,7 +193,7 @@ class ProfilesTab(ctk.CTkFrame):
         button = ctk.CTkButton(
             self.list_frame, text=name, anchor="w", height=30, corner_radius=6,
             fg_color="transparent", hover_color=WARM_LINE, text_color=COCOA_INK,
-            font=self.label_font, command=lambda: self.select(name),
+            font=self.label_font, command=lambda: self._handle_row_clicked(name),
         )
         button.pack(fill="x", pady=2, padx=4)
         self._rows[name] = button

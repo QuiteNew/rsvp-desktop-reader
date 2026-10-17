@@ -1517,6 +1517,14 @@ def _assert_popup_not_clipped(popup):
     assert popup.winfo_reqheight() <= popup.winfo_height()
 
 
+def _click_tab(window, name):
+    """Press a tab's button in the Settings tab bar, the way a person does.
+    Unlike tabview.set(), this goes through CustomTkinter's click handling, so
+    the tab view's command runs too, which is what hides and shows the window's
+    Apply button."""
+    window.tabview._segmented_button._buttons_dict[name].invoke()
+
+
 @pytest.fixture
 def profile_tab(app, settings, profiles_sandbox):
     """The shared Settings window's Profiles tab, shown, with no profiles saved.
@@ -1524,7 +1532,7 @@ def profile_tab(app, settings, profiles_sandbox):
     controls these tests change back, and returns to the Defaults tab."""
     tab = settings.profiles_tab
     controls = _read_controls(settings)
-    settings.tabview.set("Profiles")
+    _click_tab(settings, "Profiles")
     tab.refresh()
     try:
         yield tab
@@ -1539,7 +1547,7 @@ def profile_tab(app, settings, profiles_sandbox):
         tab.refresh()
         _write_controls(settings, controls)
         settings._show_message("")
-        settings.tabview.set("Defaults")
+        _click_tab(settings, "Defaults")
         _settle(app, 100)
 
 
@@ -1554,6 +1562,10 @@ def test_the_profiles_tab_says_what_a_profile_does_and_does_not_change(settings)
     assert "spaces" in explanation
     note = next(text for text in labels if text.startswith("Saving, updating or applying"))
     assert "first applies" in note
+    # Settings' own Apply is hidden on this tab, so the note must not send
+    # anyone looking for it.
+    assert "other tabs" in note
+    assert "pressing Apply" not in note
 
 
 def test_an_empty_profiles_tab_says_so_and_has_nothing_to_act_on(profile_tab):
@@ -1572,6 +1584,81 @@ def test_saved_profiles_are_listed_in_order_and_none_starts_selected(app, profil
     assert not any(text.startswith("No profiles yet") for text in _labels_by_text(profile_tab.list_frame))
     for button in profile_tab._action_buttons:
         assert button.cget("state") == "disabled"
+
+
+def test_clicking_the_selected_row_again_unselects_it(app, profile_tab):
+    from gui.theme import EMBER_GLOW
+
+    app._save_profile("Fast skim")
+    app._save_profile("Careful read")
+    profile_tab.refresh()
+
+    row = profile_tab._rows["Fast skim"]
+    row.invoke()
+    assert profile_tab.selected_name == "Fast skim"
+    assert row.cget("fg_color") == EMBER_GLOW
+
+    # The second click puts everything back the way it was before the first.
+    row.invoke()
+    assert profile_tab.selected_name is None
+    assert row.cget("fg_color") == "transparent"
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "disabled"
+
+    # And it can be selected again after that.
+    row.invoke()
+    assert profile_tab.selected_name == "Fast skim"
+    assert row.cget("fg_color") == EMBER_GLOW
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "normal"
+
+
+def test_clicking_a_different_row_moves_the_selection_instead_of_clearing_it(app, profile_tab):
+    from gui.theme import EMBER_GLOW
+
+    app._save_profile("Fast skim")
+    app._save_profile("Careful read")
+    profile_tab.refresh()
+
+    profile_tab._rows["Fast skim"].invoke()
+    profile_tab._rows["Careful read"].invoke()
+
+    assert profile_tab.selected_name == "Careful read"
+    assert profile_tab._rows["Careful read"].cget("fg_color") == EMBER_GLOW
+    assert profile_tab._rows["Fast skim"].cget("fg_color") == "transparent"
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "normal"
+
+
+def test_select_always_selects_and_deselect_clears_whatever_is_selected(app, profile_tab):
+    app._save_profile("Fast skim")
+    profile_tab.refresh()
+
+    profile_tab.deselect()  # nothing selected yet: harmless
+    assert profile_tab.selected_name is None
+
+    profile_tab.select("Fast skim")
+    profile_tab.select("Fast skim")  # selecting the selected one does not toggle it
+    assert profile_tab.selected_name == "Fast skim"
+
+    profile_tab.deselect()
+    assert profile_tab.selected_name is None
+    for button in profile_tab._action_buttons:
+        assert button.cget("state") == "disabled"
+
+
+def test_after_unselecting_the_action_buttons_open_nothing(app, profile_tab):
+    app._save_profile("Fast skim")
+    profile_tab.refresh()
+    row = profile_tab._rows["Fast skim"]
+    row.invoke()
+    row.invoke()
+
+    for button in profile_tab._action_buttons:
+        button.invoke()  # disabled, so these do nothing
+
+    assert profile_tab._popup is None
+    assert [p.name for p in app.settings_store.profiles] == ["Fast skim"]
 
 
 def test_selecting_a_row_highlights_it_and_switches_the_buttons_on(app, profile_tab):
@@ -1877,6 +1964,60 @@ def test_profile_buttons_do_nothing_while_nothing_is_selected(app, settings, pro
     assert app._current_profile_settings() == before
 
 
+def test_the_windows_apply_button_is_hidden_on_the_profiles_tab_only(app, settings):
+    apply_button = settings.apply_button
+    close_button = _find_button(settings, "Close")
+    button_row = apply_button.master
+    row_height = button_row.winfo_reqheight()
+
+    try:
+        assert settings.tabview.get() == "Defaults"
+        assert apply_button.winfo_manager() == "pack"
+
+        for name in settings.tabview._name_list:
+            _click_tab(settings, name)
+            assert settings.tabview.get() == name
+            expected = "" if name == "Profiles" else "pack"
+            assert apply_button.winfo_manager() == expected, name
+            # Close stays, and the row doesn't change size as Apply comes and goes.
+            assert close_button.winfo_manager() == "pack", name
+            assert button_row.winfo_reqheight() == row_height, name
+    finally:
+        _click_tab(settings, "Defaults")
+
+    assert apply_button.winfo_manager() == "pack"
+
+
+def test_apply_comes_back_on_the_right_after_visiting_the_profiles_tab(settings):
+    apply_button = settings.apply_button
+    close_button = _find_button(settings, "Close")
+    try:
+        _click_tab(settings, "Profiles")
+        assert apply_button.winfo_manager() == ""
+        _click_tab(settings, "Stats")
+        assert apply_button.winfo_manager() == "pack"
+        assert apply_button.pack_info()["side"] == "right"
+        assert close_button.pack_info()["side"] == "left"
+    finally:
+        _click_tab(settings, "Defaults")
+
+
+def test_the_profile_buttons_still_apply_pending_changes_with_the_windows_apply_hidden(app, settings, profile_tab):
+    """On this tab the window's own Apply is gone, so Save has to be enough: it
+    applies what was typed in the other tabs first and then saves the profile."""
+    store = app.settings_store
+    assert settings.apply_button.winfo_manager() == ""
+    settings._set_entry_value(settings.guide_mark_thickness_entry, 3)
+
+    profile_tab.save_button.invoke()
+    popup = _popup_of(profile_tab)
+    _type_name(popup, "No apply button")
+    _finish_popup(app, popup, _find_button(popup, "Save").invoke)
+
+    assert store.guide_mark_thickness_px == 3
+    assert store.get_profile("No apply button").values["guide_mark_thickness_px"] == 3
+
+
 def test_the_profiles_tab_fits_the_smallest_settings_window(app, settings, profile_tab):
     """At the smallest size Settings can be made, the tab must not ask for so
     much room that the tab view grows over the error line and the Close and
@@ -1895,10 +2036,10 @@ def test_the_profiles_tab_fits_the_smallest_settings_window(app, settings, profi
     profile_tab.refresh()
     original_geometry = settings.geometry()
     try:
-        settings.tabview.set("Defaults")
+        _click_tab(settings, "Defaults")
         settings.geometry("420x420")
         _settle(settings, 250)
-        settings.tabview.set("Profiles")
+        _click_tab(settings, "Profiles")
         _settle(settings, 250)
 
         tabview_bottom = settings.tabview.winfo_y() + settings.tabview.winfo_height()
