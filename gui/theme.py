@@ -12,6 +12,8 @@ import sys
 import ctypes
 import tkinter as tk
 
+from core.font_choice import FontChoice, choose_fonts
+
 # ---- Palettes ----
 
 LIGHT_PALETTE = {
@@ -138,32 +140,79 @@ LIGHT_READING_GUIDE_MARK_COLOR = LIGHT_PALETTE["cocoa_ink"]  # "#3B2E27", unchan
 DARK_READING_GUIDE_MARK_COLOR = DARK_PALETTE["cocoa_ink"]    # "#F2E8DC", soft cream/white, visible on a dark background
 
 # ---- Fonts ----
-
-FONT_HEADING = "Fredoka SemiBold"
-FONT_BODY = "Quicksand Medium"
+# The fonts are settled once, here, at import time, the same way the palette
+# is, so every component keeps importing the plain names FONT_HEADING and
+# FONT_BODY. The names and the choice itself live in core/font_choice.py; this
+# part only reads the "Dyslexia-friendly font" setting, looks at which font
+# files are in the folder and applies the result.
 
 _FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
-_FONT_FILES = ["Fredoka-SemiBold.ttf", "Quicksand-Medium.ttf"]
 
 _FR_PRIVATE = 0x10
+
+
+def _resolve_font_choice() -> FontChoice:
+    """Work out which fonts to use. Falls back to the standard fonts on any
+    problem reading the setting or the folder (a fresh install with no
+    settings file yet, say), so this can never stop the app from launching."""
+    enabled = False
+    try:
+        from core.settings_store import SettingsStore
+        enabled = SettingsStore().dyslexia_font_enabled
+    except Exception:
+        pass
+    try:
+        present_files = os.listdir(_FONT_DIR)
+    except OSError:
+        present_files = []
+    return choose_fonts(enabled, present_files)
+
+
+def _apply_default_font_family(choice: FontChoice) -> None:
+    """Make the widgets that set no font of their own follow the choice too.
+
+    A CTkFont created without a family (the transcript edit box does this)
+    takes it from CustomTkinter's theme, which names Roboto, so switching
+    FONT_BODY alone would leave those widgets behind. Only the dyslexia-
+    friendly set changes anything here. With the standard fonts the theme is
+    left exactly as CustomTkinter ships it, as it always has been."""
+    if not choice.dyslexia_friendly:
+        return
+    try:
+        from customtkinter import ThemeManager
+        ThemeManager.theme["CTkFont"]["family"] = choice.body
+    except Exception:
+        pass
+
+
+FONT_CHOICE = _resolve_font_choice()
+FONT_HEADING = FONT_CHOICE.heading
+FONT_BODY = FONT_CHOICE.body
+DYSLEXIA_FONT_ACTIVE = FONT_CHOICE.dyslexia_friendly   # the OpenDyslexic fonts are in use this run
+DYSLEXIA_FONT_FELL_BACK = FONT_CHOICE.fell_back        # switched on, but its font files weren't found
+
+_apply_default_font_family(FONT_CHOICE)
+
+
+def _font_paths() -> list[str]:
+    """Full paths of the font files the current choice needs that are really
+    on disk. A missing file is skipped, never an error."""
+    paths = [os.path.join(_FONT_DIR, name) for name in FONT_CHOICE.files]
+    return [path for path in paths if os.path.exists(path)]
 
 
 def register_fonts() -> None:
     if os.name != "nt":
         return
-    for filename in _FONT_FILES:
-        path = os.path.join(_FONT_DIR, filename)
-        if os.path.exists(path):
-            ctypes.windll.gdi32.AddFontResourceExW(ctypes.c_wchar_p(path), _FR_PRIVATE, 0)
+    for path in _font_paths():
+        ctypes.windll.gdi32.AddFontResourceExW(ctypes.c_wchar_p(path), _FR_PRIVATE, 0)
 
 
 def unregister_fonts() -> None:
     if os.name != "nt":
         return
-    for filename in _FONT_FILES:
-        path = os.path.join(_FONT_DIR, filename)
-        if os.path.exists(path):
-            ctypes.windll.gdi32.RemoveFontResourceExW(ctypes.c_wchar_p(path), _FR_PRIVATE, 0)
+    for path in _font_paths():
+        ctypes.windll.gdi32.RemoveFontResourceExW(ctypes.c_wchar_p(path), _FR_PRIVATE, 0)
 
 # ---- App icon ----
 
