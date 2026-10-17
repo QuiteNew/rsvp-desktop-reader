@@ -8,16 +8,19 @@ GUI in it and no store. core/settings_store.py keeps the saved profiles and
 imports the rules from here.
 
 A profile only holds app-wide settings: the guide marks, the pacing options,
-resume rewind, peripheral context and skip behaviour. It never holds anything
-that belongs to a transcript (speed, colours, font size, chunking) and never
-the Defaults that new transcripts start from. Keeping different texts apart is
-what spaces are for.
+resume rewind, peripheral context, skip behaviour, the scrubber and paragraph
+switches, the +/- step, and the Speed and Word size that new transcripts start
+from. It never holds anything that belongs to a transcript, and it never
+changes the transcript that is open: Speed and Word size here are the sliders on
+the Defaults tab, so they only decide where the next new transcript starts.
+Keeping different texts apart is what spaces are for.
 
-Left out on purpose: window and layout sizes, the data directory, the
-Light/Dark/System mode, and settings that are about editing or the scrubber
-rather than how the reader reads. Because the list is short and named here, a
+Left out on purpose: the colours (the Defaults colours, and the colours a
+transcript is read in), chunking, window and layout sizes, the data directory
+and the Light/Dark/System mode. Because the list is short and named here, a
 profile saved by one version still loads in another. A key that is missing from
-a saved profile simply means "leave that setting alone"."""
+a saved profile simply means "leave that setting alone", which is also how a
+profile saved before a setting joined the list keeps working."""
 
 import re
 from dataclasses import dataclass, field
@@ -39,6 +42,11 @@ PROFILE_KEYS = (
     "peripheral_context_enabled",
     "skip_word_count",
     "pause_on_skip",
+    "default_wpm",
+    "default_font_size",
+    "font_size_step",
+    "split_long_paragraphs_enabled",
+    "scrub_pause_enabled",
 )
 
 # Colours that can follow the Light/Dark theme. A profile stores None for one of
@@ -61,6 +69,11 @@ _KINDS = {
     "peripheral_context_enabled": "bool",
     "skip_word_count": "int",
     "pause_on_skip": "bool",
+    "default_wpm": "int",
+    "default_font_size": "int",
+    "font_size_step": "int",
+    "split_long_paragraphs_enabled": "bool",
+    "scrub_pause_enabled": "bool",
 }
 
 _HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")

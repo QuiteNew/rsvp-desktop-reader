@@ -10,8 +10,9 @@ import pytest
 from core.profile_apply import NUMBER_RANGES, ProfilePlan, clamp_value, plan_profile
 from core.profiles import PROFILE_KEYS, value_is_valid
 from core.settings_store import (
-    GUIDE_MARK_LENGTH_PERCENT_RANGE, GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE,
-    RESUME_REWIND_WORDS_RANGE, SKIP_WORD_COUNT_RANGE, AppSettings,
+    FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
+    GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE, RESUME_REWIND_WORDS_RANGE,
+    SKIP_WORD_COUNT_RANGE, WPM_RANGE, AppSettings,
 )
 
 THEME_COLOUR = "#F2E8DC"
@@ -43,6 +44,9 @@ def test_the_ranges_are_the_ones_the_settings_window_uses():
     assert NUMBER_RANGES["guide_mark_length_percent"] == GUIDE_MARK_LENGTH_PERCENT_RANGE
     assert NUMBER_RANGES["resume_rewind_words"] == RESUME_REWIND_WORDS_RANGE
     assert NUMBER_RANGES["skip_word_count"] == SKIP_WORD_COUNT_RANGE
+    assert NUMBER_RANGES["default_wpm"] == WPM_RANGE
+    assert NUMBER_RANGES["default_font_size"] == FONT_SIZE_RANGE
+    assert NUMBER_RANGES["font_size_step"] == FONT_SIZE_STEP_RANGE
 
 def test_every_range_has_a_low_below_its_high():
     for key, (low, high) in NUMBER_RANGES.items():
@@ -92,6 +96,18 @@ def test_the_plan_keeps_numbers_that_are_in_range():
     assert plan.values["skip_word_count"] == 25
     assert plan.values["resume_rewind_words"] == 4
 
+def test_the_plan_takes_speed_word_size_and_step_from_the_profile():
+    plan = _plan({"default_wpm": 450, "default_font_size": 48, "font_size_step": 4})
+    assert plan.values["default_wpm"] == 450
+    assert plan.values["default_font_size"] == 48
+    assert plan.values["font_size_step"] == 4
+
+def test_the_plan_clamps_speed_word_size_and_step():
+    plan = _plan({"default_wpm": 5000, "default_font_size": 4, "font_size_step": 99})
+    assert plan.values["default_wpm"] == WPM_RANGE[1]
+    assert plan.values["default_font_size"] == FONT_SIZE_RANGE[0]
+    assert plan.values["font_size_step"] == FONT_SIZE_STEP_RANGE[1]
+
 
 # ---- plan_profile: switches ----
 
@@ -106,6 +122,12 @@ def test_the_plan_takes_switch_values_from_the_profile():
 def test_a_profile_can_switch_something_off():
     current = {**_current(), "warm_up_enabled": True}
     assert _plan({"warm_up_enabled": False}, current=current).values["warm_up_enabled"] is False
+
+def test_the_plan_takes_the_scrubber_and_paragraph_switches_from_the_profile():
+    current = {**_current(), "scrub_pause_enabled": True, "split_long_paragraphs_enabled": False}
+    plan = _plan({"scrub_pause_enabled": False, "split_long_paragraphs_enabled": True}, current=current)
+    assert plan.values["scrub_pause_enabled"] is False
+    assert plan.values["split_long_paragraphs_enabled"] is True
 
 
 # ---- plan_profile: settings the profile leaves out ----
@@ -126,6 +148,18 @@ def test_settings_the_profile_leaves_out_keep_their_current_value():
     assert plan.values["skip_word_count"] == 25
     assert plan.values["resume_rewind_words"] == 2
     assert plan.values["pause_on_skip"] is True
+
+def test_a_profile_saved_before_the_newer_settings_joined_leaves_them_as_they_are():
+    # The twelve settings profiles started with, and nothing else.
+    older = {key: value for key, value in _current().items() if key not in (
+        "default_wpm", "default_font_size", "font_size_step",
+        "split_long_paragraphs_enabled", "scrub_pause_enabled")}
+    current = {**_current(), "default_wpm": 450, "default_font_size": 48, "font_size_step": 4,
+               "split_long_paragraphs_enabled": True, "scrub_pause_enabled": False}
+    plan = _plan(older, current=current)
+    for key in ("default_wpm", "default_font_size", "font_size_step",
+                "split_long_paragraphs_enabled", "scrub_pause_enabled"):
+        assert plan.values[key] == current[key], key
 
 def test_a_current_value_that_is_out_of_range_is_left_as_it_is_when_the_profile_leaves_it_out():
     # Only what a profile sets is clamped. Anything else is not this module's
@@ -211,7 +245,7 @@ def test_the_result_is_a_copy_of_the_current_settings():
     assert current["skip_word_count"] != 1
 
 def test_a_current_dict_with_extra_keys_is_fine_and_they_are_left_out_of_the_plan():
-    current = {**_current(), "window_width": 1000, "default_wpm": 300}
+    current = {**_current(), "window_width": 1000, "default_font_color": "#3B2E27"}
     assert set(_plan({}, current=current).values) == set(PROFILE_KEYS)
 
 def test_a_current_dict_missing_a_key_raises():

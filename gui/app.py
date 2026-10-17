@@ -812,8 +812,9 @@ class RSVPApp(ctk.CTk):
     # A profile is a snapshot of the app-wide settings in PROFILE_KEYS (see
     # core/profiles.py). Applying one goes through the same store setters and
     # live canvas calls that Settings' Apply uses, so it takes effect straight
-    # away. It never touches a transcript or the Defaults that new transcripts
-    # start from.
+    # away. It never touches a transcript. Of the Defaults that new transcripts
+    # start from it holds only Speed and Word size, never the colours or the
+    # chunking defaults.
 
     def _current_profile_settings(self) -> dict:
         """The app-wide settings a profile holds, as they are saved right now."""
@@ -859,6 +860,12 @@ class RSVPApp(ctk.CTk):
         current theme. This method only writes the result out. The paired
         setters (skip behaviour, resume rewind) need both of their values,
         which the plan always provides.
+
+        Speed and Word size go in as the Defaults new transcripts start from,
+        through the same setter Settings' Apply uses. That setter takes the
+        three Defaults colours too, so they are passed through as they are now,
+        which leaves them alone. The transcript that is open keeps its own
+        speed and size.
 
         Raises ProfileError when there is no profile with this name."""
         profile = self.settings_store.get_profile(name)
@@ -906,6 +913,21 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_skip_behavior(values["skip_word_count"], values["pause_on_skip"])
         self.canvas.set_skip_word_count(values["skip_word_count"])
         self.canvas.set_pause_on_skip(values["pause_on_skip"])
+
+        self.settings_store.set_defaults(
+            values["default_wpm"], self.settings_store.default_font_color,
+            self.settings_store.default_highlight_color, self.settings_store.default_background_color,
+            values["default_font_size"],
+        )
+
+        self.settings_store.set_font_size_step(values["font_size_step"])
+        self.footer.set_font_size_step(values["font_size_step"])
+
+        self.settings_store.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
+        self.canvas.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
+
+        self.settings_store.set_scrub_pause_enabled(values["scrub_pause_enabled"])
+        self.canvas.set_scrub_pause(values["scrub_pause_enabled"])
 
     def _open_chunking_settings(self) -> None:
         """Opens the chunking window from the Settings "Configure chunking"

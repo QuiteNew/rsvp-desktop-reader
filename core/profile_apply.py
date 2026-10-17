@@ -14,7 +14,9 @@ Three things are sorted out on the way:
   different limits could otherwise push a value the window would never allow.
 - A setting the profile doesn't hold is filled in from the current settings,
   which is how "leave that setting alone" works. It also means the grouped
-  setters (skip behaviour, resume rewind) always get both of their values.
+  setters (skip behaviour, resume rewind) always get both of their values. That
+  is also what keeps a profile saved before a setting joined the list working:
+  the newer settings are simply missing from it, so they stay as they are.
 - The guide mark colour is resolved against the current theme. A profile that
   stored None was following the theme when it was saved, so it gets the
   theme's colour now and keeps following. A colour picked by hand is applied as
@@ -24,8 +26,9 @@ from dataclasses import dataclass
 
 from core.profiles import PROFILE_KEYS, sanitize_values
 from core.settings_store import (
-    GUIDE_MARK_LENGTH_PERCENT_RANGE, GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE,
-    RESUME_REWIND_WORDS_RANGE, SKIP_WORD_COUNT_RANGE,
+    FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
+    GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE, RESUME_REWIND_WORDS_RANGE,
+    SKIP_WORD_COUNT_RANGE, WPM_RANGE,
 )
 
 # The allowed (low, high) for every profile setting that is a number. These are
@@ -36,6 +39,9 @@ NUMBER_RANGES = {
     "guide_mark_length_percent": GUIDE_MARK_LENGTH_PERCENT_RANGE,
     "resume_rewind_words": RESUME_REWIND_WORDS_RANGE,
     "skip_word_count": SKIP_WORD_COUNT_RANGE,
+    "default_wpm": WPM_RANGE,
+    "default_font_size": FONT_SIZE_RANGE,
+    "font_size_step": FONT_SIZE_STEP_RANGE,
 }
 
 

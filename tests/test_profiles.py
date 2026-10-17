@@ -6,7 +6,8 @@ The first group guards the list of keys against the real settings classes, so
 renaming a setting in AppSettings fails here instead of quietly leaving a
 profile that no longer applies to anything. It also guards the line the feature
 draws: a profile holds app-wide settings only, never anything that belongs to a
-transcript or to the Defaults for new transcripts."""
+transcript, and of the Defaults for new transcripts only Speed and Word size,
+never the colours or the chunking defaults."""
 
 import dataclasses
 
@@ -56,19 +57,30 @@ def test_the_real_defaults_are_all_valid_values():
 def test_a_profile_never_holds_anything_that_belongs_to_a_transcript():
     assert not set(PROFILE_KEYS) & _transcript_fields()
 
-def test_a_profile_never_holds_a_default_for_new_transcripts():
-    assert not [key for key in PROFILE_KEYS if key.startswith("default_")]
+def test_a_profile_holds_only_speed_and_word_size_of_the_defaults_for_new_transcripts():
+    held = {key for key in PROFILE_KEYS if key.startswith("default_")}
+    assert held == {"default_wpm", "default_font_size"}
 
-def test_speed_look_and_chunking_are_not_part_of_a_profile():
+def test_the_colours_and_chunking_defaults_are_not_part_of_a_profile():
+    for key in ("default_font_color", "default_highlight_color", "default_background_color",
+                "default_chunking_enabled", "default_chunk_size", "default_chunk_mode",
+                "default_chunk_char_target"):
+        assert key not in PROFILE_KEYS, key
+
+def test_a_transcripts_own_speed_look_and_chunking_are_not_part_of_a_profile():
     for key in ("wpm", "font_color", "highlight_color", "background_color", "font_size",
                 "chunking_enabled", "chunk_size", "chunk_mode", "chunk_char_target"):
         assert key not in PROFILE_KEYS, key
 
 def test_layout_theme_and_storage_settings_are_not_part_of_a_profile():
     for key in ("window_width", "window_height", "sidebar_width", "bottom_band_height",
-                "freeform_resize_enabled", "data_directory", "appearance_mode",
-                "split_long_paragraphs_enabled", "font_size_step", "scrub_pause_enabled"):
+                "freeform_resize_enabled", "data_directory", "appearance_mode"):
         assert key not in PROFILE_KEYS, key
+
+def test_speed_word_size_step_and_the_two_switches_are_part_of_a_profile():
+    for key in ("default_wpm", "default_font_size", "font_size_step",
+                "split_long_paragraphs_enabled", "scrub_pause_enabled"):
+        assert key in PROFILE_KEYS, key
 
 
 # ---- Names ----
@@ -138,6 +150,21 @@ def test_true_and_false_are_valid_for_switches():
 def test_a_number_is_not_a_valid_switch_value():
     assert not value_is_valid("pause_on_skip", 1)
 
+def test_speed_word_size_and_step_take_whole_numbers_only():
+    for key in ("default_wpm", "default_font_size", "font_size_step"):
+        assert value_is_valid(key, 300), key
+        assert not value_is_valid(key, True), key
+        assert not value_is_valid(key, 300.0), key
+        assert not value_is_valid(key, "300"), key
+        assert not value_is_valid(key, None), key
+
+def test_the_scrubber_and_paragraph_settings_take_true_or_false_only():
+    for key in ("split_long_paragraphs_enabled", "scrub_pause_enabled"):
+        assert value_is_valid(key, True), key
+        assert value_is_valid(key, False), key
+        assert not value_is_valid(key, 1), key
+        assert not value_is_valid(key, None), key
+
 def test_hex_colours_are_valid_in_either_case():
     assert value_is_valid("guide_mark_color", "#3B2E27")
     assert value_is_valid("guide_mark_color", "#3b2e27")
@@ -201,7 +228,7 @@ def test_build_values_takes_each_value_from_the_input():
 
 def test_build_values_ignores_keys_that_are_not_part_of_a_profile():
     # A whole settings dict can be passed in without filtering it first.
-    given = {**_real_settings(), "window_width": 1234, "default_wpm": 999}
+    given = {**_real_settings(), "window_width": 1234, "default_font_color": "#112233"}
     assert set(build_values(given)) == set(PROFILE_KEYS)
 
 def test_build_values_stores_none_for_a_colour_that_follows_the_theme():
@@ -270,10 +297,19 @@ def test_clean_profile_list_returns_plain_dicts():
     assert type(cleaned[0]["values"]) is dict
 
 def test_clean_profile_list_drops_settings_that_used_to_be_allowed():
-    # Profiles saved by the first draft of this feature could hold speed, font
-    # size and so on. They are ignored now, and the rest of the profile loads.
+    # Profiles saved by the first draft of this feature could hold a
+    # transcript's own speed, font size and so on. They are ignored now, and the
+    # rest of the profile loads.
     raw = [{"name": "Old", "values": {"wpm": 600, "font_size": 28, "skip_word_count": 25}}]
     assert clean_profile_list(raw) == [{"name": "Old", "values": {"skip_word_count": 25}}]
+
+def test_clean_profile_list_keeps_the_newer_settings_and_drops_the_colour_defaults():
+    raw = [{"name": "Mixed", "values": {"default_wpm": 450, "default_font_size": 40, "font_size_step": 3,
+                                         "scrub_pause_enabled": False, "split_long_paragraphs_enabled": True,
+                                         "default_font_color": "#112233", "default_chunk_size": 4}}]
+    assert clean_profile_list(raw) == [{"name": "Mixed", "values": {
+        "default_wpm": 450, "default_font_size": 40, "font_size_step": 3,
+        "split_long_paragraphs_enabled": True, "scrub_pause_enabled": False}}]
 
 def test_profile_error_is_a_value_error():
     assert issubclass(profiles.ProfileError, ValueError)

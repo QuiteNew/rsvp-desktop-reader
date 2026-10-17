@@ -1175,6 +1175,11 @@ _PROFILE_VALUES = {
     "peripheral_context_enabled": True,
     "skip_word_count": 30,
     "pause_on_skip": True,
+    "default_wpm": 450,
+    "default_font_size": 48,
+    "font_size_step": 4,
+    "split_long_paragraphs_enabled": True,
+    "scrub_pause_enabled": False,
 }
 
 
@@ -1193,7 +1198,17 @@ def _put_profile_settings_back(application, values, follows_theme):
     store.set_resume_rewind(values["resume_rewind_enabled"], values["resume_rewind_words"])
     store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
     store.set_skip_behavior(values["skip_word_count"], values["pause_on_skip"])
+    store.set_defaults(
+        values["default_wpm"], store.default_font_color, store.default_highlight_color,
+        store.default_background_color, values["default_font_size"],
+    )
+    store.set_font_size_step(values["font_size_step"])
+    store.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
+    store.set_scrub_pause_enabled(values["scrub_pause_enabled"])
     canvas = application.canvas
+    application.footer.set_font_size_step(values["font_size_step"])
+    canvas.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
+    canvas.set_scrub_pause(values["scrub_pause_enabled"])
     canvas.set_highlight_offset(values["highlight_offset_px"])
     canvas.set_guide_mark_horizontal_enabled(values["guide_mark_horizontal_enabled"])
     canvas.set_guide_mark_thickness(values["guide_mark_thickness_px"])
@@ -1245,11 +1260,15 @@ def test_applying_a_profile_changes_every_app_wide_setting(profiles_sandbox):
     assert canvas._peripheral_context_enabled is True
     assert canvas._skip_word_count == 30
     assert canvas._pause_on_skip is True
+    assert canvas._split_long_paragraphs_enabled is True
+    assert canvas._scrub_pause_enabled is False
+    assert app.footer._font_size_step == 4
     reader = canvas.reader_display
     assert reader._highlight_offset_px == 2
     assert reader._guide_mark_thickness_px == 4
     assert reader._resume_rewind_words == 5
     assert reader._peripheral_context_enabled is True
+    assert reader._scrub_pause_enabled is False
 
 
 def test_an_applied_profile_is_written_to_settings_json(profiles_sandbox):
@@ -1265,26 +1284,77 @@ def test_an_applied_profile_is_written_to_settings_json(profiles_sandbox):
     assert saved["guide_mark_color_is_default"] is False
 
 
-def test_applying_a_profile_leaves_transcripts_and_defaults_alone(profiles_sandbox):
+def test_applying_a_profile_leaves_transcripts_the_colours_and_chunking_alone(profiles_sandbox):
     app = profiles_sandbox
     store = app.settings_store
     transcript = app.store.add_transcript(
         "Profile bystander", app.store.current_space,
-        wpm=450, font_color="#445566", highlight_color="#778899", background_color="#AABBCC",
+        wpm=600, font_color="#445566", highlight_color="#778899", background_color="#AABBCC",
         font_size=44, chunking_enabled=True, chunk_size=3,
     )
     transcript_before = dict(vars(transcript))
-    defaults = ("default_wpm", "default_font_color", "default_highlight_color", "default_background_color",
-                "default_font_size", "default_chunking_enabled", "default_chunk_size",
-                "default_chunk_mode", "default_chunk_char_target", "appearance_mode",
-                "window_width", "sidebar_width", "scrub_pause_enabled")
-    defaults_before = {key: getattr(store, key) for key in defaults}
+    # Known colours of its own, so the result can't depend on what an earlier
+    # test left behind. Put back afterwards.
+    original_colours = (store.default_font_color, store.default_highlight_color, store.default_background_color)
+    store.set_defaults(store.default_wpm, "#445566", "#778899", "#AABBCC", store.default_font_size)
+    untouched = ("default_font_color", "default_highlight_color", "default_background_color",
+                 "default_chunking_enabled", "default_chunk_size",
+                 "default_chunk_mode", "default_chunk_char_target", "appearance_mode",
+                 "window_width", "sidebar_width")
+    untouched_before = {key: getattr(store, key) for key in untouched}
+    try:
+        store.add_profile("Everything", dict(_PROFILE_VALUES))
+        app._apply_profile("Everything")
 
-    store.add_profile("Everything", dict(_PROFILE_VALUES))
-    app._apply_profile("Everything")
+        assert vars(transcript) == transcript_before
+        assert {key: getattr(store, key) for key in untouched} == untouched_before
+    finally:
+        store.set_defaults(store.default_wpm, *original_colours, store.default_font_size)
 
-    assert vars(transcript) == transcript_before
-    assert {key: getattr(store, key) for key in defaults} == defaults_before
+
+def test_applying_a_profile_moves_the_speed_and_word_size_defaults_but_not_the_open_transcript(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    transcript = _load_reading_transcript(app)
+    wpm_before, size_before = transcript.wpm, transcript.font_size
+    reader = app.canvas.reader_display
+    original_colours = (store.default_font_color, store.default_highlight_color, store.default_background_color)
+    store.set_defaults(store.default_wpm, "#445566", "#778899", "#AABBCC", store.default_font_size)
+    colours_before = ("#445566", "#778899", "#AABBCC")
+    assert (store.default_wpm, store.default_font_size) != (450, 48)
+    try:
+        store.add_profile("Quick", {"default_wpm": 450, "default_font_size": 48})
+        app._apply_profile("Quick")
+
+        # The Defaults sliders' values changed...
+        assert store.default_wpm == 450
+        assert store.default_font_size == 48
+        # ...the colours that share their setter did not...
+        assert (store.default_font_color, store.default_highlight_color, store.default_background_color) == colours_before
+        # ...and neither did the transcript that is open, or the reader showing it.
+        assert (transcript.wpm, transcript.font_size) == (wpm_before, size_before)
+        assert reader.session is not None
+    finally:
+        store.set_defaults(store.default_wpm, *original_colours, store.default_font_size)
+        app.canvas.stop()
+
+
+def test_a_profile_saved_before_speed_and_size_joined_leaves_them_alone(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    store.set_defaults(
+        420, store.default_font_color, store.default_highlight_color,
+        store.default_background_color, 40,
+    )
+    older = {key: value for key, value in _PROFILE_VALUES.items() if key not in (
+        "default_wpm", "default_font_size", "font_size_step",
+        "split_long_paragraphs_enabled", "scrub_pause_enabled")}
+    store.add_profile("Older", older)
+    app._apply_profile("Older")
+
+    assert store.skip_word_count == 30           # what it does hold was applied
+    assert store.default_wpm == 420              # what it doesn't hold was left alone
+    assert store.default_font_size == 40
 
 
 def test_a_profile_that_holds_only_some_settings_leaves_the_rest_as_they_are(profiles_sandbox):
@@ -1558,7 +1628,11 @@ def test_the_profiles_tab_sits_between_appearance_and_stats(settings):
 def test_the_profiles_tab_says_what_a_profile_does_and_does_not_change(settings):
     labels = _labels_by_text(settings.profiles_tab)
     explanation = next(text for text in labels if text.startswith("A profile is"))
-    assert "never a transcript or your Defaults" in explanation
+    assert "never changes a transcript, your colours or chunking" in explanation
+    assert "Speed and Word size only set where new transcripts start" in explanation
+    # Speed and Word size are Defaults sliders and do switch, so the text must
+    # not promise that the Defaults are left alone.
+    assert "your Defaults" not in explanation
     assert "spaces" in explanation
     note = next(text for text in labels if text.startswith("Saving, updating or applying"))
     assert "first applies" in note
@@ -1889,7 +1963,7 @@ def test_applying_a_profile_applies_pending_changes_first_then_the_profile_and_c
     window = app._settings_window
     try:
         _settle(window)
-        window.default_wpm_slider.set(333)       # not a profile setting
+        window.default_wpm_slider.set(333)       # a setting this profile doesn't hold
         window.skip_word_count_slider.set(40)    # one the profile sets too
         chosen_wpm = int(window.default_wpm_slider.get())
         assert chosen_wpm != wpm_before
@@ -1913,6 +1987,46 @@ def test_applying_a_profile_applies_pending_changes_first_then_the_profile_and_c
             wpm_before, store.default_font_color, store.default_highlight_color,
             store.default_background_color, store.default_font_size,
         )
+
+
+def test_switching_profiles_moves_the_defaults_tab_sliders_and_switches_when_settings_is_reopened(app, settings, profiles_sandbox):
+    """The case that was reported: after applying a profile, the Speed and Word
+    size sliders (and the +/- step, scrubber and paragraph switches) on the
+    Defaults tab have to show the profile's values the next time Settings opens."""
+    store = app.settings_store
+    wpm_before, size_before = store.default_wpm, store.default_font_size
+    store.add_profile("Everything", dict(_PROFILE_VALUES))
+
+    app._open_settings_window()
+    first = app._settings_window
+    second = None
+    try:
+        _settle(first)
+        assert int(first.default_wpm_slider.get()) == wpm_before
+        assert int(first.default_font_size_slider.get()) == size_before
+
+        first.profiles_tab.select("Everything")
+        _cancel_pending_afters(first)
+        first.profiles_tab.apply_button.invoke()
+        _settle(app, 150)
+        assert not first.winfo_exists()
+
+        app._open_settings_window()
+        second = app._settings_window
+        _settle(second)
+        assert int(second.default_wpm_slider.get()) == 450
+        assert second.default_wpm_label.cget("text") == "450 WPM"
+        assert int(second.default_font_size_slider.get()) == 48
+        assert second.default_font_size == 48
+        assert second.default_font_size_label.cget("text") == "48 px"
+        assert second.font_size_step_entry.get() == "4"
+        assert bool(second.split_long_paragraphs_switch.get()) is True
+        assert bool(second.scrub_pause_switch.get()) is False
+    finally:
+        for window in (first, second):
+            if window is not None and window.winfo_exists():
+                _close(app, window)
+        app._settings_window = settings
 
 
 def test_a_bad_value_in_settings_stops_save_update_and_apply_and_is_reported(app, settings, profile_tab):

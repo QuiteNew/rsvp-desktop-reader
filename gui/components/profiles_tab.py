@@ -8,11 +8,15 @@ from gui.theme import COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_H
 
 # Explains what a profile is, and what it is not. The second part matters: a
 # person who reads "profile" may expect it to change their transcripts or their
-# Defaults, and it does neither.
+# colours, and it changes neither. Speed and Word size are the two sliders on the
+# Defaults tab, so they only set where a new transcript starts, which is why the
+# text says so.
 EXPLANATION = (
     "A profile is a saved set of reader settings: the guide marks, pacing, "
-    "rewind on resume, surrounding words and skipping. Applying one changes "
-    "only those settings, never a transcript or your Defaults. To keep "
+    "rewind on resume, surrounding words, skipping, the +/- step, the "
+    "scrubber and paragraph switches, and the Speed and Word size sliders. "
+    "Applying one never changes a transcript, your colours or chunking, and "
+    "Speed and Word size only set where new transcripts start. To keep "
     "different texts apart, use spaces."
 )
 
