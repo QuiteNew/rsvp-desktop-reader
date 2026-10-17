@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 
+from core.letter_spacing import MAX_LEVEL
 from core.profiles import Profile, ProfileError, clean_name, clean_profile_list, name_problem, sanitize_values
 from core.storage import DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
 
@@ -29,6 +30,8 @@ CHUNK_SIZE_RANGE = (2, 5)  # words flashed together in fixed chunking mode. 1 is
 CHUNK_CHAR_TARGET_RANGE = (15, 60)  # adaptive chunking width, in characters (the words plus the
                                      # single spaces between them). It drives adaptive mode the way
                                      # CHUNK_SIZE_RANGE drives fixed mode.
+LETTER_SPACING_LEVEL_RANGE = (0, MAX_LEVEL)  # 0 is Off. The top level comes from core/letter_spacing.py, which
+                                              # holds the gap size for every level, so the two can't drift apart.
 
 @dataclass
 class AppSettings:
@@ -86,6 +89,12 @@ class AppSettings:
                                                # peripheral vision keeps the thread of the sentence. Off by
                                                # default. See gui/components/reader_display.py's
                                                # set_peripheral_context().
+    dyslexia_font_enabled: bool = False  # global, not per-transcript: switch every font in the app to OpenDyslexic.
+                                          # Off by default. Read once at startup by gui/theme.py, so a change
+                                          # takes effect on the next launch, the same as the Light/Dark theme.
+    letter_spacing_level: int = 0  # global, not per-transcript: extra room between the letters of the flashing
+                                    # word. 0 is Off, up to the top of LETTER_SPACING_LEVEL_RANGE. What each level
+                                    # means is in core/letter_spacing.py. Applies live, no restart.
     profiles: list = field(default_factory=list)  # saved reading profiles, each a plain dict with a "name" and a
                                                    # "values" dict (see core/profiles.py). Kept as dicts so
                                                    # they go to settings.json and into export bundles as they
@@ -309,6 +318,14 @@ class SettingsStore:
     def peripheral_context_enabled(self) -> bool:
         return self._settings.peripheral_context_enabled
 
+    @property
+    def dyslexia_font_enabled(self) -> bool:
+        return self._settings.dyslexia_font_enabled
+
+    @property
+    def letter_spacing_level(self) -> int:
+        return self._settings.letter_spacing_level
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -413,6 +430,14 @@ class SettingsStore:
 
     def set_peripheral_context_enabled(self, enabled: bool) -> None:
         self._settings.peripheral_context_enabled = enabled
+        self._save()
+
+    def set_dyslexia_font_enabled(self, enabled: bool) -> None:
+        self._settings.dyslexia_font_enabled = enabled
+        self._save()
+
+    def set_letter_spacing_level(self, level: int) -> None:
+        self._settings.letter_spacing_level = level
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:
