@@ -725,6 +725,8 @@ class RSVPApp(ctk.CTk):
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
             peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
+            dyslexia_font_enabled=self.settings_store.dyslexia_font_enabled,
+            letter_spacing_level=self.settings_store.letter_spacing_level,
             guide_mark_horizontal_enabled=self.settings_store.guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self.settings_store.guide_mark_thickness_px,
             guide_mark_length_percent=self.settings_store.guide_mark_length_percent,
@@ -807,6 +809,12 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_peripheral_context_enabled(values["peripheral_context_enabled"])
         self.canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
 
+        self.settings_store.set_letter_spacing_level(values["letter_spacing_level"])
+        self.canvas.set_letter_spacing_level(values["letter_spacing_level"])
+
+        # The font switch and the Light/Dark mode are only read at startup
+        # (gui/theme.py), so they are saved here and take effect next launch.
+        self.settings_store.set_dyslexia_font_enabled(values["dyslexia_font_enabled"])
         self.settings_store.set_appearance_mode(values["appearance_mode"])
 
     # ---- Reading profiles ----

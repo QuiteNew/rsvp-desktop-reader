@@ -1,9 +1,12 @@
+import os
 import sys
 
 import customtkinter as ctk
 from dataclasses import dataclass
 from tkinter import colorchooser, filedialog
 from core.colors import blend_colors
+from core.font_choice import font_switch_notes
+from core.letter_spacing import LEVEL_NAMES, clamp_level
 from core.settings_search import matches, query_words
 from core.settings_store import (
     AppSettings,
@@ -18,12 +21,26 @@ from gui.components.about_dialog import AboutDialog
 from gui.components.profiles_tab import ProfilesTab
 from gui.components.search_box import SearchBox
 from gui.icons import description_icon, info_icon
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, DYSLEXIA_FONT_FELL_BACK, apply_app_icon, center_over_parent
 
 # The tab where this window's own Apply button is hidden: the Profiles tab's
 # buttons apply whatever is pending first, so a second Apply would only be in
 # the way (see _update_apply_button()).
 PROFILES_TAB_NAME = "Profiles"
+
+# How wide the Appearance tab's grey notes wrap. The tab scrolls, and its
+# scrollbar takes some of the room, so this is narrower than the 420 the notes
+# used to have. At the smallest Settings window the visible part of the tab is
+# a little under 380 wide, and this leaves a margin inside it.
+APPEARANCE_WRAP_LENGTH = 360
+
+
+def _app_loads_its_fonts() -> bool:
+    """Whether the app registers its own font files on this system. This
+    mirrors register_fonts() in gui/theme.py, which only does anything on
+    Windows. Everywhere else the OpenDyslexic family has to be installed."""
+    return os.name == "nt"
+
 
 @dataclass
 class _DefaultsItem:
@@ -42,11 +59,13 @@ class _DefaultsItem:
 class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
     free-form drag-resize), where transcript data is stored, colour theme,
-    saved reading profiles, and per-transcript reading stats. Header height
-    is a fixed constant, not user-configurable; see gui/app.py. Theme changes
-    take effect on next launch, not live: every widget's color is set
-    explicitly at creation, so a live switch would mean reconfiguring the
-    entire widget tree at once."""
+    font and letter spacing, saved reading profiles, and per-transcript reading
+    stats. Header height is a fixed constant, not user-configurable; see
+    gui/app.py. Theme changes take effect on next launch, not live: every
+    widget's color is set explicitly at creation, so a live switch would mean
+    reconfiguring the entire widget tree at once. The font switch works the
+    same way, since fonts are settled at startup (see gui/theme.py); the letter
+    spacing level is applied live."""
 
     def __init__(
         self, master,
@@ -69,6 +88,8 @@ class SettingsWindow(ctk.CTkToplevel):
         guide_mark_color,
         data_directory,
         appearance_mode,
+        dyslexia_font_enabled,
+        letter_spacing_level,
         transcripts,
         on_apply,
         on_export_requested,
@@ -167,7 +188,7 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         self._build_layout_tab(layout_tab, window_width, window_height, sidebar_width, bottom_band_height, freeform_resize_enabled)
         self._build_storage_tab(storage_tab, data_directory)
-        self._build_appearance_tab(appearance_tab, appearance_mode)
+        self._build_appearance_tab(appearance_tab, appearance_mode, dyslexia_font_enabled, letter_spacing_level)
         self._build_profiles_tab(profiles_tab)
         self._build_stats_tab(stats_tab, transcripts)
 
@@ -1058,13 +1079,21 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Appearance tab ----
 
-    def _build_appearance_tab(self, tab, appearance_mode: str) -> None:
+    def _build_appearance_tab(self, tab, appearance_mode: str, dyslexia_font_enabled: bool, letter_spacing_level: int) -> None:
+        """The colour theme, the font and the letter spacing. The theme and the
+        font are read once at startup, so those two say they need a relaunch;
+        the spacing level applies as soon as Apply is pressed. The tab scrolls,
+        because it holds more than fits when the window is made small."""
+        scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
+        self._appearance_scroll = scroll
+
         ctk.CTkLabel(
-            tab, text="Colour theme", text_color=COCOA_INK, font=self.label_font,
+            scroll, text="Colour theme", text_color=COCOA_INK, font=self.label_font,
         ).pack(anchor="w", pady=(10, 8))
 
         self.appearance_mode_selector = ctk.CTkSegmentedButton(
-            tab, values=["Light", "Dark", "System"],
+            scroll, values=["Light", "Dark", "System"],
             fg_color=WARM_TAUPE, selected_color=EMBER_GLOW, selected_hover_color=EMBER_GLOW_HOVER,
             unselected_color=WARM_TAUPE, unselected_hover_color=WARM_LINE,
             text_color=COCOA_INK, font=self.label_font,
@@ -1073,13 +1102,13 @@ class SettingsWindow(ctk.CTkToplevel):
         self.appearance_mode_selector.pack(fill="x", pady=(0, 10))
 
         ctk.CTkLabel(
-            tab,
+            scroll,
             text="Takes effect the next time you launch the app.",
-            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+            text_color=COCOA_INK, font=self.small_font, wraplength=APPEARANCE_WRAP_LENGTH, justify="left",
         ).pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(
-            tab,
+            scroll,
             text=(
                 "Note: a new transcript's reading colours (font, highlight, "
                 "background) come from the Defaults tab, not from this theme "
@@ -1088,7 +1117,51 @@ class SettingsWindow(ctk.CTkToplevel):
                 "control band at the bottom of the main window, if you'd "
                 "like the reading canvas itself to match."
             ),
-            text_color=COCOA_INK, font=self.small_font, wraplength=420, justify="left",
+            text_color=COCOA_INK, font=self.small_font, wraplength=APPEARANCE_WRAP_LENGTH, justify="left",
+        ).pack(anchor="w", pady=(0, 10))
+
+        # The font. The notes under the switch come from core/font_choice.py,
+        # so their wording is tested without a window.
+        ctk.CTkLabel(
+            scroll, text="Font", text_color=COCOA_INK, font=self.label_font,
+        ).pack(anchor="w", pady=(10, 8))
+
+        self.dyslexia_font_switch = self._styled_switch(scroll, "Use the OpenDyslexic font")
+        (self.dyslexia_font_switch.select() if dyslexia_font_enabled else self.dyslexia_font_switch.deselect())
+        self.dyslexia_font_switch.pack(anchor="w", pady=(0, 8))
+
+        self.dyslexia_font_notes = []
+        for note in font_switch_notes(_app_loads_its_fonts(), DYSLEXIA_FONT_FELL_BACK):
+            label = ctk.CTkLabel(
+                scroll, text=note, text_color=COCOA_INK, font=self.small_font,
+                wraplength=APPEARANCE_WRAP_LENGTH, justify="left",
+            )
+            label.pack(anchor="w", pady=(0, 8))
+            self.dyslexia_font_notes.append(label)
+
+        # The letter spacing. One button per level, named in core/letter_spacing.py.
+        ctk.CTkLabel(
+            scroll, text="Letter spacing", text_color=COCOA_INK, font=self.label_font,
+        ).pack(anchor="w", pady=(10, 8))
+
+        self.letter_spacing_selector = ctk.CTkSegmentedButton(
+            scroll, values=list(LEVEL_NAMES),
+            fg_color=WARM_TAUPE, selected_color=EMBER_GLOW, selected_hover_color=EMBER_GLOW_HOVER,
+            unselected_color=WARM_TAUPE, unselected_hover_color=WARM_LINE,
+            text_color=COCOA_INK, font=self.label_font,
+        )
+        self.letter_spacing_selector.set(LEVEL_NAMES[clamp_level(letter_spacing_level)])
+        self.letter_spacing_selector.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(
+            scroll,
+            text=(
+                "Adds room between the letters of the flashing word, and between "
+                "the words of a chunk. It applies as soon as you press Apply and "
+                "is saved in reading profiles. The right amount differs from "
+                "person to person, so try the levels by eye."
+            ),
+            text_color=COCOA_INK, font=self.small_font, wraplength=APPEARANCE_WRAP_LENGTH, justify="left",
         ).pack(anchor="w", pady=(0, 10))
 
     # ---- Profiles tab ----
@@ -1264,6 +1337,8 @@ class SettingsWindow(ctk.CTkToplevel):
         values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory
         values["appearance_mode"] = self.appearance_mode_selector.get().lower()
+        values["dyslexia_font_enabled"] = bool(self.dyslexia_font_switch.get())
+        values["letter_spacing_level"] = LEVEL_NAMES.index(self.letter_spacing_selector.get())
 
         self.error_label.configure(text="")
         self.on_apply(values)

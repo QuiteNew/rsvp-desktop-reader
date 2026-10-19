@@ -2168,6 +2168,424 @@ def test_the_profiles_tab_fits_the_smallest_settings_window(app, settings, profi
         _settle(settings, 150)
 
 
+# ---- Letter spacing and the font switch ----
+# The spacing level reaches every reader: the main one, a detached window, and
+# (as a snapshot) a selection preview. It is saved and applied from the
+# Appearance tab, and it travels in profiles. The font switch is saved from the
+# same tab but only read at startup, so nothing on screen changes when it is
+# pressed. What the spacing does to the word itself is tested without the rest
+# of the app in test_reader_letter_spacing.py, and the notes' wording in
+# test_font_choice.py.
+
+
+@pytest.fixture
+def spacing_sandbox(app):
+    """Hands a test the shared app and puts the letter spacing level and the
+    font switch back to what they were afterwards, in the store and in every
+    reader the canvas knows about."""
+    store = app.settings_store
+    level_before = store.letter_spacing_level
+    font_before = store.dyslexia_font_enabled
+    try:
+        yield app
+    finally:
+        store.set_letter_spacing_level(level_before)
+        store.set_dyslexia_font_enabled(font_before)
+        app.canvas.set_letter_spacing_level(level_before)
+
+
+def _choose_spacing(window, level):
+    """Pick a level on the Appearance tab's selector by pressing its button,
+    the way a person does."""
+    from core.letter_spacing import LEVEL_NAMES
+
+    window.letter_spacing_selector._buttons_dict[LEVEL_NAMES[level]].invoke()
+
+
+def test_the_canvas_hands_its_level_to_the_reader_it_builds(app):
+    from gui.components.canvas import Canvas
+
+    # A canvas of its own, so what the constructor does with the level is what
+    # is checked, not what the shared app's canvas happened to be given.
+    canvas = Canvas(app, letter_spacing_level=2)
+    try:
+        assert canvas._letter_spacing_level == 2
+        assert canvas.reader_display.letter_spacing_level == 2
+    finally:
+        canvas.destroy()
+
+
+# Builds the whole app in a process of its own, with a settings file that was
+# saved at level 2, and reports the level the canvas and its reader started at.
+# A process of its own because the shared app above was built before any test
+# could choose what the settings file said, and a second Tk root in this process
+# is what the note at the top of this file warns against.
+_START_THE_APP = """
+import sys
+sys.path.insert(0, sys.argv[1])
+import tkinter
+from gui.app import RSVPApp
+try:
+    app = RSVPApp()
+except tkinter.TclError as exc:
+    print("NO DISPLAY", exc)
+    sys.exit(0)
+app.withdraw()
+app.update_idletasks()
+print(app.canvas._letter_spacing_level)
+print(app.canvas.reader_display.letter_spacing_level)
+app.destroy()
+"""
+
+
+def test_the_app_starts_its_reader_at_the_level_that_was_saved(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    home = tmp_path / "home"
+    (home / ".rsvp_reader").mkdir(parents=True)
+    (home / ".rsvp_reader" / "settings.json").write_text(
+        json.dumps({"letter_spacing_level": 2}), encoding="utf-8")
+    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
+    project_root = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        [sys.executable, "-c", _START_THE_APP, str(project_root)],
+        capture_output=True, text=True, env=env, timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    if result.stdout.startswith("NO DISPLAY"):
+        pytest.skip(f"Tk can't start a display here: {result.stdout}")
+    assert result.stdout.split() == ["2", "2"]
+
+
+def test_the_shared_canvas_starts_with_the_level_the_store_holds(app):
+    assert app.canvas._letter_spacing_level == app.settings_store.letter_spacing_level
+    assert app.canvas.reader_display.letter_spacing_level == app.settings_store.letter_spacing_level
+
+
+def test_setting_the_level_on_the_canvas_reaches_its_reader(spacing_sandbox):
+    canvas = spacing_sandbox.canvas
+    for level in (3, 1, 0, 2):
+        canvas.set_letter_spacing_level(level)
+        assert canvas._letter_spacing_level == level
+        assert canvas.reader_display.letter_spacing_level == level
+
+
+def test_a_level_set_on_the_canvas_changes_the_word_that_is_on_screen(spacing_sandbox):
+    app = spacing_sandbox
+    _load_reading_transcript(app)
+    from core.letter_spacing import GAP_UNIT_CHARS
+
+    reader = app.canvas.reader_display
+
+    def drawn():
+        return reader.before_label.cget("text") + reader.focus_label.cget("text") + reader.after_label.cget("text")
+
+    try:
+        app.canvas.set_letter_spacing_level(0)
+        plain = drawn()
+        assert plain.strip()                                  # a word is on screen
+        assert not any(char in plain for char in GAP_UNIT_CHARS)
+        app.canvas.set_letter_spacing_level(3)
+        spaced = drawn()
+        # Gap characters came in between the letters, and the word is still there.
+        assert any(char in spaced for char in GAP_UNIT_CHARS)
+        assert "".join(char for char in spaced if char not in GAP_UNIT_CHARS) == plain
+    finally:
+        app.canvas.stop()
+
+
+def test_a_detached_window_is_built_at_the_current_level_and_follows_changes(spacing_sandbox):
+    app = spacing_sandbox
+    _load_reading_transcript(app)
+    app.canvas.set_letter_spacing_level(2)
+    app.canvas._handle_detach()
+    detached = app.canvas._detached_window
+    assert detached is not None
+    try:
+        assert detached.letter_spacing_level == 2
+        assert detached.reader_display.letter_spacing_level == 2
+
+        app.canvas.set_letter_spacing_level(3)
+        assert detached.letter_spacing_level == 3
+        assert detached.reader_display.letter_spacing_level == 3
+    finally:
+        app.canvas._handle_reattach()
+    assert app.canvas._detached_window is None
+    # The main reader kept up with the level while its transcript was detached.
+    assert app.canvas.reader_display.letter_spacing_level == 3
+
+
+def test_a_selection_preview_keeps_the_level_it_was_opened_with(spacing_sandbox):
+    app = spacing_sandbox
+    _load_reading_transcript(app)
+    app.canvas.set_letter_spacing_level(2)
+    app.canvas.open_selection_preview("alpha beta gamma")
+    assert len(app.canvas._selection_previews) == 1
+    preview = app.canvas._selection_previews[0][0]
+    try:
+        _settle(preview)
+        assert preview.letter_spacing_level == 2
+        assert preview.reader_display.letter_spacing_level == 2
+
+        # Previews are a snapshot, like their other styling.
+        app.canvas.set_letter_spacing_level(0)
+        assert preview.reader_display.letter_spacing_level == 2
+    finally:
+        _cancel_pending_afters(preview)
+        preview.close()
+        _settle(app, 100)
+    assert app.canvas._selection_previews == []
+    app.canvas.stop()
+
+
+def test_applying_settings_saves_the_chosen_level_and_applies_it_live(spacing_sandbox, settings):
+    app = spacing_sandbox
+    store = app.settings_store
+    shown_before = settings.letter_spacing_selector.get()
+    store.set_letter_spacing_level(0)
+    try:
+        _choose_spacing(settings, 3)
+        assert store.letter_spacing_level == 0                # choosing applies nothing
+        assert settings._handle_apply() is True
+
+        assert store.letter_spacing_level == 3
+        assert app.canvas._letter_spacing_level == 3
+        assert app.canvas.reader_display.letter_spacing_level == 3
+    finally:
+        settings.letter_spacing_selector.set(shown_before)
+
+
+@pytest.mark.parametrize("level", [0, 1, 2, 3])
+def test_every_button_on_the_selector_applies_its_own_level(spacing_sandbox, settings, level):
+    app = spacing_sandbox
+    shown_before = settings.letter_spacing_selector.get()
+    try:
+        _choose_spacing(settings, level)
+        assert settings._handle_apply() is True
+        assert app.settings_store.letter_spacing_level == level
+        assert app.canvas.reader_display.letter_spacing_level == level
+    finally:
+        settings.letter_spacing_selector.set(shown_before)
+
+
+def test_choosing_a_level_applies_nothing_until_apply_is_pressed(spacing_sandbox, settings):
+    app = spacing_sandbox
+    app.settings_store.set_letter_spacing_level(1)
+    app.canvas.set_letter_spacing_level(1)
+    shown_before = settings.letter_spacing_selector.get()
+    try:
+        _choose_spacing(settings, 3)
+        assert app.settings_store.letter_spacing_level == 1
+        assert app.canvas.reader_display.letter_spacing_level == 1
+    finally:
+        settings.letter_spacing_selector.set(shown_before)
+
+
+def test_the_spacing_level_is_written_to_settings_json(spacing_sandbox, settings):
+    import json
+
+    app = spacing_sandbox
+    shown_before = settings.letter_spacing_selector.get()
+    try:
+        _choose_spacing(settings, 2)
+        settings._handle_apply()
+        saved = json.loads(app.settings_store._settings_file.read_text(encoding="utf-8"))
+        assert saved["letter_spacing_level"] == 2
+    finally:
+        settings.letter_spacing_selector.set(shown_before)
+
+
+def test_applying_settings_saves_the_font_switch_but_changes_no_font_on_screen(spacing_sandbox, settings):
+    from gui import theme
+
+    app = spacing_sandbox
+    store = app.settings_store
+    heading_before, body_before = theme.FONT_HEADING, theme.FONT_BODY
+    switch_before = bool(settings.dyslexia_font_switch.get())
+    try:
+        (settings.dyslexia_font_switch.deselect() if switch_before else settings.dyslexia_font_switch.select())
+        assert store.dyslexia_font_enabled is switch_before   # pressing the switch saves nothing
+        assert settings._handle_apply() is True
+
+        assert store.dyslexia_font_enabled is (not switch_before)
+        # The fonts are settled once at startup, so this run keeps the ones it had.
+        assert (theme.FONT_HEADING, theme.FONT_BODY) == (heading_before, body_before)
+    finally:
+        (settings.dyslexia_font_switch.select() if switch_before else settings.dyslexia_font_switch.deselect())
+
+
+def test_the_font_switch_is_written_to_settings_json(spacing_sandbox, settings):
+    import json
+
+    app = spacing_sandbox
+    switch_before = bool(settings.dyslexia_font_switch.get())
+    try:
+        settings.dyslexia_font_switch.select()
+        settings._handle_apply()
+        saved = json.loads(app.settings_store._settings_file.read_text(encoding="utf-8"))
+        assert saved["dyslexia_font_enabled"] is True
+    finally:
+        (settings.dyslexia_font_switch.select() if switch_before else settings.dyslexia_font_switch.deselect())
+
+
+def test_settings_opens_showing_the_saved_level_and_font_switch(spacing_sandbox, settings):
+    from core.letter_spacing import LEVEL_NAMES
+
+    app = spacing_sandbox
+    store = app.settings_store
+    store.set_letter_spacing_level(2)
+    store.set_dyslexia_font_enabled(True)
+
+    app._open_settings_window()
+    window = app._settings_window
+    try:
+        _settle(window)
+        assert window.letter_spacing_selector.get() == LEVEL_NAMES[2]
+        assert bool(window.dyslexia_font_switch.get()) is True
+
+        store.set_letter_spacing_level(0)
+        store.set_dyslexia_font_enabled(False)
+    finally:
+        _close(app, window)
+        app._settings_window = settings
+
+    app._open_settings_window()
+    window = app._settings_window
+    try:
+        _settle(window)
+        assert window.letter_spacing_selector.get() == LEVEL_NAMES[0]
+        assert bool(window.dyslexia_font_switch.get()) is False
+    finally:
+        _close(app, window)
+        app._settings_window = settings
+
+
+@pytest.mark.parametrize("saved, shown", [(99, "Large"), (-5, "Off"), ("big", "Off"), (True, "Off")])
+def test_a_saved_level_that_is_not_a_level_shows_as_the_nearest_one(spacing_sandbox, settings, saved, shown):
+    # A hand-edited settings.json must not break the window. The same rule the
+    # reader uses applies: a number is pulled to the nearest level, anything
+    # that isn't a whole number means Off.
+    app = spacing_sandbox
+    app.settings_store.set_letter_spacing_level(saved)
+
+    app._open_settings_window()
+    window = app._settings_window
+    try:
+        _settle(window)
+        assert window.letter_spacing_selector.get() == shown
+    finally:
+        _close(app, window)
+        app._settings_window = settings
+
+
+def test_the_appearance_tab_offers_the_four_levels_in_order(settings):
+    from core.letter_spacing import LEVEL_NAMES
+
+    assert tuple(settings.letter_spacing_selector.cget("values")) == LEVEL_NAMES
+    assert LEVEL_NAMES == ("Off", "Small", "Medium", "Large")
+
+
+@pytest.mark.parametrize("loads_fonts, fell_back", [(True, False), (False, False), (True, True), (False, True)])
+def test_a_new_settings_window_shows_the_notes_for_its_situation(spacing_sandbox, settings, monkeypatch, loads_fonts, fell_back):
+    # Every combination, whatever system the tests run on: the window asks
+    # which system it is on and whether the font files were found, and shows
+    # what core/font_choice.py says for that.
+    import gui.components.settings_window as settings_window
+    from core.font_choice import font_switch_notes
+
+    app = spacing_sandbox
+    monkeypatch.setattr(settings_window, "_app_loads_its_fonts", lambda: loads_fonts)
+    monkeypatch.setattr(settings_window, "DYSLEXIA_FONT_FELL_BACK", fell_back)
+
+    app._open_settings_window()
+    window = app._settings_window
+    try:
+        _settle(window)
+        shown = tuple(label.cget("text") for label in window.dyslexia_font_notes)
+        assert shown == font_switch_notes(loads_fonts, fell_back)
+    finally:
+        _close(app, window)
+        app._settings_window = settings
+
+
+def test_the_font_notes_match_the_system_and_the_fonts_in_use(settings):
+    import os
+    from core.font_choice import FELL_BACK_NOTE, NOT_LOADED_NOTE, RESTART_NOTE
+    from gui.theme import DYSLEXIA_FONT_FELL_BACK
+
+    shown = [label.cget("text") for label in settings.dyslexia_font_notes]
+    assert shown[0] == RESTART_NOTE
+    # Only Windows loads the font files itself, so only the other systems are
+    # told to install the font.
+    assert (NOT_LOADED_NOTE in shown) is (os.name != "nt")
+    assert (FELL_BACK_NOTE in shown) is DYSLEXIA_FONT_FELL_BACK
+
+
+def test_the_appearance_tab_makes_no_claim_that_the_font_or_spacing_helps(settings):
+    texts = [text.lower() for text in _labels_by_text(settings.tabview.tab("Appearance"))]
+    texts.append(settings.dyslexia_font_switch.cget("text").lower())
+    for text in texts:
+        for claim in ("helps", "improve", "easier to read", "faster", "proven", "cure", "treat"):
+            assert claim not in text, (claim, text)
+
+
+def test_the_appearance_tab_keeps_the_theme_selector_and_its_two_notes(settings):
+    labels = _labels_by_text(settings.tabview.tab("Appearance"))
+    assert "Colour theme" in labels
+    assert "Takes effect the next time you launch the app." in labels
+    assert any(text.startswith("Note: a new transcript's reading colours") for text in labels)
+    assert settings.appearance_mode_selector.get() in ("Light", "Dark", "System")
+
+
+def test_the_appearance_tab_scrolls_and_fits_the_smallest_settings_window(app, settings):
+    """At the smallest size Settings can be made, the tab holds more than fits,
+    so it has to scroll rather than push the tab view over the error line and
+    the buttons below it, and its notes must wrap inside the tab instead of
+    running off the side. The window is made small first and the tab shown
+    after, the order that exposes the problem (see the same test for the
+    Profiles tab)."""
+    import customtkinter as ctk
+
+    original_geometry = settings.geometry()
+    try:
+        _click_tab(settings, "Defaults")
+        settings.geometry("420x420")
+        _settle(settings, 250)
+        _click_tab(settings, "Appearance")
+        _settle(settings, 250)
+
+        tabview_bottom = settings.tabview.winfo_y() + settings.tabview.winfo_height()
+        assert tabview_bottom <= settings.error_label.winfo_y()
+
+        scroll = settings._appearance_scroll
+        assert isinstance(scroll, ctk.CTkScrollableFrame)
+        # More content than room: it scrolls instead of being cut off.
+        canvas = scroll._parent_canvas
+        assert canvas.bbox("all")[3] > canvas.winfo_height()
+        # The frame inside the scroll area grows to fit its widest label, so its
+        # own width says nothing. What the person sees is the canvas.
+        visible_width = canvas.winfo_width()
+        for label in (w for w in _all_widgets(scroll) if isinstance(w, ctk.CTkLabel)):
+            assert label.winfo_reqwidth() <= visible_width, label.cget("text")
+        assert settings.letter_spacing_selector.winfo_reqwidth() <= visible_width
+    finally:
+        settings.geometry(original_geometry)
+        _click_tab(settings, "Defaults")
+        _settle(settings, 150)
+
+
+def test_the_apply_button_is_shown_on_the_appearance_tab(settings):
+    try:
+        _click_tab(settings, "Appearance")
+        assert settings.apply_button.winfo_manager() == "pack"
+    finally:
+        _click_tab(settings, "Defaults")
+
+
 def test_divider_click_without_drag_does_not_corrupt_saved_layout(app):
     """Regression for the still-click layout bug. A press and release with no
     drag in between still fires on_drag_end, which commits _pending_value, so
