@@ -2,12 +2,12 @@
 
 There are two sets. The standard one is Fredoka for headings and Quicksand for
 body text. The other is OpenDyslexic, picked with the "Dyslexia-friendly font"
-switch in Settings. This module only holds the names and the file lists and
-makes the choice. It never touches a widget or the disk, so it can be tested
-without a window. gui/theme.py reads the setting, looks at which font files are
-really in the folder, asks choose_fonts() and sets the app's fonts from the
-answer, once, at startup. That is why turning the switch on or off takes effect
-on the next launch."""
+switch in Settings. This module only holds the names and the file lists, makes
+the choice and words the notes that go with the switch. It never touches a
+widget or the disk, so it can be tested without a window. gui/theme.py reads
+the setting, looks at which font files are really in the folder, asks
+choose_fonts() and sets the app's fonts from the answer, once, at startup. That
+is why turning the switch on or off takes effect on the next launch."""
 
 from dataclasses import dataclass, replace
 from typing import Iterable
@@ -70,3 +70,41 @@ def choose_fonts(dyslexia_font_enabled, present_files: Iterable[str]) -> FontCho
     if all(name.casefold() in present for name in DYSLEXIA_FONTS.files):
         return DYSLEXIA_FONTS
     return replace(STANDARD_FONTS, fell_back=True)
+
+
+# ---- Notes shown under the Settings switch ----
+
+RESTART_NOTE = (
+    "Takes effect the next time you launch the app, and isn't saved in "
+    "reading profiles."
+)
+
+# Only Windows lets the app load its own font files (see gui/theme.py). Anywhere
+# else the family has to be installed on the system, or Tk draws the text in a
+# stand-in font and the switch seems to do nothing.
+NOT_LOADED_NOTE = (
+    "On macOS and Linux the app can't load this font itself. Install "
+    "OpenDyslexic on your system first (the files are in the app's "
+    "assets/fonts folder), or the text will be drawn in a stand-in font."
+)
+
+FELL_BACK_NOTE = (
+    "The OpenDyslexic font files weren't found in the app's fonts folder, so "
+    "the standard fonts are in use for now."
+)
+
+
+def font_switch_notes(app_loads_fonts: bool, fell_back: bool) -> tuple[str, ...]:
+    """The grey notes to show under the font switch, top to bottom.
+
+    app_loads_fonts says whether the app registers its own font files on this
+    system (True on Windows only). fell_back is FontChoice.fell_back for the
+    fonts in use this run, True when the switch was on but the OpenDyslexic
+    files were missing. The restart note is always there, since the choice is
+    only read at startup."""
+    notes = [RESTART_NOTE]
+    if not app_loads_fonts:
+        notes.append(NOT_LOADED_NOTE)
+    if fell_back:
+        notes.append(FELL_BACK_NOTE)
+    return tuple(notes)

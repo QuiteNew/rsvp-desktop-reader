@@ -10,7 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from core.font_choice import DYSLEXIA_FONTS, STANDARD_FONTS, FontChoice, choose_fonts
+from core.font_choice import (
+    DYSLEXIA_FONTS, FELL_BACK_NOTE, NOT_LOADED_NOTE, RESTART_NOTE, STANDARD_FONTS,
+    FontChoice, choose_fonts, font_switch_notes,
+)
 
 FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 
@@ -131,3 +134,40 @@ def test_choose_fonts_always_returns_a_font_choice():
     for enabled in (True, False, None):
         for present in ([], EVERY_FONT_FILE):
             assert isinstance(choose_fonts(enabled, present), FontChoice)
+
+
+# ---- The notes under the Settings switch ----
+
+def test_the_restart_note_is_always_shown():
+    for app_loads_fonts in (True, False):
+        for fell_back in (True, False):
+            assert font_switch_notes(app_loads_fonts, fell_back)[0] == RESTART_NOTE
+
+def test_on_windows_with_the_files_found_only_the_restart_note_shows():
+    assert font_switch_notes(True, False) == (RESTART_NOTE,)
+
+def test_off_windows_the_install_note_follows_the_restart_note():
+    assert font_switch_notes(False, False) == (RESTART_NOTE, NOT_LOADED_NOTE)
+
+def test_missing_font_files_add_the_fell_back_note():
+    assert font_switch_notes(True, True) == (RESTART_NOTE, FELL_BACK_NOTE)
+
+def test_off_windows_with_the_files_missing_all_three_notes_show_in_order():
+    assert font_switch_notes(False, True) == (RESTART_NOTE, NOT_LOADED_NOTE, FELL_BACK_NOTE)
+
+def test_the_notes_say_the_font_is_not_part_of_a_profile_and_do_not_claim_it_helps():
+    # The font switch only changes at startup, so a profile can't hold it, and
+    # the notes should say so. Whether the font helps is an open question, so
+    # nothing here may promise it.
+    assert "profiles" in RESTART_NOTE
+    for note in (RESTART_NOTE, NOT_LOADED_NOTE, FELL_BACK_NOTE):
+        assert "help" not in note.lower()
+        assert "improve" not in note.lower()
+        assert "easier" not in note.lower()
+
+def test_the_fell_back_note_agrees_with_the_choice_that_causes_it():
+    # The note is shown when choose_fonts() reports fell_back, so check the two
+    # meet: switch on, a file missing, and the standard fonts in use.
+    choice = choose_fonts(True, [DYSLEXIA_FONTS.files[0]])
+    assert choice.fell_back is True
+    assert font_switch_notes(True, choice.fell_back)[-1] == FELL_BACK_NOTE
