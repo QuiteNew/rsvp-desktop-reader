@@ -823,7 +823,8 @@ class RSVPApp(ctk.CTk):
     # live canvas calls that Settings' Apply uses, so it takes effect straight
     # away. It never touches a transcript. Of the Defaults that new transcripts
     # start from it holds only Speed and Word size, never the colours or the
-    # chunking defaults.
+    # chunking defaults. The letter spacing level is part of a profile; the
+    # Dyslexia-friendly font switch is not, since a font can't change live.
 
     def _current_profile_settings(self) -> dict:
         """The app-wide settings a profile holds, as they are saved right now."""
@@ -937,6 +938,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_scrub_pause_enabled(values["scrub_pause_enabled"])
         self.canvas.set_scrub_pause(values["scrub_pause_enabled"])
+
+        self.settings_store.set_letter_spacing_level(values["letter_spacing_level"])
+        self.canvas.set_letter_spacing_level(values["letter_spacing_level"])
 
     def _open_chunking_settings(self) -> None:
         """Opens the chunking window from the Settings "Configure chunking"

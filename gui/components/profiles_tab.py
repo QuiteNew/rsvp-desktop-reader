@@ -14,7 +14,8 @@ from gui.theme import COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_H
 EXPLANATION = (
     "A profile is a saved set of reader settings: the guide marks, pacing, "
     "rewind on resume, surrounding words, skipping, the +/- step, the "
-    "scrubber and paragraph switches, and the Speed and Word size sliders. "
+    "scrubber and paragraph switches, the letter spacing, and the Speed and "
+    "Word size sliders. "
     "Applying one never changes a transcript, your colours or chunking, and "
     "Speed and Word size only set where new transcripts start. To keep "
     "different texts apart, use spaces."

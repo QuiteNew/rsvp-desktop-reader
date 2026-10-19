@@ -11,8 +11,8 @@ from core.profile_apply import NUMBER_RANGES, ProfilePlan, clamp_value, plan_pro
 from core.profiles import PROFILE_KEYS, value_is_valid
 from core.settings_store import (
     FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
-    GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE, RESUME_REWIND_WORDS_RANGE,
-    SKIP_WORD_COUNT_RANGE, WPM_RANGE, AppSettings,
+    GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE, LETTER_SPACING_LEVEL_RANGE,
+    RESUME_REWIND_WORDS_RANGE, SKIP_WORD_COUNT_RANGE, WPM_RANGE, AppSettings,
 )
 
 THEME_COLOUR = "#F2E8DC"
@@ -47,6 +47,7 @@ def test_the_ranges_are_the_ones_the_settings_window_uses():
     assert NUMBER_RANGES["default_wpm"] == WPM_RANGE
     assert NUMBER_RANGES["default_font_size"] == FONT_SIZE_RANGE
     assert NUMBER_RANGES["font_size_step"] == FONT_SIZE_STEP_RANGE
+    assert NUMBER_RANGES["letter_spacing_level"] == LETTER_SPACING_LEVEL_RANGE
 
 def test_every_range_has_a_low_below_its_high():
     for key, (low, high) in NUMBER_RANGES.items():
@@ -109,6 +110,19 @@ def test_the_plan_clamps_speed_word_size_and_step():
     assert plan.values["font_size_step"] == FONT_SIZE_STEP_RANGE[1]
 
 
+def test_the_plan_takes_the_letter_spacing_level_from_the_profile():
+    assert _plan({"letter_spacing_level": 2}).values["letter_spacing_level"] == 2
+
+def test_the_plan_clamps_the_letter_spacing_level_to_the_levels_that_exist():
+    low, high = LETTER_SPACING_LEVEL_RANGE
+    assert _plan({"letter_spacing_level": 99}).values["letter_spacing_level"] == high
+    assert _plan({"letter_spacing_level": -4}).values["letter_spacing_level"] == low
+
+def test_a_profile_can_turn_the_letter_spacing_off():
+    current = {**_current(), "letter_spacing_level": 3}
+    assert _plan({"letter_spacing_level": 0}, current=current).values["letter_spacing_level"] == 0
+
+
 # ---- plan_profile: switches ----
 
 def test_the_plan_takes_switch_values_from_the_profile():
@@ -151,14 +165,14 @@ def test_settings_the_profile_leaves_out_keep_their_current_value():
 
 def test_a_profile_saved_before_the_newer_settings_joined_leaves_them_as_they_are():
     # The twelve settings profiles started with, and nothing else.
-    older = {key: value for key, value in _current().items() if key not in (
-        "default_wpm", "default_font_size", "font_size_step",
-        "split_long_paragraphs_enabled", "scrub_pause_enabled")}
+    newer = ("default_wpm", "default_font_size", "font_size_step",
+             "split_long_paragraphs_enabled", "scrub_pause_enabled", "letter_spacing_level")
+    older = {key: value for key, value in _current().items() if key not in newer}
     current = {**_current(), "default_wpm": 450, "default_font_size": 48, "font_size_step": 4,
-               "split_long_paragraphs_enabled": True, "scrub_pause_enabled": False}
+               "split_long_paragraphs_enabled": True, "scrub_pause_enabled": False,
+               "letter_spacing_level": 2}
     plan = _plan(older, current=current)
-    for key in ("default_wpm", "default_font_size", "font_size_step",
-                "split_long_paragraphs_enabled", "scrub_pause_enabled"):
+    for key in newer:
         assert plan.values[key] == current[key], key
 
 def test_a_current_value_that_is_out_of_range_is_left_as_it_is_when_the_profile_leaves_it_out():

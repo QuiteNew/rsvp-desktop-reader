@@ -1180,6 +1180,7 @@ _PROFILE_VALUES = {
     "font_size_step": 4,
     "split_long_paragraphs_enabled": True,
     "scrub_pause_enabled": False,
+    "letter_spacing_level": 2,
 }
 
 
@@ -1205,6 +1206,7 @@ def _put_profile_settings_back(application, values, follows_theme):
     store.set_font_size_step(values["font_size_step"])
     store.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
     store.set_scrub_pause_enabled(values["scrub_pause_enabled"])
+    store.set_letter_spacing_level(values["letter_spacing_level"])
     canvas = application.canvas
     application.footer.set_font_size_step(values["font_size_step"])
     canvas.set_split_long_paragraphs_enabled(values["split_long_paragraphs_enabled"])
@@ -1220,6 +1222,7 @@ def _put_profile_settings_back(application, values, follows_theme):
     canvas.set_peripheral_context_enabled(values["peripheral_context_enabled"])
     canvas.set_skip_word_count(values["skip_word_count"])
     canvas.set_pause_on_skip(values["pause_on_skip"])
+    canvas.set_letter_spacing_level(values["letter_spacing_level"])
 
 
 @pytest.fixture
@@ -1262,6 +1265,7 @@ def test_applying_a_profile_changes_every_app_wide_setting(profiles_sandbox):
     assert canvas._pause_on_skip is True
     assert canvas._split_long_paragraphs_enabled is True
     assert canvas._scrub_pause_enabled is False
+    assert canvas._letter_spacing_level == 2
     assert app.footer._font_size_step == 4
     reader = canvas.reader_display
     assert reader._highlight_offset_px == 2
@@ -1269,6 +1273,7 @@ def test_applying_a_profile_changes_every_app_wide_setting(profiles_sandbox):
     assert reader._resume_rewind_words == 5
     assert reader._peripheral_context_enabled is True
     assert reader._scrub_pause_enabled is False
+    assert reader.letter_spacing_level == 2
 
 
 def test_an_applied_profile_is_written_to_settings_json(profiles_sandbox):
@@ -1348,13 +1353,27 @@ def test_a_profile_saved_before_speed_and_size_joined_leaves_them_alone(profiles
     )
     older = {key: value for key, value in _PROFILE_VALUES.items() if key not in (
         "default_wpm", "default_font_size", "font_size_step",
-        "split_long_paragraphs_enabled", "scrub_pause_enabled")}
+        "split_long_paragraphs_enabled", "scrub_pause_enabled", "letter_spacing_level")}
     store.add_profile("Older", older)
     app._apply_profile("Older")
 
     assert store.skip_word_count == 30           # what it does hold was applied
     assert store.default_wpm == 420              # what it doesn't hold was left alone
     assert store.default_font_size == 40
+
+
+def test_a_profile_saved_before_letter_spacing_joined_leaves_the_spacing_alone(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    app.canvas.set_letter_spacing_level(3)
+    store.set_letter_spacing_level(3)
+    store.add_profile("No spacing in it", {"skip_word_count": 7})
+    app._apply_profile("No spacing in it")
+
+    assert store.skip_word_count == 7
+    assert store.letter_spacing_level == 3
+    assert app.canvas._letter_spacing_level == 3
+    assert app.canvas.reader_display.letter_spacing_level == 3
 
 
 def test_a_profile_that_holds_only_some_settings_leaves_the_rest_as_they_are(profiles_sandbox):
@@ -1399,6 +1418,31 @@ def test_a_profile_that_followed_the_theme_gets_the_themes_guide_colour_back(pro
     assert store.guide_mark_color == app._theme_guide_mark_color()
     assert store.guide_mark_color_is_default is True
     assert app.canvas._guide_mark_color == app._theme_guide_mark_color()
+
+
+def test_a_letter_spacing_level_outside_the_levels_is_clamped_when_applied(profiles_sandbox):
+    from core.letter_spacing import MAX_LEVEL
+
+    app = profiles_sandbox
+    app.settings_store.add_profile("Far too much", {"letter_spacing_level": 99})
+    app._apply_profile("Far too much")
+
+    assert app.settings_store.letter_spacing_level == MAX_LEVEL
+    assert app.canvas._letter_spacing_level == MAX_LEVEL
+    assert app.canvas.reader_display.letter_spacing_level == MAX_LEVEL
+
+
+def test_applying_a_profile_leaves_the_font_switch_alone(profiles_sandbox):
+    app = profiles_sandbox
+    store = app.settings_store
+    before = store.dyslexia_font_enabled
+    try:
+        store.set_dyslexia_font_enabled(not before)
+        store.add_profile("Everything", dict(_PROFILE_VALUES))
+        app._apply_profile("Everything")
+        assert store.dyslexia_font_enabled is (not before)
+    finally:
+        store.set_dyslexia_font_enabled(before)
 
 
 def test_a_guide_colour_picked_by_hand_stops_following_even_when_it_matches_the_theme(profiles_sandbox):
@@ -1464,7 +1508,7 @@ def test_saving_then_applying_a_profile_brings_the_settings_back(profiles_sandbo
              "guide_mark_thickness_px": 2, "guide_mark_length_percent": 20, "guide_mark_color": "#FFEEDD",
              "length_pacing_enabled": False, "warm_up_enabled": False, "resume_rewind_enabled": False,
              "resume_rewind_words": 1, "peripheral_context_enabled": False, "skip_word_count": 3,
-             "pause_on_skip": False}
+             "pause_on_skip": False, "letter_spacing_level": 0}
     _put_profile_settings_back(app, other, False)
     assert app._current_profile_settings() == other
 
@@ -1526,6 +1570,7 @@ def test_applying_a_profile_reaches_a_detached_reader(profiles_sandbox):
         app._apply_profile("Everything")
         assert detached.reader_display._guide_mark_thickness_px == 4
         assert detached.reader_display._highlight_offset_px == 2
+        assert detached.reader_display.letter_spacing_level == 2
     finally:
         app.canvas._handle_reattach()
     assert app.canvas._detached_window is None
@@ -1634,6 +1679,7 @@ def test_the_profiles_tab_says_what_a_profile_does_and_does_not_change(settings)
     # not promise that the Defaults are left alone.
     assert "your Defaults" not in explanation
     assert "spaces" in explanation
+    assert "letter spacing" in explanation
     note = next(text for text in labels if text.startswith("Saving, updating or applying"))
     assert "first applies" in note
     # Settings' own Apply is hidden on this tab, so the note must not send

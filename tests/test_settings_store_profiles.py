@@ -276,6 +276,16 @@ def test_a_complete_profile_survives_a_restart_unchanged(tmp_path):
     again = SettingsStore(settings_directory=str(tmp_path))
     assert again.get_profile("Everything").values == _full_values()
 
+def test_a_profile_holding_the_letter_spacing_level_keeps_it_through_a_restart(tmp_path):
+    first = SettingsStore(settings_directory=str(tmp_path))
+    first.add_profile("Roomy", {"letter_spacing_level": 3, "skip_word_count": 12})
+    again = SettingsStore(settings_directory=str(tmp_path))
+    assert again.get_profile("Roomy").values == {"letter_spacing_level": 3, "skip_word_count": 12}
+
+def test_the_dyslexia_font_switch_is_dropped_from_a_profile_that_holds_it(store):
+    profile = store.add_profile("Odd", {"dyslexia_font_enabled": True, "letter_spacing_level": 1})
+    assert profile.values == {"letter_spacing_level": 1}
+
 def test_a_settings_file_from_before_profiles_existed_loads_with_none(tmp_path):
     (tmp_path / "settings.json").write_text(json.dumps({"default_wpm": 450}), encoding="utf-8")
     loaded = SettingsStore(settings_directory=str(tmp_path))

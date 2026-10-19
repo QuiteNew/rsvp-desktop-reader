@@ -82,6 +82,13 @@ def test_speed_word_size_step_and_the_two_switches_are_part_of_a_profile():
                 "split_long_paragraphs_enabled", "scrub_pause_enabled"):
         assert key in PROFILE_KEYS, key
 
+def test_the_letter_spacing_level_is_part_of_a_profile():
+    assert "letter_spacing_level" in PROFILE_KEYS
+
+def test_the_dyslexia_font_switch_is_not_part_of_a_profile():
+    # The font only changes on the next launch, so a profile can't switch it.
+    assert "dyslexia_font_enabled" not in PROFILE_KEYS
+
 
 # ---- Names ----
 
@@ -157,6 +164,15 @@ def test_speed_word_size_and_step_take_whole_numbers_only():
         assert not value_is_valid(key, 300.0), key
         assert not value_is_valid(key, "300"), key
         assert not value_is_valid(key, None), key
+
+def test_the_letter_spacing_level_takes_whole_numbers_only():
+    assert value_is_valid("letter_spacing_level", 0)
+    assert value_is_valid("letter_spacing_level", 3)
+    assert not value_is_valid("letter_spacing_level", True)
+    assert not value_is_valid("letter_spacing_level", False)
+    assert not value_is_valid("letter_spacing_level", 2.0)
+    assert not value_is_valid("letter_spacing_level", "2")
+    assert not value_is_valid("letter_spacing_level", None)
 
 def test_the_scrubber_and_paragraph_settings_take_true_or_false_only():
     for key in ("split_long_paragraphs_enabled", "scrub_pause_enabled"):
@@ -302,6 +318,16 @@ def test_clean_profile_list_drops_settings_that_used_to_be_allowed():
     # rest of the profile loads.
     raw = [{"name": "Old", "values": {"wpm": 600, "font_size": 28, "skip_word_count": 25}}]
     assert clean_profile_list(raw) == [{"name": "Old", "values": {"skip_word_count": 25}}]
+
+def test_clean_profile_list_keeps_the_letter_spacing_level_and_drops_the_font_switch():
+    raw = [{"name": "Spaced", "values": {"letter_spacing_level": 2, "dyslexia_font_enabled": True,
+                                          "skip_word_count": 25}}]
+    assert clean_profile_list(raw) == [{"name": "Spaced", "values": {
+        "skip_word_count": 25, "letter_spacing_level": 2}}]
+
+def test_clean_profile_list_drops_a_letter_spacing_level_of_the_wrong_kind():
+    raw = [{"name": "Odd", "values": {"letter_spacing_level": "large", "skip_word_count": 25}}]
+    assert clean_profile_list(raw) == [{"name": "Odd", "values": {"skip_word_count": 25}}]
 
 def test_clean_profile_list_keeps_the_newer_settings_and_drops_the_colour_defaults():
     raw = [{"name": "Mixed", "values": {"default_wpm": 450, "default_font_size": 40, "font_size_step": 3,

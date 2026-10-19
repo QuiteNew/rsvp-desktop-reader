@@ -9,15 +9,18 @@ imports the rules from here.
 
 A profile only holds app-wide settings: the guide marks, the pacing options,
 resume rewind, peripheral context, skip behaviour, the scrubber and paragraph
-switches, the +/- step, and the Speed and Word size that new transcripts start
-from. It never holds anything that belongs to a transcript, and it never
-changes the transcript that is open: Speed and Word size here are the sliders on
-the Defaults tab, so they only decide where the next new transcript starts.
-Keeping different texts apart is what spaces are for.
+switches, the +/- step, the letter spacing level, and the Speed and Word size
+that new transcripts start from. It never holds anything that belongs to a
+transcript, and it never changes the transcript that is open: Speed and Word
+size here are the sliders on the Defaults tab, so they only decide where the
+next new transcript starts. Keeping different texts apart is what spaces are
+for.
 
 Left out on purpose: the colours (the Defaults colours, and the colours a
-transcript is read in), chunking, window and layout sizes, the data directory
-and the Light/Dark/System mode. Because the list is short and named here, a
+transcript is read in), chunking, window and layout sizes, the data directory,
+the Light/Dark/System mode and the Dyslexia-friendly font switch. The font is
+left out because it only changes on the next launch, so a profile could not
+honestly promise to switch it. Because the list is short and named here, a
 profile saved by one version still loads in another. A key that is missing from
 a saved profile simply means "leave that setting alone", which is also how a
 profile saved before a setting joined the list keeps working."""
@@ -47,6 +50,7 @@ PROFILE_KEYS = (
     "font_size_step",
     "split_long_paragraphs_enabled",
     "scrub_pause_enabled",
+    "letter_spacing_level",
 )
 
 # Colours that can follow the Light/Dark theme. A profile stores None for one of
@@ -74,6 +78,7 @@ _KINDS = {
     "font_size_step": "int",
     "split_long_paragraphs_enabled": "bool",
     "scrub_pause_enabled": "bool",
+    "letter_spacing_level": "int",
 }
 
 _HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")

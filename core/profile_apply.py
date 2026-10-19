@@ -27,8 +27,8 @@ from dataclasses import dataclass
 from core.profiles import PROFILE_KEYS, sanitize_values
 from core.settings_store import (
     FONT_SIZE_RANGE, FONT_SIZE_STEP_RANGE, GUIDE_MARK_LENGTH_PERCENT_RANGE,
-    GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE, RESUME_REWIND_WORDS_RANGE,
-    SKIP_WORD_COUNT_RANGE, WPM_RANGE,
+    GUIDE_MARK_THICKNESS_RANGE, HIGHLIGHT_OFFSET_RANGE, LETTER_SPACING_LEVEL_RANGE,
+    RESUME_REWIND_WORDS_RANGE, SKIP_WORD_COUNT_RANGE, WPM_RANGE,
 )
 
 # The allowed (low, high) for every profile setting that is a number. These are
@@ -42,6 +42,7 @@ NUMBER_RANGES = {
     "default_wpm": WPM_RANGE,
     "default_font_size": FONT_SIZE_RANGE,
     "font_size_step": FONT_SIZE_STEP_RANGE,
+    "letter_spacing_level": LETTER_SPACING_LEVEL_RANGE,
 }
 
 
