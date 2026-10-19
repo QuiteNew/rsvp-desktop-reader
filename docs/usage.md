@@ -271,9 +271,10 @@ per-transcript settings.
 ## Wide flashes: auto-fit and the scrollbar
 
 Sometimes a flash is wider than the reading area, most often when chunking is
-on at a large Word size, or when a transcript contains one very long word. The
-reader deals with this on its own, in two stages, and most of the time you will
-not notice either one.
+on at a large Word size, when [letter spacing](#letter-spacing-and-the-opendyslexic-font)
+is turned up, or when a transcript contains one very long word. The reader deals
+with this on its own, in two stages, and most of the time you will not notice
+either one.
 
 **Auto-fit** shrinks the words just enough that the widest flash in the whole
 transcript fits the reading area, with a small margin on each side. It measures
@@ -307,7 +308,57 @@ window that plays a selection.
 
 Panning moves the words, it cannot make a flash wider than the window fit in a
 single glance. If you keep seeing the scrollbar, the lasting fix is a smaller
-group, a lower adaptive width, or a smaller Word size.
+group, a lower adaptive width, a lower letter spacing level, or a smaller Word
+size.
+
+## Letter spacing and the OpenDyslexic font
+
+Two optional settings change how the words look. Both are on the **Appearance**
+tab in Settings (see [Appearance](#appearance)), both are off by default, and
+they are independent: letter spacing works with any font, and the font switch
+does not touch the spacing.
+
+**Letter spacing** adds a little room between the letters of the flashing word.
+It has four levels, Off, Small, Medium and Large, which add roughly 0.1, 0.18
+and 0.3 of the Word size between neighbouring letters.
+
+- The highlighted letter stays on its usual point. The room is added around it,
+  not inside it.
+- In chunk mode the gaps between the words of a group are widened where needed,
+  so the words do not run together once the letters are spaced out.
+- The surrounding-words line is left as it is.
+- It applies as soon as you press **Apply**, in the main window and in the
+  detached window. A window that plays a selection keeps the level it was
+  opened with.
+- The level is saved in [reading profiles](#profiles).
+- Wider words need more room, so with spacing turned up the words may be drawn a
+  little smaller, or the scrollbar may appear sooner (see
+  [Wide flashes](#wide-flashes-auto-fit-and-the-scrollbar)).
+
+Tk, the toolkit the app is built on, has no letter spacing setting, so the app
+puts thin space characters between the letters. How wide those come out depends
+on the font and on the computer, so the app measures them and picks the mix that
+lands closest to each level. The levels look alike from one font or computer to
+the next, but they are not identical.
+
+**The OpenDyslexic font** switch changes every font in the app, not only the
+reader, to OpenDyslexic, a typeface released under the SIL Open Font License.
+
+- It takes effect the next time you launch the app, like the colour theme,
+  because the fonts are chosen once at startup. The switch is saved when you
+  press **Apply**.
+- It is not saved in reading profiles, since a profile applies on the spot and a
+  font cannot change that way.
+- On Windows the app loads the font files from `assets/fonts/` itself. On macOS
+  and Linux it cannot, so install OpenDyslexic on your system first (the files
+  are in that folder), or the text is drawn in a stand-in font.
+- If the OpenDyslexic files cannot be found in the fonts folder, the app keeps
+  the standard fonts, and the Appearance tab says so.
+
+Neither setting is a treatment for dyslexia, and the app does not claim that
+either one helps. The research is mixed, and the studies used running text, not
+words flashed one at a time. The FAQ has the details, under
+[Do the OpenDyslexic font and letter spacing actually help?](faq.md#do-the-opendyslexic-font-and-letter-spacing-actually-help).
 
 ## The detached window
 
@@ -430,8 +481,19 @@ Shows the folder your transcripts are saved in (as a JSON file).
 
 ### Appearance
 
+This tab scrolls when the Settings window is too small to show all of it.
+
 - **Colour theme**: Light, Dark, or System (default Light). This one takes
   effect the next time you launch the app, not live.
+- **Use the OpenDyslexic font**: changes every font in the app to OpenDyslexic
+  (default off). This one also takes effect the next time you launch the app,
+  and it is saved when you press **Apply**. Notes under the switch say what
+  applies on your system.
+- **Letter spacing**: Off, Small, Medium or Large (default Off). It applies as
+  soon as you press **Apply**.
+
+Both are described under
+[Letter spacing and the OpenDyslexic font](#letter-spacing-and-the-opendyslexic-font).
 
 Note that a new transcript's reading colors come from the Defaults tab, not
 from the theme, so they will not automatically match Light or Dark. Adjust them
@@ -444,7 +506,8 @@ A profile is a saved set of reader settings, so you can switch between ways of
 reading in one go, say a quick, light skim and a slower, careful read, instead
 of changing a handful of controls by hand each time.
 
-**What a profile holds.** These Defaults-tab settings:
+**What a profile holds.** These settings, all from the Defaults tab except the
+last:
 
 - the guide marks: **Highlight vertical offset**, **Guide-mark thickness**,
   **Mark length**, **Mark colour**, and **Show horizontal guide lines**
@@ -456,11 +519,13 @@ of changing a handful of controls by hand each time.
 - **Pause after using the scrubber** and **Split long paragraphs when
   normalizing**
 - **Speed** and **Word size**, the two sliders at the top of the Defaults tab
+- **Letter spacing**, from the Appearance tab
 
 **What it never changes.** Applying a profile never touches a transcript: not
 its text, its position, or its own speed and size. It does not change your
 Defaults colours (font, highlight and background), the chunking settings, the
-layout, the data folder, or the Light / Dark theme. Speed and Word size are the
+layout, the data folder, the Light / Dark theme, or the OpenDyslexic font switch
+(a font only changes when the app starts). Speed and Word size are the
 Defaults sliders, so they only decide where the next *new* transcript starts.
 The transcript you have open keeps the speed and size it already has. To keep
 different texts apart, use [Spaces](#spaces).
@@ -501,8 +566,9 @@ a profile up to date, set things the way you want and press **Update**.
 
 **Older profiles.** A profile only changes the settings it holds. Profiles saved
 before the Speed, Word size, +/- step, scrubber and paragraph settings joined do
-not hold those five, so applying them leaves those settings as they are. Select
-the profile and press **Update** once to bring them in.
+not hold those five, and profiles saved before version 3.5.1 do not hold the
+letter spacing, so applying them leaves those settings as they are. Select the
+profile and press **Update** once to bring them in.
 
 **Export and Import.** Profiles are saved in `settings.json`, so **Export Data**
 carries them to another machine. **Replace** brings them in with the rest of
@@ -533,9 +599,11 @@ compare against the latest release on the project's Releases page.
 
 - **Immediately:** the Skip amount and Pause-when-skipping controls, and the
   Export and Import buttons (Import then closes the app).
-- **On Apply:** everything else on Defaults, Layout, and Storage.
+- **On Apply:** everything else on Defaults, Layout, and Storage, and the letter
+  spacing on Appearance.
 - **When you use a button on the Profiles tab:** saving, updating, renaming and
   deleting a profile are saved at once, and applying one takes effect at once
   and closes Settings. Saving, updating and applying first apply any pending
   changes from the other tabs.
-- **Next launch:** the Appearance theme.
+- **Next launch:** the Appearance theme and the OpenDyslexic font switch. Both
+  are saved when you press **Apply**.

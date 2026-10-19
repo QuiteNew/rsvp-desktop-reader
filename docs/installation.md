@@ -72,10 +72,15 @@ fails, check that `pip` and `python` point at the same interpreter -
 `python -m pip install ...` (rather than a bare `pip install ...`) keeps them
 in sync.
 
-The two fonts the app uses (Fredoka and Quicksand) are already bundled in
-`assets/fonts/` and committed to this repo, so there's nothing extra to
-download - they're registered automatically, just for this app, when it
-launches.
+The fonts the app uses (Fredoka and Quicksand, plus OpenDyslexic if you turn on
+the font switch in Settings) are already bundled in `assets/fonts/` and
+committed to this repo, so there's nothing extra to download. On Windows the
+app registers them itself, just for this app, when it launches. On macOS and
+Linux it can't, so it uses whichever of these fonts are installed on your
+system and draws the text in a stand-in font for any it can't find. The app
+works either way, it only looks different. If you want the intended look, or
+want the OpenDyslexic switch to do anything, install the font files from
+`assets/fonts/` on your system.
 
 Then run it:
 

@@ -54,9 +54,9 @@ platforms.
 
 ### Does it need an internet connection?
 
-No. The app is fully offline. Nothing it does requires a network, and the two
-fonts it uses (Fredoka and Quicksand) are bundled in the repo and registered at
-launch, so there is nothing extra to download.
+No. The app is fully offline. Nothing it does requires a network, and the fonts
+it uses (Fredoka and Quicksand, plus OpenDyslexic if you turn it on) are bundled
+in the repo, so there is nothing extra to download.
 
 ## Getting text in
 
@@ -125,14 +125,15 @@ single-click a row to jump to that word, and double-click it to rename it.
 
 That is auto-fit. When the widest flash in a transcript, usually a multi-word
 group at a large Word size, would run past the edges of the reading area, the
-reader draws the words a little smaller so they fit. Your Word size setting is
-not changed, and the words return to full size when everything fits again, for
-example with a smaller group or a wider window. Auto-fit never goes below 60% of
-your Word size. If a flash is still too wide at that point, a horizontal
-scrollbar appears along the bottom so you can slide the words into view. The
-small button above it, or the **C** key, snaps them back to the centre. See
-[Wide flashes](usage.md#wide-flashes-auto-fit-and-the-scrollbar) for the full
-picture.
+reader draws the words a little smaller so they fit. Letter spacing makes every
+flash wider too, so turning it up can bring this on sooner. Your Word size
+setting is not changed, and the words return to full size when everything fits
+again, for example with a smaller group or a wider window. Auto-fit never goes
+below 60% of your Word size. If a flash is still too wide at that point, a
+horizontal scrollbar appears along the bottom so you can slide the words into
+view. The small button above it, or the **C** key, snaps them back to the
+centre. See [Wide flashes](usage.md#wide-flashes-auto-fit-and-the-scrollbar) for
+the full picture.
 
 ### Why can't I turn on focus mode in the detached window?
 
@@ -174,8 +175,9 @@ reading in one click. Set things up the way you like in Settings, open the
 select it in the list and press **Apply**. It takes effect straight away and
 Settings closes. A profile holds the guide marks, pacing, rewind on resume,
 surrounding words, skipping, the +/- step, the scrubber and paragraph switches,
-and the Speed and Word size sliders. The full list is under
-[Profiles](usage.md#profiles) on the Usage page.
+the letter spacing, and the Speed and Word size sliders. It does not hold the
+OpenDyslexic font switch, because a font only changes when the app starts. The
+full list is under [Profiles](usage.md#profiles) on the Usage page.
 
 ### I applied a profile, but my open transcript's speed and size did not change
 
@@ -193,12 +195,14 @@ your reader. The only colour a profile carries is the guide mark colour. If you
 want different colours for different texts, set them per transcript from the
 control band, or keep those texts in separate [Spaces](usage.md#spaces).
 
-### An older profile does not move Speed, Word size, the step or the switches
+### An older profile does not move Speed, Word size, the step, the switches or the letter spacing
 
-Profiles saved before those five settings joined do not hold them, and a
-profile only changes what it holds, so applying one leaves them as they are.
-Select the profile, set Settings the way you want, and press **Update** once to
-bring them in.
+Profiles saved before those settings joined do not hold them, and a profile only
+changes what it holds, so applying one leaves them as they are. That covers
+Speed, Word size, the +/- step and the scrubber and paragraph switches for the
+oldest profiles, and the letter spacing for any profile saved before version
+3.5.1. Select the profile, set Settings the way you want, and press **Update**
+once to bring them in.
 
 ### If I change a setting afterwards, does the saved profile change?
 
@@ -216,6 +220,56 @@ settings, and **Expand** leaves your settings, profiles included, as they are.
 
 The Light / Dark / System theme takes effect the next time you launch the app,
 not immediately. Close and reopen it to see the change.
+
+### What does the OpenDyslexic font switch do?
+
+On the **Appearance** tab in Settings, **Use the OpenDyslexic font** changes
+every font in the app, not only the reader, to OpenDyslexic, a typeface released
+under the SIL Open Font License. It takes effect the next time you launch the
+app, like the colour theme, and it is not saved in reading profiles, because a
+profile applies on the spot and a font cannot change that way. On Windows the app
+loads the font files from `assets/fonts/` itself. On macOS and Linux it cannot,
+so install OpenDyslexic on your system first (the files are in that folder),
+otherwise the text is drawn in a stand-in font. The switch is saved when you
+press **Apply**.
+
+### I turned on the OpenDyslexic font but nothing changed
+
+Three things to check. The font only changes at startup, so close the app and
+open it again. On macOS and Linux the font has to be installed on your system
+first, since the app cannot load its own font files there. And if the Appearance
+tab says the OpenDyslexic font files weren't found, the app has put the standard
+fonts back for now: check that `OpenDyslexic3-Regular.ttf` and
+`OpenDyslexic3-Bold.ttf` are in the app's `assets/fonts/` folder.
+
+### What does letter spacing do?
+
+It adds a little room between the letters of the flashing word, with four levels
+on the Appearance tab: Off (the default), Small, Medium and Large. In chunk mode
+the gaps between the words of a group are widened where needed, so the words do
+not run together. The highlighted letter stays on its usual point, and the
+surrounding-words line is left as it is. It applies as soon as you press
+**Apply**, in the main window and in the detached window, and it is saved in
+reading profiles. A window that plays a selection keeps the level it was opened
+with. Wider words need more room, so with spacing turned up the words may be
+drawn a little smaller, or the scrollbar may appear sooner. See
+[Wide flashes](usage.md#wide-flashes-auto-fit-and-the-scrollbar).
+
+### Do the OpenDyslexic font and letter spacing actually help?
+
+The app does not claim they do, and neither is a treatment for dyslexia. They are
+optional, for people who find them easier on the eyes, and the research so far is
+mixed. A study of OpenDyslexic found no improvement in reading rate or accuracy
+(Wery and Diliberto, *Annals of Dyslexia*, 2017, [full
+text](https://pmc.ncbi.nlm.nih.gov/articles/PMC5629233)). Wider spacing has had
+better results: children with dyslexia read sentences faster and with fewer
+mistakes when the letters were spaced further apart (Zorzi and others, *PNAS*,
+2012, [doi:10.1073/pnas.1205566109](https://doi.org/10.1073/pnas.1205566109)),
+and another study found that the benefit of a font made for dyslexia came from
+its wider spacing, not the shape of its letters (Marinus and others,
+*Dyslexia*, 2016). Those studies used running text, not words flashed one at a
+time, so how much any of this carries over to an RSVP reader is not known. Try
+the levels by eye, and keep whatever feels comfortable.
 
 ### I switched to Dark theme but my reading colors didn't change
 
@@ -301,6 +355,13 @@ Tkinter for.
 
 ### Do I need to install the fonts?
 
-No. Fredoka and Quicksand are bundled with the app in `assets/fonts/` and
-registered automatically, just for the app, when it launches. They are not
-installed system-wide and need nothing from you.
+On Windows, no. Fredoka and Quicksand (and OpenDyslexic, if you turn it on) are
+bundled with the app in `assets/fonts/`, and the app registers the ones it needs
+itself, just for the app, when it launches. They are not installed system-wide
+and need nothing from you.
+
+On macOS and Linux the app cannot load its own font files, so it uses the fonts
+installed on your system. Without Fredoka and Quicksand installed the app still
+works, and the text is drawn in a stand-in font, so it only looks different. For
+the OpenDyslexic switch to do anything, install OpenDyslexic first. Install the
+files from `assets/fonts/` the way you would install any font on your system.
