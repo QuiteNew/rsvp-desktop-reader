@@ -1,8 +1,10 @@
 import time
+import tkinter.font as tkfont
 
 import customtkinter as ctk
 from core.reader import ReaderSession, assemble_chunk_text
 from core.colors import blend_colors
+from core.letter_spacing import GAP_UNIT_CHARS, NO_SPACING, PLAIN_SPACE, SpacingPlan, build_plan, clamp_level, space_chunk
 from core.scroll import scrollbar_fractions, pan_from_fraction, clamp_pan
 from gui.icons import center_icon
 from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, HEARTH_PAPER
@@ -40,6 +42,15 @@ class ReaderDisplay(ctk.CTkFrame):
     a few previous words to its left and upcoming words to its right, so
     peripheral vision keeps the thread of the sentence. Off by default;
     see set_peripheral_context() and _update_peripheral_context().
+
+    Letter spacing (off by default) puts a little extra room between the
+    letters of the flashing word. Tk has no such setting, so the room is made
+    of thin space characters added to the text that gets drawn, around the
+    focus letter rather than inside it: the focus letter is never touched, so
+    it stays pinned at the anchor and none of the placement code has to know
+    about spacing. The fit measurement uses the same spaced text, so what is
+    measured is exactly what is drawn. See set_letter_spacing() and
+    core/letter_spacing.py. The peripheral ribbon stays unspaced.
     """
 
     DEFAULT_FONT_COLOR = COCOA_INK
@@ -103,6 +114,12 @@ class ReaderDisplay(ctk.CTkFrame):
     CENTER_BUTTON_MARGIN_PX = 6    # px, gap from the row's left edge and from the scrollbar
                                     # sitting just below it
 
+    SPACING_MEASURE_SIZE_PX = 120  # px, the large size the spacing characters are measured at,
+                                    # so Tk's whole-pixel widths turn into em values that are
+                                    # accurate to well under 0.01 em
+    SPACING_MEASURE_SAMPLE = "reading"  # the word the characters are measured between; seven
+                                         # letters give six gaps to average over
+
     def __init__(self, master, on_position_changed=None, on_session_stats=None, on_progress=None):
         super().__init__(master, fg_color="transparent")
         self.session: ReaderSession | None = None
@@ -116,6 +133,15 @@ class ReaderDisplay(ctk.CTkFrame):
         self._peripheral_context_enabled = False
         self._peripheral_context_before = 1
         self._peripheral_context_after = 2
+        # Letter spacing. _spacing_plan is what actually gets drawn: the gap
+        # strings for the current level, worked out from how wide the gap
+        # characters measure in this font. The widths (in em) are measured
+        # once per font and kept in _gap_widths_em, keyed by the font they
+        # came from, since neither the level nor the font size changes them.
+        self._letter_spacing_level = 0
+        self._spacing_plan: SpacingPlan = NO_SPACING
+        self._gap_widths_em: dict | None = None
+        self._gap_widths_font: tuple | None = None
         # Scrubber drag state (see scrub_move/scrub_end). _scrubbing is True
         # between the first move of a drag and its release; _scrub_was_playing
         # records whether reading was playing when that drag began, so
@@ -540,6 +566,73 @@ class ReaderDisplay(ctk.CTkFrame):
         self._peripheral_context_after = max(0, after)
         self._update_peripheral_context()
 
+    @property
+    def letter_spacing_level(self) -> int:
+        return self._letter_spacing_level
+
+    def set_letter_spacing(self, level: int) -> None:
+        """Set how much room goes between the letters of the flashing word:
+        0 is Off, up to the top level in core/letter_spacing.py. A value that
+        isn't a valid level is pulled to the nearest one (or to Off).
+
+        Applied live, with nothing about the session touched: the position, the
+        pause state and the timing all stay as they are, and only the drawn text
+        and the fit change. The widest chunk is measured again, because the same
+        words now need more room and so may be drawn a little smaller, or pan
+        sooner. Can be called any time, before a session is loaded too, and the
+        level is used from the first word. Asking for the level that is already
+        set does nothing."""
+        level = clamp_level(level)
+        if level == self._letter_spacing_level:
+            return
+        self._letter_spacing_level = level
+        self._spacing_plan = self._build_spacing_plan(level)
+        if self.session is None:
+            return
+        self._recompute_fit_widest()
+        self._apply_fit()
+        self._update_scrollbar()
+        self._show_current_frame()
+        self._update_guide_marks()
+
+    def _build_spacing_plan(self, level: int) -> SpacingPlan:
+        """The gap strings for a level in the font on screen. Off needs no
+        measuring at all. For the other levels the gap characters are measured
+        the first time they are needed and reused after that."""
+        if level == 0:
+            return NO_SPACING
+        font_key = (self.word_font.cget("family"), self.word_font.cget("weight"))
+        if self._gap_widths_em is None or self._gap_widths_font != font_key:
+            self._gap_widths_em = self._measure_gap_widths_em()
+            self._gap_widths_font = font_key
+        return build_plan(level, self._gap_widths_em)
+
+    def _measure_gap_widths_em(self) -> dict:
+        """How wide a plain space and each of the gap characters is in this
+        font, in em (a fraction of the font size), keyed by character.
+
+        Most fonts have no glyph of their own for the thin spaces, so Windows
+        draws them from another font and how wide they come out differs from
+        font to font and from machine to machine. That is why they are measured
+        here, rather than assumed. Each one is measured by putting it between
+        the letters of a sample word and comparing with the plain word, the way
+        a letter gap is really used, at a large size so the whole-pixel widths
+        Tk reports are accurate. This measures with a throwaway font of the same
+        family, not the label's own font, so the display's DPI scaling and the
+        font's current size don't come into it: the answer is a ratio."""
+        measure_font = tkfont.Font(
+            root=self, family=self.word_font.cget("family"), weight=self.word_font.cget("weight"),
+            size=-self.SPACING_MEASURE_SIZE_PX,
+        )
+        sample = self.SPACING_MEASURE_SAMPLE
+        plain = measure_font.measure(sample)
+        gaps = len(sample) - 1
+        widths = {}
+        for char in (PLAIN_SPACE, *GAP_UNIT_CHARS):
+            spaced = measure_font.measure(char.join(sample))
+            widths[char] = (spaced - plain) / gaps / self.SPACING_MEASURE_SIZE_PX
+        return widths
+
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self._font_color = font_color
         self._background_color = background_color
@@ -657,7 +750,10 @@ class ReaderDisplay(ctk.CTkFrame):
         not on a resize or a plain size nudge. Character length is a close but
         imperfect stand-in for rendered width (wide and narrow letters differ),
         so this shortlists the longest chunks by characters and then measures
-        those few in real pixels, keeping the widest."""
+        those few in real pixels, keeping the widest. The measuring is done on
+        the text as it will be drawn, with the letter spacing already in it, so
+        a wider setting is reflected in the fit; the shortlist itself still goes
+        by the plain character count, which the spacing scales evenly."""
         self._fit_widest = None
         self._fit_required_per_size = None
         self._fit_left_reach_per_size = None
@@ -672,6 +768,7 @@ class ReaderDisplay(ctk.CTkFrame):
         widest_reaches = (0.0, 0.0)
         widest_width = -1.0
         for before, focus, after in candidates[:self.FIT_WIDEST_CANDIDATES]:
+            before, focus, after = space_chunk(before, focus, after, self._spacing_plan)
             left_reach, right_reach = self._measure_reaches(self._chosen_font_size, before, focus, after)
             width = 2 * max(left_reach, right_reach)
             if width > widest_width:
@@ -861,8 +958,12 @@ class ReaderDisplay(ctk.CTkFrame):
             # single word, and in a chunk only the first word keeps its ORP
             # split and anchored highlight while the rest trail to its right in
             # the after-label. Using the same assembler the font-fit measures
-            # keeps the drawn chunk and the measured chunk identical.
-            before, focus, after = assemble_chunk_text(self.session.current_chunk())
+            # keeps the drawn chunk and the measured chunk identical. The letter
+            # spacing goes in last, around the focus letter and never into it, and
+            # the fit applies it to the very same text.
+            before, focus, after = space_chunk(
+                *assemble_chunk_text(self.session.current_chunk()), self._spacing_plan,
+            )
             self.before_label.configure(text=before)
             self.focus_label.configure(text=focus)
             self.after_label.configure(text=after)
