@@ -90,13 +90,16 @@ reading this way (including where it helps and where it does not), see [The scie
   Settings, showing the app's version, its license, and a link to the project
 - Reading profiles - save how the reader feels (guide marks, pacing, rewind on
   resume, surrounding words, skipping, the +/- step, the scrubber and paragraph
-  switches, and the Speed and Word size defaults) under a name, and switch
-  between them from Settings in one click. Applying a profile never touches your
-  transcripts, your colours or your chunking
+  switches, the letter spacing, and the Speed and Word size defaults) under a
+  name, and switch between them from Settings in one click. Applying a profile
+  never touches your transcripts, your colours or your chunking
+- Optional letter spacing (Off, Small, Medium or Large) for the flashing word,
+  and an OpenDyslexic font switch for the whole app. Both are comfort settings
+  you can try by eye, not a treatment, and the app does not claim they help
 - Light / Dark / System theme support with reading colors that
   automatically follow the active theme unless you've customized them
-- Fully offline and self-contained - no browser, offline,
-  custom fonts bundled directly into the project
+- Fully offline and self-contained - no browser or internet needed, and the
+  fonts it uses are bundled with the project
 
 ## The RSVP Technique
 
@@ -132,7 +135,8 @@ including the per-platform Tkinter look at [docs/installation.md](docs/installat
 4. Adjust speed and colors for the current transcript from the control
    band at the bottom of the window.
 5. Open **Settings** (top-right) for new-transcript defaults, layout
-   sizing, where your data is stored, theme, and saved reading profiles.
+   sizing, where your data is stored, theme, font and letter spacing, and
+   saved reading profiles.
 <br>
 
 For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs/usage.md).
@@ -144,7 +148,7 @@ For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs
 rsvp-desktop-reader/
 ├── .github/workflows/       # GitHub Actions: tests, build & release, docs site
 ├── assets/
-│   ├── fonts/               # Bundled Fredoka & Quicksand font files
+│   ├── fonts/               # Bundled Fredoka, Quicksand & OpenDyslexic font files, with their licenses
 │   └── icons/               # Custom made icon
 ├── core/                    # Pure reading engine, no GUI dependencies
 │   ├── models.py            # The Transcript data model
@@ -158,6 +162,8 @@ rsvp-desktop-reader/
 │   ├── timing.py            # Converts WPM into a per-word delay
 │   ├── reader.py            # ReaderSession: ties the above together
 │   ├── scroll.py            # Pure geometry for the reader's horizontal pan
+│   ├── letter_spacing.py    # Letter spacing levels and the thin-space plan that builds each gap
+│   ├── font_choice.py       # Which fonts the app uses (standard or OpenDyslexic) and the notes for the font switch
 │   ├── settings_search.py   # Pure matching for the Settings search (name, keywords, description)
 │   ├── profiles.py          # Reading profiles: which settings a profile holds, name rules, loading saved ones
 │   ├── profile_apply.py     # Works out what applying a profile does (clamping, guide mark colour vs. theme)
@@ -177,9 +183,11 @@ rsvp-desktop-reader/
 │   ├── test_chunking.py
 │   ├── test_colors.py
 │   ├── test_data_bundle.py
+│   ├── test_font_choice.py
 │   ├── test_gui_smoke.py
 │   ├── test_icons.py
 │   ├── test_importers.py
+│   ├── test_letter_spacing.py
 │   ├── test_models.py
 │   ├── test_normalizer.py
 │   ├── test_orp.py
@@ -188,11 +196,14 @@ rsvp-desktop-reader/
 │   ├── test_profiles.py
 │   ├── test_punctuation.py
 │   ├── test_reader.py
+│   ├── test_reader_letter_spacing.py
 │   ├── test_scroll.py
 │   ├── test_settings_search.py
 │   ├── test_settings_store.py
+│   ├── test_settings_store_dyslexia.py
 │   ├── test_settings_store_profiles.py
 │   ├── test_storage.py
+│   ├── test_theme_fonts.py
 │   ├── test_theme_following_colours.py
 │   ├── test_timing.py
 │   ├── test_tokenizer.py
@@ -211,7 +222,7 @@ and the CustomTkinter `gui/`, see [docs/architecture.md](docs/architecture.md) *
 - [Python](https://www.python.org/)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) - the GUI framework
 - [Pillow](https://python-pillow.org/) - used to hand-draw a couple of icons
-- [Fredoka](https://fonts.google.com/specimen/Fredoka) & [Quicksand](https://fonts.google.com/specimen/Quicksand) - bundled fonts
+- [Fredoka](https://fonts.google.com/specimen/Fredoka), [Quicksand](https://fonts.google.com/specimen/Quicksand) & [OpenDyslexic](https://opendyslexic.org/) - bundled fonts
 
 ## Settings and Configuration
 
@@ -226,16 +237,17 @@ Settings are organized into six tabs:
   any time. Also where you can export everything (transcripts, spaces, and
   settings) to a file, or import one from another machine, choosing whether
   to replace what's here or add to it
-- **Appearance** - Light / Dark / System theme (takes effect on next
-  launch, not live)
+- **Appearance** - Light / Dark / System theme and the OpenDyslexic font
+  switch (both take effect on next launch, not live), plus the letter spacing
+  (applies as soon as you press Apply)
 - **Profiles** - save the current reader settings under a name, then apply,
   update, rename or delete them later. A profile holds the guide marks,
   pacing, rewind on resume, surrounding words, skipping, the +/- step, the
-  scrubber and paragraph switches, and the Speed and Word size sliders.
-  Applying one takes effect straight away, and never changes a transcript,
-  your colours or chunking (Speed and Word size only set where new
-  transcripts start). Profiles are saved with your settings, so Export and
-  Import carry them along
+  scrubber and paragraph switches, the letter spacing, and the Speed and Word
+  size sliders. Applying one takes effect straight away, and never changes a
+  transcript, your colours, chunking or font (Speed and Word size only set
+  where new transcripts start). Profiles are saved with your settings, so
+  Export and Import carry them along
 - **Stats** - read-only reading totals for each transcript (how many times
   it's been read, words read, and time spent), updated when a session ends
   rather than while you're paused
@@ -282,7 +294,7 @@ project on GitHub.
 - ~~App version info dialog~~
 - ~~Automated tests and repo cleanup~~
 - ~~Setting profiles~~
-- Dyslexia-friendly font and letter spacing
+- ~~Dyslexia-friendly font and letter spacing~~
 - Bionic Reading
 
 
@@ -290,13 +302,21 @@ project on GitHub.
 
 Released under the MIT License. See [LICENSE](LICENSE) for the full text.
 
-The bundled Fredoka and Quicksand fonts have their own SIL Open Font License
-(see Acknowledgments); the MIT license covers the project's own code.
+The bundled Fredoka, Quicksand and OpenDyslexic fonts are each released under
+the SIL Open Font License, not the MIT license. A copy of each font's license
+sits next to the font files in [assets/fonts](assets/fonts), and the fonts are
+credited under Acknowledgments. The MIT license covers the project's own code.
 
 ## Acknowledgments
 
-- [Fredoka](https://fonts.google.com/specimen/Fredoka) and
-  [Quicksand](https://fonts.google.com/specimen/Quicksand), by their
-  respective creators, licensed under the
-  [SIL Open Font License](https://openfontlicense.org/)
+- [Fredoka](https://fonts.google.com/specimen/Fredoka), by Milena Brandão and
+  Ben Nathan (Hafontia), licensed under the
+  [SIL Open Font License](https://openfontlicense.org/). See
+  [OFL-Fredoka.txt](assets/fonts/OFL-Fredoka.txt)
+- [Quicksand](https://fonts.google.com/specimen/Quicksand), by Andrew
+  Paglinawan, licensed under the SIL Open Font License. See
+  [OFL-Quicksand.txt](assets/fonts/OFL-Quicksand.txt)
+- [OpenDyslexic](https://opendyslexic.org/), by Abbie Gonzalez, licensed under
+  the SIL Open Font License. See
+  [OFL-OpenDyslexic.txt](assets/fonts/OFL-OpenDyslexic.txt)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom Schimansky
