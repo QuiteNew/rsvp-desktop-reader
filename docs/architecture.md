@@ -65,7 +65,8 @@ of its own. The passage of time is the GUI's job.
   throttle so rapid updates do not hammer the disk, and an explicit flush forces
   a write when a session ends.
 - `settings_store.py` does the same for application settings: the new-transcript
-  defaults, layout sizes, data location, theme, and the saved reading profiles.
+  defaults, layout sizes, data location, theme, the font switch and letter
+  spacing level, and the saved reading profiles.
 - `data_bundle.py` builds and applies the single-file export used to move
   transcripts, Spaces, and settings between machines, deliberately leaving the
   machine-specific data path out of the bundle.
@@ -77,15 +78,17 @@ pieces of logic behind it are both pure.
 
 `profiles.py` holds the rules. It lists which settings a profile may hold (the
 guide marks, pacing, rewind, surrounding words, skipping, the +/- step, the
-scrubber and paragraph switches, and the Speed and Word size defaults), checks
-that a value is the right kind for its setting, and decides what makes a good
-name: trimmed, at most 30 characters, unique without regard to capitals. It also
-loads saved profiles forgivingly. A damaged entry is dropped, an unknown or
-invalid key inside a profile is ignored, and a key that is missing from a
-profile means "leave that setting alone". That last rule is what keeps a profile
-saved by an older version working after a newer version adds a setting. What a
-profile does not hold is as deliberate as what it does: no transcript values, no
-Defaults colours, no chunking, no layout, data location or theme.
+scrubber and paragraph switches, the letter spacing level, and the Speed and
+Word size defaults), checks that a value is the right kind for its setting, and
+decides what makes a good name: trimmed, at most 30 characters, unique without
+regard to capitals. It also loads saved profiles forgivingly. A damaged entry is
+dropped, an unknown or invalid key inside a profile is ignored, and a key that
+is missing from a profile means "leave that setting alone". That last rule is
+what keeps a profile saved by an older version working after a newer version
+adds a setting. What a profile does not hold is as deliberate as what it does:
+no transcript values, no Defaults colours, no chunking, no layout, data location
+or theme, and no font switch. The font is only read once at startup, so a
+profile could not switch it on the spot the way it does everything else.
 
 `profile_apply.py` works out what applying a profile does, without doing it.
 Given the profile's values and the current settings, it hands back the complete
@@ -116,6 +119,35 @@ The core also owns how a flash's text is assembled. `reader.py` exposes the
 split of each chunk into its before, focus, and after parts, in one place, so
 that drawing a flash and measuring how wide the widest one is both use the same
 text.
+
+### Letter spacing and font choice
+
+Two more small, pure modules sit behind the letter spacing selector and the font
+switch on the Appearance tab.
+
+`letter_spacing.py` works out the spacing. Tk has no letter spacing setting, so
+the room between letters is made of thin space characters in the text that gets
+drawn. How wide each of those characters is depends on the font and the machine,
+because most fonts have no glyph for them and the system borrows one from
+another font. So the GUI measures each character once, in em (a fraction of the
+font size), and hands the widths to `build_plan()`. That picks the combination of
+characters whose total lands closest to the gap the chosen level asks for (Off,
+Small, Medium or Large), and it also decides the gap between the words of a
+chunk, which is widened where needed so the words do not run together.
+`space_chunk()` then puts those gaps into a flash's before, focus and after text
+and leaves the focus letter itself untouched. The module never measures anything
+and never touches a widget, so it is tested without a window. A level that is not
+a valid one is pulled to the nearest valid one, and a value that is not a whole
+number means Off.
+
+`font_choice.py` names the two font sets, Fredoka with Quicksand as the standard
+set and OpenDyslexic as the other, along with the font files each one needs.
+`choose_fonts()` picks a set from the saved switch and the names of the files
+found in the fonts folder. Only a real `true` turns OpenDyslexic on, so a damaged
+settings file cannot do it by accident, and if the switch is on but the
+OpenDyslexic files are missing it falls back to the standard set and says so.
+The same module words the grey notes Settings shows under the switch, which
+keeps that wording testable too.
 
 ## The GUI layer
 
@@ -158,6 +190,14 @@ the geometry in `core/scroll.py`, and a small button (and the C key) that return
 the flash to the centre. Measuring pixels is the GUI's job, which is why the fit
 calculation lives here and only the pure arithmetic lives in the core.
 
+Letter spacing is handled in the same place. The display measures the gap
+characters in the font on screen, asks `build_plan()` for the gaps, and applies
+`space_chunk()` both when it draws a flash and when it measures the widest one,
+so the fit sees exactly what is drawn. Changing the level redraws the current
+flash and measures again without touching the session, so the position, the
+pause state and the timing all stay as they are. The surrounding-words line is
+left unspaced.
+
 Around the reader sit the controls: the floating stop button, the toolbar with
 its play, restart, bookmarks, detach, and focus-mode actions and its time and
 percent read-outs, the progress scrubber with its bookmark ticks, and the
@@ -188,6 +228,14 @@ inconsistently across platforms. The many dialogs (the add-transcript chooser,
 the create and move and delete dialogs, the Space dialogs, Settings, the About
 dialog, and the import dialogs) each live in their own component file under
 `gui/components/`.
+
+The fonts follow the same pattern as the theme. `theme.py` reads the font switch
+once, when it is first imported, and asks `font_choice.py` which set to use,
+which is why changing the switch takes effect on the next launch. It registers
+only the font files that set needs, and only on Windows (on other systems the
+fonts have to be installed on the machine). When OpenDyslexic is in use it also
+points CustomTkinter's default font at the same family, so widgets that set no
+font of their own, such as the transcript edit box, follow along.
 
 ## How a word reaches the screen
 

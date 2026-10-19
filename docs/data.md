@@ -129,6 +129,7 @@ A flat object, one key per setting. Defaults shown.
 | `scrub_pause_enabled` | true | Pause on the word after releasing the scrubber. |
 | `peripheral_context_enabled` | false | Show the dim surrounding-words line. |
 | `highlight_offset_px` | 0 | Shift the focus letter up (positive) or down (negative). |
+| `letter_spacing_level` | 0 | Room between the letters of the flashing word: 0 Off, 1 Small, 2 Medium, 3 Large. A number outside 0 to 3 is treated as the nearest level, and anything that is not a whole number as Off. |
 
 **Guide marks** (global)
 
@@ -153,6 +154,7 @@ A flat object, one key per setting. Defaults shown.
 | `split_long_paragraphs_enabled` | false | Whether Normalize also splits long prose into paragraphs. |
 | `data_directory` | `~/.rsvp_reader` | Where `data.json` is written. |
 | `appearance_mode` | `light` | Theme: `light`, `dark`, or `system`. |
+| `dyslexia_font_enabled` | false | Use the OpenDyslexic font for the whole app. Only `true` turns it on. Like the theme, it is read once at startup, so a change shows on the next launch. |
 
 ### A reading profile
 
@@ -176,9 +178,12 @@ A profile can hold these settings: `highlight_offset_px`,
 `warm_up_enabled`, `resume_rewind_enabled`, `resume_rewind_words`,
 `peripheral_context_enabled`, `skip_word_count`, `pause_on_skip`,
 `default_wpm`, `default_font_size`, `font_size_step`,
-`split_long_paragraphs_enabled` and `scrub_pause_enabled`. It never holds a
-transcript's own values, the Defaults colours, the chunking defaults, the window
-and layout sizes, the data directory, or the theme.
+`split_long_paragraphs_enabled`, `scrub_pause_enabled` and
+`letter_spacing_level`. It never holds a transcript's own values, the Defaults
+colours, the chunking defaults, the window and layout sizes, the data
+directory, the theme, or the `dyslexia_font_enabled` font switch. The font is
+left out because it is only read at startup, so a profile could not switch it
+on the spot the way it does everything else.
 
 - A setting that is missing from `values` means "leave that setting alone" when
   the profile is applied. That is how a profile saved before a setting joined
