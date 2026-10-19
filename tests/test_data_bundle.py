@@ -183,6 +183,29 @@ def test_apply_bundle_replace_keeps_the_importing_machines_data_directory(tmp_pa
 
     assert dest_ss.data_directory == "/importer/own/path"
 
+def test_apply_bundle_replace_accepts_keys_this_version_does_not_know(tmp_path, source_stores):
+    # A bundle exported by a newer version can carry a setting and a transcript
+    # field this version has never heard of. The import must still go through
+    # in full. Before, the transcripts were replaced and then the settings
+    # raised, which left the import half done.
+    source_ts, source_ss = source_stores
+    source_ts.add_transcript("Imported", "General")
+    source_ss.set_window_size(1280, 800)
+
+    bundle_dict = data_bundle.build_bundle(source_ts, source_ss)
+    bundle_dict["settings"]["future_setting"] = 1
+    bundle_dict["data"]["transcripts"][0]["future_field"] = "x"
+    bundle = data_bundle.parse_bundle(json.dumps(bundle_dict))
+
+    dest_ts = TranscriptStore(data_directory=str(tmp_path / "dest_data"))
+    dest_ss = SettingsStore(settings_directory=str(tmp_path / "dest_settings"))
+    dest_ts.add_transcript("Old", "General")
+    data_bundle.apply_bundle_replace(bundle, dest_ts, dest_ss)  # must not raise
+
+    assert [t.title for t in dest_ts.transcripts] == ["Imported"]
+    assert dest_ss.window_width == 1280
+    assert dest_ss.window_height == 800
+
 def test_apply_bundle_replace_persists_to_disk(tmp_path, source_stores):
     source_ts, source_ss = source_stores
     source_ts.add_transcript("Imported", "General")

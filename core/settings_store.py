@@ -1,7 +1,7 @@
 import json
 import time
 from pathlib import Path
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict, field, fields
 
 from core.letter_spacing import MAX_LEVEL
 from core.profiles import Profile, ProfileError, clean_name, clean_profile_list, name_problem, sanitize_values
@@ -100,6 +100,24 @@ class AppSettings:
                                                    # they go to settings.json and into export bundles as they
                                                    # are. Use SettingsStore's profile methods, not this list.
 
+# The names of AppSettings' own fields, used by _known_settings() below.
+_SETTINGS_FIELDS = {f.name for f in fields(AppSettings)}
+
+
+def _known_settings(data: dict) -> dict:
+    """Keep only the keys AppSettings has a field for.
+
+    A settings dict can carry a key this version does not know: a setting
+    added by a newer version of the app (someone going back to an older
+    release, or importing a bundle exported by a newer one), a field that was
+    removed long ago like header_height, or a typo from editing the file by
+    hand. Passing one to AppSettings() raises a TypeError, which used to make
+    the whole load fall back to the defaults, and the next change then saved
+    those defaults over the real file. Dropping the key instead keeps every
+    other setting."""
+    return {key: value for key, value in data.items() if key in _SETTINGS_FIELDS}
+
+
 class SettingsStore:
     """Persists app-level settings to their own file, separate from
     transcript/space data."""
@@ -117,7 +135,10 @@ class SettingsStore:
             return AppSettings()
         try:
             data = json.loads(self._settings_file.read_text(encoding="utf-8"))
-            data.pop("header_height", None)
+            # Valid JSON that is not an object (a list, null, a bare number)
+            # cannot be settings, so start from the defaults.
+            if not isinstance(data, dict):
+                return AppSettings()
             # guide_mark_color predates guide_mark_color_is_default. For an
             # old settings.json missing the flag, infer it from whether the
             # stored color still equals the one-and-only historical default
@@ -132,7 +153,7 @@ class SettingsStore:
             # is dropped on its own, so one damaged profile can't make the
             # whole load fail and reset every other setting to its default.
             data["profiles"] = clean_profile_list(data.get("profiles"))
-            return AppSettings(**data)
+            return AppSettings(**_known_settings(data))
         except (json.JSONDecodeError, KeyError, TypeError):
             return AppSettings()
 
@@ -178,13 +199,16 @@ class SettingsStore:
         that carries a "profiles" list replaces this machine's profiles like
         any other setting. A bundle exported before profiles existed has no
         such key, and for that one the profiles already on this machine are
-        kept, so importing an old backup doesn't wipe them out."""
+        kept, so importing an old backup doesn't wipe them out.
+
+        A key this version does not know is dropped, so a bundle exported by
+        a newer version still imports. See _known_settings()."""
         merged = {**settings, "data_directory": self._settings.data_directory}
         if "profiles" in settings:
             merged["profiles"] = clean_profile_list(settings["profiles"])
         else:
             merged["profiles"] = self._settings.profiles
-        self._settings = AppSettings(**merged)
+        self._settings = AppSettings(**_known_settings(merged))
         self._save()
 
     @property

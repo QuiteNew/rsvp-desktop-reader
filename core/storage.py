@@ -21,6 +21,13 @@ _COLOR_DEFAULT_FLAG_FIELDS = ("font_color_is_default", "highlight_color_is_defau
 # discarding the whole save. See parse_data().
 _BOOKMARK_FIELDS = {f.name for f in dataclass_fields(Bookmark)}
 
+# The same idea for Transcript. A save file written by a newer version of the
+# app can carry a transcript field this version has never heard of, and
+# passing it to Transcript() would raise. parse_data() would then answer
+# "no valid save", the store would start empty, and the next change would be
+# saved over the real file. Keeping only these keys avoids that.
+_TRANSCRIPT_FIELDS = {f.name for f in dataclass_fields(Transcript)}
+
 # Shared by TranscriptStore and SettingsStore for any setter that gets
 # called from a live, high-frequency UI event, such as continuous
 # playback position or dragging the WPM or skip-amount sliders, rather
@@ -78,7 +85,13 @@ def parse_data(data: dict) -> dict | None:
                     Bookmark(**{k: v for k, v in b.items() if k in _BOOKMARK_FIELDS})
                     for b in t["bookmarks"]
                 ]
-        transcripts = [Transcript(**t) for t in data["transcripts"]]
+        # Only the keys Transcript knows go in, the same as for bookmarks
+        # above. A field that is really required (id, title, space) is still
+        # required, so a transcript missing one still makes this return None.
+        transcripts = [
+            Transcript(**{k: v for k, v in t.items() if k in _TRANSCRIPT_FIELDS})
+            for t in data["transcripts"]
+        ]
         return {
             "next_id": data["next_id"],
             "current_space_index": data["current_space_index"],

@@ -200,9 +200,9 @@ def test_settings_file_missing_newer_fields_fills_in_defaults(tmp_path):
 def test_settings_file_with_stale_header_height_field_loads_correctly(tmp_path):
     """header_height was removed from AppSettings, but older settings.json
     files may still have it saved. Passing an unknown keyword straight into
-    AppSettings(**data) would raise a TypeError. This test would fail
-    without the data.pop("header_height", None) step, which proves that
-    step really works."""
+    AppSettings(**data) would raise a TypeError. Loading drops every key
+    AppSettings has no field for (see _known_settings()), and this is the
+    oldest real example of one."""
     settings_file = tmp_path / "settings.json"
     settings_file.write_text(json.dumps({
         "window_width": 1000,
@@ -213,6 +213,76 @@ def test_settings_file_with_stale_header_height_field_loads_correctly(tmp_path):
     store = SettingsStore(settings_directory=str(tmp_path))  # must not raise TypeError
     assert store.window_width == 1000
     assert store.window_height == 650
+
+
+# Keys this version does not know
+
+def _write_settings(tmp_path, data) -> None:
+    (tmp_path / "settings.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_unknown_settings_key_does_not_reset_the_other_settings(tmp_path):
+    """A settings.json from a newer version, or one edited by hand, can hold a
+    key this version has no field for. Before, that one key made the whole
+    load fall back to the defaults, data_directory included."""
+    _write_settings(tmp_path, {
+        "default_wpm": 450,
+        "window_width": 1200,
+        "data_directory": "/my/own/folder",
+        "appearance_mode": "dark",
+        "dyslexia_font_enabled": True,
+        "letter_spacing_level": 2,
+        "some_future_setting": 7,
+    })
+
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert store.default_wpm == 450
+    assert store.window_width == 1200
+    assert store.data_directory == "/my/own/folder"
+    assert store.appearance_mode == "dark"
+    assert store.dyslexia_font_enabled is True
+    assert store.letter_spacing_level == 2
+
+def test_unknown_settings_key_is_not_written_back_but_the_rest_is(tmp_path):
+    _write_settings(tmp_path, {"default_wpm": 450, "some_future_setting": 7})
+
+    store = SettingsStore(settings_directory=str(tmp_path))
+    store.set_font_size_step(3)  # an ordinary change, which saves the whole file
+
+    saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert "some_future_setting" not in saved
+    assert saved["default_wpm"] == 450
+    assert saved["font_size_step"] == 3
+
+def test_unknown_key_next_to_saved_profiles_keeps_the_profiles(tmp_path):
+    _write_settings(tmp_path, {
+        "profiles": [{"name": "Skim", "values": {"skip_word_count": 25}}],
+        "some_future_setting": 7,
+    })
+
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert [p.name for p in store.profiles] == ["Skim"]
+
+@pytest.mark.parametrize("text", ["[]", "null", '"text"', "42", "true"])
+def test_settings_file_that_is_not_an_object_loads_the_defaults(tmp_path, text):
+    """Valid JSON that is not an object cannot be settings. It should load the
+    defaults, not crash on the way to filtering the keys."""
+    (tmp_path / "settings.json").write_text(text, encoding="utf-8")
+
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert store.default_wpm == AppSettings().default_wpm
+    assert store.window_width == AppSettings().window_width
+
+def test_replace_from_bundle_ignores_an_unknown_settings_key(store):
+    """A bundle exported by a newer version can carry a setting this version
+    does not have. The known settings still go in and data_directory stays."""
+    store.set_data_directory("/importer/own/path")
+
+    store.replace_from_bundle({"default_wpm": 700, "window_width": 1100, "future_setting": 1})
+
+    assert store.default_wpm == 700
+    assert store.window_width == 1100
+    assert store.data_directory == "/importer/own/path"
 
 
 # Separate settings folders don't affect each other

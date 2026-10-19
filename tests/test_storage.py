@@ -191,6 +191,35 @@ def test_parse_data_missing_bookmarks_key_defaults_to_empty():
     assert result["transcripts"][0].bookmarks == []
 
 
+# parse_data: keys Transcript does not know
+
+def test_parse_data_filters_unknown_transcript_keys():
+    # A transcript field added by a newer version must be dropped, not passed
+    # to Transcript(), which would raise and make the whole save look invalid.
+    result = parse_data(_valid_data([{
+        "id": 1, "title": "Doc", "space": "General", "wpm": 420,
+        "future_field": "ignored",
+    }]))
+    assert result is not None
+    transcript = result["transcripts"][0]
+    assert transcript.title == "Doc"
+    assert transcript.wpm == 420
+    assert not hasattr(transcript, "future_field")
+
+def test_parse_data_one_transcript_with_an_unknown_key_does_not_cost_the_others():
+    result = parse_data(_valid_data([
+        {"id": 1, "title": "Plain", "space": "General"},
+        {"id": 2, "title": "Odd", "space": "General", "future_field": 1},
+        {"id": 3, "title": "Also plain", "space": "General"},
+    ]))
+    assert [t.title for t in result["transcripts"]] == ["Plain", "Odd", "Also plain"]
+
+def test_parse_data_unknown_keys_do_not_make_a_required_field_optional():
+    # Dropping unknown keys must not loosen the real requirements: a
+    # transcript without a title is still not a valid save.
+    assert parse_data(_valid_data([{"id": 1, "space": "General", "future_field": 1}])) is None
+
+
 # parse_data: failure paths all return None
 
 def test_parse_data_missing_next_id_returns_none():
@@ -239,6 +268,18 @@ def test_load_state_valid_file_returns_transcript_objects(tmp_path):
     assert result is not None
     assert isinstance(result["transcripts"][0], Transcript)
     assert result["transcripts"][0].title == "T"
+
+def test_load_state_keeps_every_transcript_when_one_has_an_unknown_key(tmp_path):
+    # The case that used to lose data: one unfamiliar key made load_state()
+    # return None, the store started empty, and the next change was saved
+    # over the real file.
+    _write_json(tmp_path, _valid_data([
+        {"id": 1, "title": "First", "space": "General", "future_field": "x"},
+        {"id": 2, "title": "Second", "space": "General"},
+    ]))
+    result = load_state(str(tmp_path))
+    assert result is not None
+    assert [t.title for t in result["transcripts"]] == ["First", "Second"]
 
 
 # Full round trip through save_state + load_state
