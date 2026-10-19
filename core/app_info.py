@@ -10,6 +10,6 @@ here, as the last step before tagging a release, so the number shown inside
 the running app always matches the tag the build was cut from."""
 
 APP_NAME = "RSVP Reader"
-APP_VERSION = "3.5.1"
+APP_VERSION = "3.6.0"
 REPO_URL = "https://github.com/QuiteNew/rsvp-desktop-reader"
 LICENSE_NAME = "MIT"

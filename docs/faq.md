@@ -201,7 +201,7 @@ Profiles saved before those settings joined do not hold them, and a profile only
 changes what it holds, so applying one leaves them as they are. That covers
 Speed, Word size, the +/- step and the scrubber and paragraph switches for the
 oldest profiles, and the letter spacing for any profile saved before version
-3.5.1. Select the profile, set Settings the way you want, and press **Update**
+3.6.0. Select the profile, set Settings the way you want, and press **Update**
 once to bring them in.
 
 ### If I change a setting afterwards, does the saved profile change?
