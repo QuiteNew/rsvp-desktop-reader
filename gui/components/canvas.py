@@ -35,6 +35,7 @@ class Canvas(ctk.CTkFrame):
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
         peripheral_context_enabled: bool = False,
+        letter_spacing_level: int = 0,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -62,6 +63,7 @@ class Canvas(ctk.CTkFrame):
         self._warm_up_enabled = warm_up_enabled
         self._scrub_pause_enabled = scrub_pause_enabled
         self._peripheral_context_enabled = peripheral_context_enabled
+        self._letter_spacing_level = letter_spacing_level
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -133,6 +135,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_resume_rewind(self._resume_rewind_enabled, self._resume_rewind_words)
         self.reader_display.set_scrub_pause(self._scrub_pause_enabled)
         self.reader_display.set_peripheral_context(self._peripheral_context_enabled)
+        self.reader_display.set_letter_spacing(self._letter_spacing_level)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -335,6 +338,15 @@ class Canvas(ctk.CTkFrame):
         # their other styling (see open_selection_preview), so they aren't
         # updated here.
 
+    def set_letter_spacing_level(self, level: int) -> None:
+        self._letter_spacing_level = level
+        self.reader_display.set_letter_spacing(level)
+        if self._detached_window:
+            self._detached_window.set_letter_spacing_level(level)
+        # Open selection previews snapshot the level at open time, like
+        # their other styling (see open_selection_preview), so they aren't
+        # updated here.
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self._resume_rewind_enabled = enabled
         self._resume_rewind_words = words
@@ -431,6 +443,7 @@ class Canvas(ctk.CTkFrame):
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
             peripheral_context_enabled=self._peripheral_context_enabled,
+            letter_spacing_level=self._letter_spacing_level,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
@@ -808,6 +821,7 @@ class Canvas(ctk.CTkFrame):
             warm_up_enabled=self._warm_up_enabled,
             scrub_pause_enabled=self._scrub_pause_enabled,
             peripheral_context_enabled=self._peripheral_context_enabled,
+            letter_spacing_level=self._letter_spacing_level,
         )
         self._show_detached_placeholder()
 

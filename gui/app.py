@@ -136,6 +136,7 @@ class RSVPApp(ctk.CTk):
             warm_up_enabled=self.settings_store.warm_up_enabled,
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
             peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
+            letter_spacing_level=self.settings_store.letter_spacing_level,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 

@@ -48,6 +48,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         warm_up_enabled: bool = False,
         scrub_pause_enabled: bool = True,
         peripheral_context_enabled: bool = False,
+        letter_spacing_level: int = 0,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -74,6 +75,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.warm_up_enabled = warm_up_enabled
         self.scrub_pause_enabled = scrub_pause_enabled
         self.peripheral_context_enabled = peripheral_context_enabled
+        self.letter_spacing_level = letter_spacing_level
 
         self.title(title)
         apply_app_icon(self)
@@ -129,6 +131,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.reader_display.set_resume_rewind(resume_rewind_enabled, resume_rewind_words)
         self.reader_display.set_scrub_pause(scrub_pause_enabled)
         self.reader_display.set_peripheral_context(peripheral_context_enabled)
+        self.reader_display.set_letter_spacing(letter_spacing_level)
 
         self._show_input()
         self._bind_shortcuts()
