@@ -112,6 +112,60 @@ def revert_icon(size: int = 24) -> ctk.CTkImage:
     return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
 
 
+# The bold word starts button draws rows of "words" as plain bars, with no page
+# around them, so it can't be taken for the Normalize or Revert page icons.
+# Each tuple is one row, and each number is a word's width as a share of the
+# glyph. The rows end ragged, like a paragraph does.
+_BOLD_STARTS_ROWS = ((0.36, 0.40), (0.44, 0.32), (0.30, 0.24))
+_BOLD_STARTS_ROW_Y = (0.24, 0.50, 0.76)
+
+# How strong the "plain" part of a word is, out of 255. With the button off,
+# every word is drawn at this strength. With it on, the front half of each word
+# is drawn at full strength instead. It is a lower alpha rather than a second
+# colour so it still looks right on hover, when the button colour changes.
+_BOLD_STARTS_SOFT_ALPHA = 130
+
+
+def _draw_bold_starts_glyph(size: int, color, bold_starts: bool) -> Image.Image:
+    """Rows of "words" as rounded bars. Off, every word is the same soft tone.
+    On, the front half of each word is full strength, the way the start of a
+    word looks in the text itself.
+
+    `color` is an RGBA tuple. The on glyph is the off glyph with the word
+    starts brightened, so switching it on only ever adds ink."""
+    supersample = 4  # draw large, then downscale: gives smooth, anti-aliased edges
+    s = size * supersample
+    bar = s * 0.13
+    gap = s * 0.09
+    red, green, blue, alpha = color
+    soft = (red, green, blue, round(alpha * _BOLD_STARTS_SOFT_ALPHA / 255))
+
+    image = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    for widths, y in zip(_BOLD_STARTS_ROWS, _BOLD_STARTS_ROW_Y):
+        top, bottom = s * y - bar / 2, s * y + bar / 2
+        x = s * 0.08
+        for width in widths:
+            end = x + s * width
+            # Drawing with an alpha replaces the pixels instead of blending
+            # over them, so the bright front covers the soft bar under it.
+            draw.rounded_rectangle([x, top, end, bottom], radius=bar * 0.4, fill=soft)
+            if bold_starts:
+                draw.rounded_rectangle([x, top, x + (end - x) / 2, bottom], radius=bar * 0.4, fill=color)
+            x = end + gap
+
+    return image.resize((size, size), Image.LANCZOS)
+
+
+def bold_starts_icon(is_on: bool, size: int = 24) -> ctk.CTkImage:
+    """The bold word starts button's icon. is_on picks the glyph that shows the
+    word starts brightened. The button colour is the same either way, so the
+    icon is the only thing that says whether the look is on."""
+    glyph = _draw_bold_starts_glyph(size * _PAGE_ICON_SOURCE_SCALE, PAGE_ICON_COLOR, is_on)
+    return ctk.CTkImage(light_image=glyph, dark_image=glyph, size=(size, size))
+
+
 def _draw_center_glyph(size: int, color) -> Image.Image:
     """A centring target: a ring with a dot at its middle and a short tick
     running out from each side, the familiar "locate" mark.
