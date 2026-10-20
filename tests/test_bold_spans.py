@@ -1,16 +1,16 @@
 """Tests for core/bold_spans.py: turning bold stretches into Tk "line.column"
-places, and finding the lines an edit touched.
+places, and leaving very long lines plain.
 
 Which letters are bold is tested in test_bold_starts.py. This file only checks
 that the same stretches come out as Tk places, including after an emoji, which
-Tk 8.6 counts as two columns and Tk 9 as one, and that the changed block of
-lines is found correctly."""
+Tk 8.6 counts as two columns and Tk 9 as one, and that lines over the limit are
+skipped."""
 
 import random
 
 import pytest
 
-from core.bold_spans import changed_lines, tk_spans
+from core.bold_spans import MAX_BOLD_LINE, has_long_line, tk_spans
 from core.bold_starts import bold_ranges
 
 EMOJI = "\U0001F600"
@@ -155,99 +155,76 @@ def test_the_columns_stay_python_positions_when_there_is_no_emoji_at_any_width()
     assert tk_spans(text, 2) == tk_spans(text, 1)
 
 
-# ---- changed_lines ----
+# ---- very long lines are left plain ----
 
-def test_nothing_changed_gives_an_empty_block_at_the_end():
-    assert changed_lines(["a", "b", "c"], ["a", "b", "c"]) == (3, 3)
+def test_there_is_no_limit_unless_one_is_given():
+    line = "word " * 5000
+    assert len(tk_spans(line)) == 5000
 
-def test_two_empty_texts_have_nothing_changed():
-    assert changed_lines([], []) == (0, 0)
+def test_a_line_over_the_limit_has_no_spans():
+    assert tk_spans("hello world", max_line=10) == []
 
-def test_an_edit_in_the_middle_gives_just_that_line():
-    assert changed_lines(["a", "b", "c"], ["a", "X", "c"]) == (1, 2)
+def test_a_line_exactly_at_the_limit_is_still_bolded():
+    assert tk_spans("hello world", max_line=11) == [(1, 0, 3), (1, 6, 9)]
 
-def test_an_edit_on_the_first_line():
-    assert changed_lines(["a", "b", "c"], ["X", "b", "c"]) == (0, 1)
+def test_one_character_over_the_limit_is_left_plain():
+    assert tk_spans("hello world", max_line=10) == []
+    assert tk_spans("hello worl", max_line=10) == [(1, 0, 3), (1, 6, 8)]
 
-def test_an_edit_on_the_last_line():
-    assert changed_lines(["a", "b", "c"], ["a", "b", "X"]) == (2, 3)
+def test_only_the_long_lines_are_skipped():
+    text = "hello world\n" + "x" * 50 + "\nreading speed"
+    assert tk_spans(text, max_line=20) == [(1, 0, 3), (1, 6, 9), (3, 0, 4), (3, 8, 11)]
 
-def test_lines_added_in_the_middle_are_the_block():
-    assert changed_lines(["a", "c"], ["a", "x", "y", "c"]) == (1, 3)
+def test_the_lines_after_a_skipped_one_keep_their_numbers():
+    text = "aaa bbb\n" + "word " * 30 + "\nccc ddd"
+    assert [line for line, _, _ in tk_spans(text, max_line=40)] == [1, 1, 3, 3]
 
-def test_lines_added_at_the_end_are_the_block():
-    assert changed_lines(["a"], ["a", "b", "c"]) == (1, 3)
+def test_a_skipped_line_does_not_change_the_other_lines_spans():
+    short = "reading speed\ninteresting words"
+    mixed = "reading speed\n" + "word " * 40 + "\ninteresting words"
+    plain = tk_spans(short)
+    kept = tk_spans(mixed, max_line=100)
+    assert [s for s in kept if s[0] == 1] == [s for s in plain if s[0] == 1]
+    assert [(3,) + s[1:] for s in kept if s[0] == 3] == [(3,) + s[1:] for s in plain if s[0] == 2]
 
-def test_lines_added_at_the_start_are_the_block():
-    assert changed_lines(["c"], ["a", "b", "c"]) == (0, 2)
+def test_the_limit_applies_to_a_piece_cut_from_a_longer_text_too():
+    assert tk_spans("short one\n" + "w" * 30, first_line=7, max_line=20) == [(7, 0, 3), (7, 6, 8)]
 
-def test_lines_removed_from_the_middle_leave_an_empty_block_where_they_were():
-    assert changed_lines(["a", "x", "y", "c"], ["a", "c"]) == (1, 1)
+def test_blank_lines_are_never_over_the_limit():
+    assert tk_spans("\n\n", max_line=0) == []
 
-def test_lines_removed_from_the_end_leave_an_empty_block_at_the_end():
-    assert changed_lines(["a", "b", "c"], ["a"]) == (1, 1)
+def test_the_limit_counts_characters_not_columns():
+    # An emoji is one character here, however many columns Tk gives it.
+    line = EMOJI * 5 + " reading"
+    assert tk_spans(line, astral_width=2, max_line=len(line)) != []
+    assert tk_spans(line, astral_width=2, max_line=len(line) - 1) == []
 
-def test_two_lines_joined_into_one_give_the_joined_line():
-    assert changed_lines(["a", "b", "c"], ["ab", "c"]) == (0, 1)
+def test_the_default_limit_is_the_one_the_widget_uses():
+    assert MAX_BOLD_LINE == 4000
 
-def test_one_line_split_into_two_gives_both_lines():
-    assert changed_lines(["ab", "c"], ["a", "b", "c"]) == (0, 2)
+def test_has_long_line_is_true_when_any_line_is_over_the_limit():
+    assert has_long_line("short\n" + "x" * 11, max_line=10)
+    assert has_long_line("x" * 11 + "\nshort", max_line=10)
 
-def test_everything_replaced_gives_everything():
-    assert changed_lines(["a", "b"], ["x", "y", "z"]) == (0, 3)
+def test_has_long_line_is_false_at_the_limit_and_below():
+    assert not has_long_line("x" * 10, max_line=10)
+    assert not has_long_line("a\nbb\nccc", max_line=10)
 
-def test_a_text_cleared_gives_an_empty_block():
-    assert changed_lines(["a", "b"], []) == (0, 0)
+def test_has_long_line_on_an_empty_text():
+    assert not has_long_line("")
 
-def test_a_text_filled_from_nothing_gives_every_line():
-    assert changed_lines([], ["a", "b"]) == (0, 2)
+def test_has_long_line_uses_the_default_limit():
+    assert not has_long_line("x" * MAX_BOLD_LINE)
+    assert has_long_line("x" * (MAX_BOLD_LINE + 1))
 
-def test_two_edits_far_apart_give_one_block_covering_both():
-    old = ["a", "b", "c", "d", "e"]
-    new = ["X", "b", "c", "d", "Y"]
-    assert changed_lines(old, new) == (0, 5)
-
-def test_repeated_lines_do_not_confuse_it():
-    assert changed_lines(["a", "a", "a"], ["a", "a", "a", "a"]) == (3, 4)
-    assert changed_lines(["a", "a", "a", "a"], ["a", "a", "a"]) == (3, 3)
-    assert changed_lines(["a", "b", "a"], ["a", "b", "b", "a"]) == (2, 3)
-
-def test_blank_lines_are_lines_like_any_other():
-    assert changed_lines(["a", "", "b"], ["a", "", "", "b"]) == (2, 3)
-
-def test_it_does_not_change_the_lists_it_is_given():
-    old, new = ["a", "b", "c"], ["a", "X", "c"]
-    changed_lines(old, new)
-    assert old == ["a", "b", "c"] and new == ["a", "X", "c"]
-
-def test_after_any_single_edit_the_lines_outside_the_block_are_the_old_ones():
-    rng = random.Random(11)
-    pool = ["a", "b", "c", "", "same", "same", "word word"]
-    for _ in range(2000):
-        old = [rng.choice(pool) for _ in range(rng.randint(0, 12))]
-        cut_from = rng.randint(0, len(old))
-        cut_to = rng.randint(cut_from, len(old))
-        inserted = [rng.choice(pool) for _ in range(rng.randint(0, 5))]
-        new = old[:cut_from] + inserted + old[cut_to:]
-        first, end = changed_lines(old, new)
-        assert 0 <= first <= end <= len(new)
-        # Nothing before the block changed, and what follows it is the old tail.
-        assert new[:first] == old[:first]
-        tail = len(new) - end
-        assert new[end:] == old[len(old) - tail:]
-        assert len(old) - tail >= first
-        # The block is no bigger than what was put in.
-        assert first >= cut_from
-        # An inserted line that equals its neighbour can make the block slide by
-        # a line, so only its size is bounded, not its exact place.
-        assert end - first <= len(inserted)
-
-def test_a_block_found_this_way_is_enough_to_rebuild_the_new_text_from_the_old():
-    rng = random.Random(3)
-    pool = ["a", "b", "", "same", "word word", "x"]
-    for _ in range(2000):
-        old = [rng.choice(pool) for _ in range(rng.randint(0, 10))]
-        new = [rng.choice(pool) for _ in range(rng.randint(0, 10))]
-        first, end = changed_lines(old, new)
-        tail = len(new) - end
-        assert old[:first] + new[first:end] + old[len(old) - tail:] == new
+def test_has_long_line_agrees_with_which_lines_tk_spans_skips():
+    # A line with letters in it loses its spans exactly when it is over the
+    # limit, and has_long_line says so when any line does.
+    for text in ("hello world", "hello world\n" + "word " * 20, "", "a" * 25, "ab cd\n\n" + "x " * 30):
+        for limit in (0, 5, 11, 50):
+            with_limit = {line for line, _, _ in tk_spans(text, max_line=limit)}
+            without = {line for line, _, _ in tk_spans(text)}
+            lengths = {n: len(line) for n, line in enumerate(text.split("\n"), 1)}
+            for number in without:
+                assert (number not in with_limit) == (lengths[number] > limit), (text, limit, number)
+            assert has_long_line(text, limit) == any(length > limit for length in lengths.values())

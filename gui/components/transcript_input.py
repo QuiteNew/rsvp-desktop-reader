@@ -2,7 +2,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from core.bold_spans import tk_spans
+from core.bold_spans import MAX_BOLD_LINE, has_long_line, tk_spans
 from core.font_choice import bold_family
 from core.normalizer import can_revert, toggle_normalization
 from gui.icons import bold_starts_icon, normalize_icon, revert_icon
@@ -10,6 +10,11 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_BODY
 
 # The Tk text tag that draws the start of every word in bold.
 BOLD_TAG = "bold_starts"
+
+# What the feedback label says when a line was too long to be bolded, see
+# core/bold_spans.py for why there is a limit. Short, since it has to fit beside
+# Start reading in the narrow detached window.
+LONG_LINES_NOTE = "Long lines stay plain"
 
 # How many bold stretches go into one tag_add call. A book has a great many of
 # them, and a few hundred small calls are quicker than one enormous one.
@@ -37,21 +42,36 @@ def _tk_astral_width(widget) -> int:
 
 
 class _EditBox(ctk.CTkTextbox):
-    """The edit box, with one extra: it says so when its font changes.
+    """The edit box, with two extras: it says so when its font changes, and it
+    says which lines were edited.
 
-    CustomTkinter hands the inner Text widget a new font whenever the display
-    scaling changes (the window moved to another monitor, say) or the font is
-    reconfigured, and it does that in exactly these two methods. The bold word
+    The font. CustomTkinter hands the inner Text widget a new font whenever the
+    display scaling changes (the window moved to another monitor, say) or the
+    font is reconfigured, and it does that in exactly two methods. The bold word
     starts are a tag with a font of its own, which would be left at the old size
     without being told, so the owner passes on_font_changed to hear about it.
     Tk sends no event for this: the inner Text is not resized when only its font
-    is, so a <Configure> binding would never fire."""
+    is, so a <Configure> binding would never fire.
 
-    def __init__(self, *args, on_font_changed=None, **kwargs):
+    The edits. Typing, pasting and cutting do not go through any Python method:
+    Tk's own key bindings call the Text widget's command directly. So the
+    command is put behind a small forwarder (the same trick Python's IDLE editor
+    uses): every call passes through it, unchanged, and when it is an insert, a
+    delete or a replace, on_edited(first, last) is called afterwards with the
+    first and last line the edit touched, counted from 1. When the lines cannot
+    be worked out it is called with (None, None), which means anything may have
+    changed. Comparing the text before and after instead is not enough: Tk keeps
+    a tag with the characters it was put on, so when new text pushes old text
+    down a line, the old line has not changed and yet its tag has moved away."""
+
+    def __init__(self, *args, on_font_changed=None, on_edited=None, **kwargs):
         # Set before anything else, since CustomTkinter can already call the
         # methods below while the widget is being built.
         self._on_font_changed = on_font_changed
+        self._on_edited = on_edited
+        self._tk_original = None
         super().__init__(*args, **kwargs)
+        self._watch_edits()
 
     def _set_scaling(self, *args, **kwargs):
         super()._set_scaling(*args, **kwargs)
@@ -64,6 +84,74 @@ class _EditBox(ctk.CTkTextbox):
     def _tell_font_changed(self):
         if self._on_font_changed is not None:
             self._on_font_changed()
+
+    def _watch_edits(self) -> None:
+        """Put the forwarder in front of the Text widget's own command. The real
+        command is renamed out of the way and called from _forward_to_tk."""
+        inner = self._textbox
+        name = str(inner)
+        self._tk_original = name + "_original"
+        inner.tk.call("rename", name, self._tk_original)
+        inner.tk.createcommand(name, self._forward_to_tk)
+
+    def _unwatch_edits(self) -> None:
+        """Take the forwarder out again and give the real command its name back."""
+        original, self._tk_original = self._tk_original, None
+        if original is None:
+            return
+        name = str(self._textbox)
+        try:
+            self.tk.call("rename", name, "")
+            self.tk.call("rename", original, name)
+        except tk.TclError:
+            pass
+
+    def destroy(self):
+        self._unwatch_edits()
+        super().destroy()
+
+    def _forward_to_tk(self, *args):
+        """Every call to the Text widget lands here first. It is passed on as it
+        is, and its result or its error comes back to the caller untouched. An
+        edit is reported to on_edited once it has been done."""
+        edited = self._on_edited is not None and self._edit_lines(args)
+        result = self.tk.call((self._tk_original,) + args)
+        if edited:
+            self._on_edited(*edited)
+        return result
+
+    def _edit_lines(self, args):
+        """For a call that changes the text: the (first, last) line it touches,
+        as they will be numbered once it is done. (None, None) when that cannot
+        be told, and False for a call that does not change the text. Worked out
+        before the call, while indexes like "insert" still mean what they meant.
+        Undo and redo need no case of their own: Tk carries them out by running
+        ordinary inserts and deletes through the widget command."""
+        command = args[0] if args else ""
+        if command == "insert":
+            index, new_text = args[1], args[2::2]
+        elif command == "replace":
+            index, new_text = args[1], args[3::2]
+        elif command == "delete":
+            if len(args) > 3:
+                # Several ranges in one call: Tk's own bindings never do this.
+                return (None, None)
+            index, new_text = args[1], ()
+        else:
+            return False
+        try:
+            line = self._line_of(index)
+        except tk.TclError:
+            # A bad index: the call itself will fail with the proper message.
+            return False
+        return line, line + sum(str(piece).count("\n") for piece in new_text)
+
+    def _line_of(self, index) -> int:
+        """The line an index points at. An index past the end, as "end" is,
+        means the last line, which is where Tk puts text sent there."""
+        original = self._tk_original
+        line = int(str(self.tk.call(original, "index", index)).split(".")[0])
+        return min(line, int(str(self.tk.call(original, "index", "end-1c")).split(".")[0]))
 
 
 class TranscriptInput(ctk.CTkFrame):
@@ -86,8 +174,11 @@ class TranscriptInput(ctk.CTkFrame):
     in bold, or stops again. It only changes how the text looks: the text is
     never touched, so saving, Start reading and Normalize's revert check all
     see the same words as before. The bold is a Tk tag laid over the text (see
-    core/bold_spans.py and core/bold_starts.py for where it goes). Whoever owns
-    this widget passes the starting state in and is told about each click
+    core/bold_spans.py and core/bold_starts.py for where it goes). Typing,
+    pasting or deleting bolds again just the lines that were touched (see
+    _EditBox for how they are found), so the look keeps up with the text
+    without redoing all of it. Whoever owns this
+    widget passes the starting state in and is told about each click
     through on_bold_starts_toggled; set_bold_starts() is how it changes the
     state from outside, for instance to keep several edit boxes in step.
 
@@ -110,6 +201,10 @@ class TranscriptInput(ctk.CTkFrame):
         self.on_detach_selection = on_detach_selection
         self.on_bold_starts_toggled = on_bold_starts_toggled
         self._bold_starts = bold_starts
+        # True while the text is being replaced in one go (see set_text and the
+        # start of __init__), so those edits are not bolded line by line just
+        # before the whole text is bolded at once.
+        self._edits_paused = True
         self._pre_normalize_text = ""
         self._normalized_text = ""
         self._feedback_after_id = None
@@ -124,7 +219,10 @@ class TranscriptInput(ctk.CTkFrame):
         self._outside_click_bound = False
         self._escape_bound = False
 
-        self.textbox = _EditBox(self, width=500, height=250, on_font_changed=self._handle_font_changed)
+        self.textbox = _EditBox(
+            self, width=500, height=250,
+            on_font_changed=self._handle_font_changed, on_edited=self._handle_edited_lines,
+        )
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
         if initial_text:
             self.textbox.insert("1.0", initial_text)
@@ -199,6 +297,7 @@ class TranscriptInput(ctk.CTkFrame):
         )
         self.feedback_label.grid(row=0, column=2, sticky="e")
 
+        self._edits_paused = False
         self._refresh_bold_starts()
 
     def get_text(self) -> str:
@@ -207,9 +306,13 @@ class TranscriptInput(ctk.CTkFrame):
 
     def set_text(self, text: str) -> None:
         """Replace the textbox's contents."""
-        self.textbox.delete("1.0", "end")
-        if text:
-            self.textbox.insert("1.0", text)
+        self._edits_paused = True
+        try:
+            self.textbox.delete("1.0", "end")
+            if text:
+                self.textbox.insert("1.0", text)
+        finally:
+            self._edits_paused = False
         # Reset the modified flag after a programmatic replace, for the same
         # reason as in __init__: keep the <<Modified>> handler live for the
         # next real edit. The icon itself is refreshed directly just below.
@@ -271,7 +374,38 @@ class TranscriptInput(ctk.CTkFrame):
         if not self._bold_starts:
             return
         self._sync_bold_font()
-        spans = tk_spans(inner.get("1.0", "end-1c"), _tk_astral_width(self))
+        self._bold_text(inner, inner.get("1.0", "end-1c"), 1)
+
+    def _handle_edited_lines(self, first, last) -> None:
+        """The edit box says lines first to last (from 1) were just edited, or
+        None when it cannot say which. Bold those lines again. The bold of a
+        line depends on nothing but that line, so every other line keeps the tag
+        it has, whether the edit was a typed letter, a paste of several lines or
+        a join of two lines."""
+        if not self._bold_starts or self._edits_paused:
+            return
+        if first is None:
+            self._apply_bold_starts()
+            return
+        inner = self._inner_text()
+        if inner is None:
+            return
+        end = f"{last}.end"
+        inner.tag_remove(BOLD_TAG, f"{first}.0", end)
+        self._bold_text(inner, inner.get(f"{first}.0", end), first)
+
+    def _bold_text(self, inner, text: str, first_line: int) -> None:
+        """Bold the word starts of `text`, which is the lines of the edit box
+        from first_line on. Lines over the limit are left plain, and the label
+        says so, so it does not look like the button did nothing."""
+        spans = tk_spans(text, _tk_astral_width(self), first_line, MAX_BOLD_LINE)
+        self._add_bold_tags(inner, spans)
+        if has_long_line(text, MAX_BOLD_LINE):
+            self._show_feedback(LONG_LINES_NOTE)
+
+    @staticmethod
+    def _add_bold_tags(inner, spans) -> None:
+        """Lay the bold tag over (line, start, end) stretches, a batch at a time."""
         for first in range(0, len(spans), _TAG_BATCH):
             places = []
             for line, start, end in spans[first:first + _TAG_BATCH]:
@@ -332,7 +466,11 @@ class TranscriptInput(ctk.CTkFrame):
         self._refresh_normalize_button()
 
     def _refresh_normalize_button(self) -> None:
-        if can_revert(self.get_text(), self._pre_normalize_text, self._normalized_text):
+        # Nothing to revert until something has been normalized. Checking that
+        # first spares reading the whole text on every edit, which is slow in a
+        # long text once the bold word starts are on (Tk puts the text together
+        # from a great many pieces then).
+        if self._pre_normalize_text and can_revert(self.get_text(), self._pre_normalize_text, self._normalized_text):
             self.normalize_button.configure(image=self._revert_image)
         else:
             self.normalize_button.configure(image=self._normalize_image)

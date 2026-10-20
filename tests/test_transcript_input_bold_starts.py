@@ -25,6 +25,11 @@ def root():
         pytest.skip("no display available for Tk")
     window.withdraw()
     yield window
+    # CustomTkinter keeps a few timers going on its windows, and a destroyed app
+    # leaves the next round of them pending. They would run during the next test
+    # module and report errors about a destroyed app, so cancel them first.
+    for timer in window.tk.splitlist(window.tk.call("after", "info")):
+        window.after_cancel(timer)
     window.destroy()
 
 
@@ -338,8 +343,9 @@ def test_building_a_box_that_starts_out_on_does_not_crash(root):
 
 # ---- the "Nothing to change" label ----
 
+@pytest.mark.parametrize("message", ["Nothing to change", "Long lines stay plain"])
 @pytest.mark.parametrize("scale", [1.0, 2.0])
-def test_the_label_does_not_run_into_the_buttons_in_the_narrow_window(root, scale):
+def test_the_label_does_not_run_into_the_buttons_in_the_narrow_window(root, scale, message):
     """The detached window is 500px wide, and Start reading is wider than the
     two buttons. With the label beside the buttons it would run into Start
     reading; at the right-hand end of the row it must not touch anything."""
@@ -348,7 +354,7 @@ def test_the_label_does_not_run_into_the_buttons_in_the_narrow_window(root, scal
     top = None
     try:
         top, box = shown_box(root, 500, 350, initial_text="hello")
-        box.feedback_label.configure(text="Nothing to change")
+        box.feedback_label.configure(text=message)
         top.update()
         label = box.feedback_label
         assert label.winfo_width() > 1
