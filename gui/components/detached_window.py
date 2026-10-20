@@ -17,6 +17,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
         on_session_stats=None, on_normalization_changed=None,
         on_add_bookmark=None, on_remove_bookmark=None, on_rename_bookmark=None,
+        on_bold_starts_toggled=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
@@ -27,6 +28,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         scrub_pause_enabled: bool = True,
         peripheral_context_enabled: bool = False,
         letter_spacing_level: int = 0,
+        bold_starts_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -100,6 +102,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.input_view = TranscriptInput(
             self, on_submit=self._handle_text_submitted, initial_text=initial_draft_text,
             on_normalized=self._handle_normalized, split_long_paragraphs=split_long_paragraphs_enabled,
+            bold_starts=bold_starts_enabled, on_bold_starts_toggled=on_bold_starts_toggled,
         )
         self.reader_display = ReaderDisplay(
             self,
@@ -159,6 +162,9 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def set_split_long_paragraphs_enabled(self, enabled: bool) -> None:
         self.split_long_paragraphs_enabled = enabled
         self.input_view.set_split_long_paragraphs(enabled)
+
+    def set_bold_starts_enabled(self, enabled: bool) -> None:
+        self.input_view.set_bold_starts(enabled)
 
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self.reader_display.set_resume_rewind(enabled, words)

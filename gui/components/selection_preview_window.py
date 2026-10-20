@@ -30,7 +30,10 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
     Its styling (WPM, colours, font, guide mark) is a snapshot of the
     transcript's settings at the moment it opened. Later Settings changes
     in the main app don't flow into an already-open preview, which keeps
-    these throwaway windows simple and self-contained."""
+    these throwaway windows simple and self-contained. The bold word starts
+    in its edit box are the same: it opens with the look the app has at that
+    moment, and its own button changes only this window, so it is neither
+    saved nor passed on to the other windows."""
 
     WIDTH = 500
     HEIGHT = 350
@@ -49,6 +52,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         scrub_pause_enabled: bool = True,
         peripheral_context_enabled: bool = False,
         letter_spacing_level: int = 0,
+        bold_starts_enabled: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
         guide_mark_thickness_px: int = 2,
@@ -115,6 +119,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.input_view = TranscriptInput(
             self, on_submit=self._start_reading, initial_text=text,
             split_long_paragraphs=split_long_paragraphs_enabled,
+            bold_starts=bold_starts_enabled,
         )
 
         # No persistence callbacks: this preview never writes to the store.

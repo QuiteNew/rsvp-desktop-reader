@@ -22,6 +22,7 @@ class Canvas(ctk.CTkFrame):
         on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
         on_stopped_changed=None, on_session_stats=None, on_normalization_changed=None,
         on_add_bookmark=None, on_remove_bookmark=None, on_rename_bookmark=None,
+        on_bold_starts_toggled=None,
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
@@ -36,6 +37,7 @@ class Canvas(ctk.CTkFrame):
         scrub_pause_enabled: bool = True,
         peripheral_context_enabled: bool = False,
         letter_spacing_level: int = 0,
+        bold_starts_enabled: bool = False,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -49,6 +51,7 @@ class Canvas(ctk.CTkFrame):
         self.on_add_bookmark = on_add_bookmark
         self.on_remove_bookmark = on_remove_bookmark
         self.on_rename_bookmark = on_rename_bookmark
+        self.on_bold_starts_toggled = on_bold_starts_toggled
         self._skip_word_count = skip_word_count
         self._pause_on_skip = pause_on_skip
         self._highlight_offset_px = highlight_offset_px
@@ -64,6 +67,7 @@ class Canvas(ctk.CTkFrame):
         self._scrub_pause_enabled = scrub_pause_enabled
         self._peripheral_context_enabled = peripheral_context_enabled
         self._letter_spacing_level = letter_spacing_level
+        self._bold_starts_enabled = bold_starts_enabled
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -120,6 +124,8 @@ class Canvas(ctk.CTkFrame):
             split_long_paragraphs=self._split_long_paragraphs_enabled,
             on_play_selection=self._handle_play_selection,
             on_detach_selection=self._handle_detach_selection,
+            bold_starts=self._bold_starts_enabled,
+            on_bold_starts_toggled=self._handle_bold_starts_toggled,
         )
         self.reader_display = ReaderDisplay(
             self.content_area,
@@ -347,6 +353,18 @@ class Canvas(ctk.CTkFrame):
         # their other styling (see open_selection_preview), so they aren't
         # updated here.
 
+    def set_bold_starts_enabled(self, enabled: bool) -> None:
+        """Show or stop showing the bold word starts in the main edit box and
+        in the detached window's. Neither reports back to on_bold_starts_toggled
+        for this, which is only for a click."""
+        self._bold_starts_enabled = enabled
+        self.input_view.set_bold_starts(enabled)
+        if self._detached_window:
+            self._detached_window.set_bold_starts_enabled(enabled)
+        # Open selection previews snapshot the look at open time and keep
+        # their own button, like their other styling (see
+        # open_selection_preview), so they aren't updated here.
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         self._resume_rewind_enabled = enabled
         self._resume_rewind_words = words
@@ -403,6 +421,14 @@ class Canvas(ctk.CTkFrame):
         if self.on_normalization_changed and self.current_transcript:
             self.on_normalization_changed(self.current_transcript, result)
 
+    def _handle_bold_starts_toggled(self, enabled: bool) -> None:
+        """The bold word starts button was clicked, in the main edit box or in
+        the detached window's. It is one setting for both, so the other one
+        follows, and the owner is told so it can save it."""
+        self.set_bold_starts_enabled(enabled)
+        if self.on_bold_starts_toggled:
+            self.on_bold_starts_toggled(enabled)
+
     def _handle_play_selection(self, text: str) -> None:
         self.play_selection(text)
 
@@ -444,6 +470,7 @@ class Canvas(ctk.CTkFrame):
             scrub_pause_enabled=self._scrub_pause_enabled,
             peripheral_context_enabled=self._peripheral_context_enabled,
             letter_spacing_level=self._letter_spacing_level,
+            bold_starts_enabled=self._bold_starts_enabled,
             highlight_offset_px=self._highlight_offset_px,
             guide_mark_horizontal_enabled=self._guide_mark_horizontal_enabled,
             guide_mark_thickness_px=self._guide_mark_thickness_px,
@@ -822,6 +849,8 @@ class Canvas(ctk.CTkFrame):
             scrub_pause_enabled=self._scrub_pause_enabled,
             peripheral_context_enabled=self._peripheral_context_enabled,
             letter_spacing_level=self._letter_spacing_level,
+            bold_starts_enabled=self._bold_starts_enabled,
+            on_bold_starts_toggled=self._handle_bold_starts_toggled,
         )
         self._show_detached_placeholder()
 

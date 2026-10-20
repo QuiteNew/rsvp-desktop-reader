@@ -10,6 +10,10 @@ TranscriptStore() in any test (today or later) stays off your real data.
 It deliberately leaves core.storage.DEFAULT_DATA_DIR itself untouched, so
 test_storage.py's check that the default sits under the home directory still
 sees the real value.
+
+It also holds fresh_widget_image_caches, which a test module that builds the
+toolbar (so, a Canvas or the whole app) asks for when it makes a Tk root of its
+own. See that fixture for why.
 """
 import pytest
 
@@ -43,3 +47,34 @@ def _never_touch_real_user_data(tmp_path_factory):
     finally:
         for mod, name, value in originals:
             setattr(mod, name, value)
+
+
+def _forget_cached_widget_images() -> None:
+    """Empty the module-level caches that hold a picture made for one Tk root."""
+    from gui import theme
+    from gui.components import canvas_toolbar
+
+    canvas_toolbar._BOOKMARK_IMAGE = None
+    theme._icon_photo_image = None
+
+
+@pytest.fixture(scope="module")
+def fresh_widget_image_caches():
+    """For a test module that makes its own Tk root and builds the toolbar.
+
+    The toolbar's bookmark picture (and, off Windows, the window icon) is made
+    once and kept in a module-level variable, and a picture belongs to the Tk
+    root that was running when it was made. A second root in the same process
+    then fails with "image pyimageN doesn't exist" the moment it builds a toolbar,
+    and a root that is gone leaves its picture behind for the next module to trip
+    over. test_gui_smoke.py avoids it by sharing one root for the whole module.
+    A module that cannot share that root empties the caches here, before its own
+    root is made and again after it is destroyed. Only the modules that ask for
+    it are affected.
+
+    What the fixture hands back is the function that empties them, for a module
+    that makes more than one root in turn (a fixture with several parameters):
+    call it before each new root is made and after each one is destroyed."""
+    _forget_cached_widget_images()
+    yield _forget_cached_widget_images
+    _forget_cached_widget_images()
