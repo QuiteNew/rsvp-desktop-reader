@@ -2,9 +2,68 @@ import tkinter as tk
 
 import customtkinter as ctk
 
+from core.bold_spans import tk_spans
+from core.font_choice import bold_family
 from core.normalizer import can_revert, toggle_normalization
-from gui.icons import normalize_icon, revert_icon
+from gui.icons import bold_starts_icon, normalize_icon, revert_icon
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_BODY
+
+# The Tk text tag that draws the start of every word in bold.
+BOLD_TAG = "bold_starts"
+
+# How many bold stretches go into one tag_add call. A book has a great many of
+# them, and a few hundred small calls are quicker than one enormous one.
+_TAG_BATCH = 500
+
+# How many columns this Tk gives a character outside the Basic Multilingual
+# Plane (an emoji). Found out the first time it is needed, see _tk_astral_width.
+_astral_width = None
+
+
+def _tk_astral_width(widget) -> int:
+    """How many columns Tk counts an emoji as: 2 in Tk 8.6, which is what
+    Python 3.13 on Windows ships, and 1 in Tk 9. Asked of a throwaway Text widget
+    once and remembered, since it is the same for every widget in the process.
+    Guessing from the version number would be shakier than just looking."""
+    global _astral_width
+    if _astral_width is None:
+        probe = tk.Text(widget)
+        try:
+            probe.insert("1.0", chr(0x1F600))
+            _astral_width = max(1, int(probe.index("1.end").split(".")[1]))
+        finally:
+            probe.destroy()
+    return _astral_width
+
+
+class _EditBox(ctk.CTkTextbox):
+    """The edit box, with one extra: it says so when its font changes.
+
+    CustomTkinter hands the inner Text widget a new font whenever the display
+    scaling changes (the window moved to another monitor, say) or the font is
+    reconfigured, and it does that in exactly these two methods. The bold word
+    starts are a tag with a font of its own, which would be left at the old size
+    without being told, so the owner passes on_font_changed to hear about it.
+    Tk sends no event for this: the inner Text is not resized when only its font
+    is, so a <Configure> binding would never fire."""
+
+    def __init__(self, *args, on_font_changed=None, **kwargs):
+        # Set before anything else, since CustomTkinter can already call the
+        # methods below while the widget is being built.
+        self._on_font_changed = on_font_changed
+        super().__init__(*args, **kwargs)
+
+    def _set_scaling(self, *args, **kwargs):
+        super()._set_scaling(*args, **kwargs)
+        self._tell_font_changed()
+
+    def _update_font(self):
+        super()._update_font()
+        self._tell_font_changed()
+
+    def _tell_font_changed(self):
+        if self._on_font_changed is not None:
+            self._on_font_changed()
 
 
 class TranscriptInput(ctk.CTkFrame):
@@ -19,8 +78,18 @@ class TranscriptInput(ctk.CTkFrame):
     that in with set_normalization() and saves the result of each click
     through on_normalized.
 
-    A click that finds nothing to change shows "Nothing to change" beside
-    the button for a moment, so it doesn't look like the click was lost.
+    A click that finds nothing to change shows "Nothing to change" at the
+    right-hand end of the button row for a moment, so it doesn't look like the
+    click was lost.
+
+    The button next to Normalize draws the start of every word in the edit box
+    in bold, or stops again. It only changes how the text looks: the text is
+    never touched, so saving, Start reading and Normalize's revert check all
+    see the same words as before. The bold is a Tk tag laid over the text (see
+    core/bold_spans.py and core/bold_starts.py for where it goes). Whoever owns
+    this widget passes the starting state in and is told about each click
+    through on_bold_starts_toggled; set_bold_starts() is how it changes the
+    state from outside, for instance to keep several edit boxes in step.
 
     Whether a click also splits long paragraphs is a global Settings
     toggle, passed in and kept current through set_split_long_paragraphs().
@@ -33,12 +102,14 @@ class TranscriptInput(ctk.CTkFrame):
 
     FEEDBACK_MS = 2000
 
-    def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None, split_long_paragraphs: bool = False, on_play_selection=None, on_detach_selection=None):
+    def __init__(self, master, on_submit, initial_text: str = "", on_normalized=None, split_long_paragraphs: bool = False, on_play_selection=None, on_detach_selection=None, bold_starts: bool = False, on_bold_starts_toggled=None):
         super().__init__(master, fg_color="transparent")
         self.on_submit = on_submit
         self.on_normalized = on_normalized
         self.on_play_selection = on_play_selection
         self.on_detach_selection = on_detach_selection
+        self.on_bold_starts_toggled = on_bold_starts_toggled
+        self._bold_starts = bold_starts
         self._pre_normalize_text = ""
         self._normalized_text = ""
         self._feedback_after_id = None
@@ -53,7 +124,7 @@ class TranscriptInput(ctk.CTkFrame):
         self._outside_click_bound = False
         self._escape_bound = False
 
-        self.textbox = ctk.CTkTextbox(self, width=500, height=250)
+        self.textbox = _EditBox(self, width=500, height=250, on_font_changed=self._handle_font_changed)
         self.textbox.pack(padx=20, pady=20, fill="both", expand=True)
         if initial_text:
             self.textbox.insert("1.0", initial_text)
@@ -77,10 +148,10 @@ class TranscriptInput(ctk.CTkFrame):
         if inner_textbox is not None:
             inner_textbox.bind("<Button-3>", self._show_selection_menu)
 
-        # Three columns: Normalize at the far left, lined up with the text
-        # box's left edge, and Start reading in the middle. uniform keeps
-        # the two outer columns the same width, so Start reading stays
-        # truly centered however wide the window is.
+        # Three columns: Normalize and the bold word starts button at the far
+        # left, lined up with the text box's left edge, and Start reading in
+        # the middle. uniform keeps the two outer columns the same width, so
+        # Start reading stays truly centered however wide the window is.
         #
         # The Normalize button is 36x28 with Start reading's rounded
         # corners. CTkButton pads its content by the corner radius (6px)
@@ -108,11 +179,27 @@ class TranscriptInput(ctk.CTkFrame):
         self.normalize_button._image_label.configure(borderwidth=0, padx=0, pady=0, highlightthickness=0)
         self.normalize_button.grid(row=0, column=0, sticky="w")
 
-        # Shares the button's column, so Start reading stays centered.
+        # The bold word starts button: the same size and colour as Normalize,
+        # with the same treatment of the image label, and 8px to its right. Its
+        # icon is what says whether the look is on, see _refresh_bold_starts.
+        self._bold_off_image = bold_starts_icon(False)
+        self._bold_on_image = bold_starts_icon(True)
+        self.bold_starts_button = ctk.CTkButton(
+            button_row, text="", image=self._bold_off_image, width=36, height=28,
+            command=self._handle_bold_starts_click,
+        )
+        self.bold_starts_button._image_label.configure(borderwidth=0, padx=0, pady=0, highlightthickness=0)
+        self.bold_starts_button.grid(row=0, column=0, sticky="w", padx=(44, 0))
+
+        # At the right-hand end of the row, in the column that mirrors the two
+        # buttons. Beside the buttons there is no room for it any more: in the
+        # 500px detached window it would run into Start reading.
         self.feedback_label = ctk.CTkLabel(
             button_row, text="", text_color="gray50", font=ctk.CTkFont(size=12),
         )
-        self.feedback_label.grid(row=0, column=0, sticky="w", padx=(44, 0))
+        self.feedback_label.grid(row=0, column=2, sticky="e")
+
+        self._refresh_bold_starts()
 
     def get_text(self) -> str:
         """Return whatever's currently typed, submitted or not."""
@@ -128,6 +215,9 @@ class TranscriptInput(ctk.CTkFrame):
         # next real edit. The icon itself is refreshed directly just below.
         self.textbox.edit_modified(False)
         self._refresh_normalize_button()
+        # The replace above wiped the tag along with the old text.
+        if self._bold_starts:
+            self._apply_bold_starts()
 
     def set_normalization(self, pre_normalize_text: str, normalized_text: str) -> None:
         """Take the current transcript's undo information (see
@@ -143,6 +233,66 @@ class TranscriptInput(ctk.CTkFrame):
         core/normalizer.py. Kept in step by whoever owns this widget when
         the Settings toggle changes."""
         self._split_long_paragraphs = enabled
+
+    def set_bold_starts(self, enabled: bool) -> None:
+        """Show or stop showing the start of every word in bold. Does nothing
+        when it is already so. This is how an owner keeps edit boxes in step;
+        it does not call on_bold_starts_toggled, which is only for a click."""
+        enabled = bool(enabled)
+        if enabled == self._bold_starts:
+            return
+        self._bold_starts = enabled
+        self._refresh_bold_starts()
+
+    def _handle_bold_starts_click(self) -> None:
+        self.set_bold_starts(not self._bold_starts)
+        if self.on_bold_starts_toggled:
+            self.on_bold_starts_toggled(self._bold_starts)
+
+    def _refresh_bold_starts(self) -> None:
+        """Match the button's icon and the text to the current state."""
+        image = self._bold_on_image if self._bold_starts else self._bold_off_image
+        self.bold_starts_button.configure(image=image)
+        self._apply_bold_starts()
+
+    def _inner_text(self):
+        """The tkinter Text inside the edit box, or None while it is not built
+        yet. The bold tag lives there because CustomTkinter's own tag_config
+        refuses a font (it could not keep it in step with the scaling)."""
+        return getattr(getattr(self, "textbox", None), "_textbox", None)
+
+    def _apply_bold_starts(self) -> None:
+        """Bold the start of every word in the whole text, or clear the bold when
+        the look is off. Replaces whatever the tag covered before."""
+        inner = self._inner_text()
+        if inner is None:
+            return
+        inner.tag_remove(BOLD_TAG, "1.0", "end")
+        if not self._bold_starts:
+            return
+        self._sync_bold_font()
+        spans = tk_spans(inner.get("1.0", "end-1c"), _tk_astral_width(self))
+        for first in range(0, len(spans), _TAG_BATCH):
+            places = []
+            for line, start, end in spans[first:first + _TAG_BATCH]:
+                places += (f"{line}.{start}", f"{line}.{end}")
+            inner.tag_add(BOLD_TAG, *places)
+
+    def _sync_bold_font(self) -> None:
+        """Give the bold tag the edit box's current font, in bold. The family and
+        the pixel size are read off the font the Text is using right now, so
+        this is also what keeps the tag in step when the scaling changes. A tuple
+        keeps the exact pixel size, where a Tk Font object would round it to
+        points. See bold_family() for the OpenDyslexic case."""
+        inner = self._inner_text()
+        if inner is None or not inner.winfo_exists():
+            return
+        family, size = inner.tk.splitlist(inner.cget("font"))[:2]
+        inner.tag_configure(BOLD_TAG, font=(bold_family(family), int(size), "bold"))
+
+    def _handle_font_changed(self) -> None:
+        if self._bold_starts:
+            self._sync_bold_font()
 
     def _handle_normalize(self) -> None:
         text_before = self.get_text().strip()
