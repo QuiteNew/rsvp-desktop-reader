@@ -95,6 +95,9 @@ class AppSettings:
     letter_spacing_level: int = 0  # global, not per-transcript: extra room between the letters of the flashing
                                     # word. 0 is Off, up to the top of LETTER_SPACING_LEVEL_RANGE. What each level
                                     # means is in core/letter_spacing.py. Applies live, no restart.
+    bold_starts_enabled: bool = False  # global, not per-transcript: draw the start of every word in the edit box in bold.
+                                       # Off by default. It is only a look: it never changes the text, and it is not
+                                       # part of a reading profile. See core/bold_starts.py.
     profiles: list = field(default_factory=list)  # saved reading profiles, each a plain dict with a "name" and a
                                                    # "values" dict (see core/profiles.py). Kept as dicts so
                                                    # they go to settings.json and into export bundles as they
@@ -350,6 +353,13 @@ class SettingsStore:
     def letter_spacing_level(self) -> int:
         return self._settings.letter_spacing_level
 
+    @property
+    def bold_starts_enabled(self) -> bool:
+        # Strictly True, so a settings file with something odd in this spot
+        # ("false" as text, a 1) reads as off, the same care core/font_choice.py
+        # takes with the font switch.
+        return self._settings.bold_starts_enabled is True
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -462,6 +472,10 @@ class SettingsStore:
 
     def set_letter_spacing_level(self, level: int) -> None:
         self._settings.letter_spacing_level = level
+        self._save()
+
+    def set_bold_starts_enabled(self, enabled: bool) -> None:
+        self._settings.bold_starts_enabled = enabled
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:
