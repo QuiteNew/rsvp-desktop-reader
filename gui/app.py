@@ -122,6 +122,7 @@ class RSVPApp(ctk.CTk):
             on_add_bookmark=self._handle_add_bookmark,
             on_remove_bookmark=self._handle_remove_bookmark,
             on_rename_bookmark=self._handle_rename_bookmark,
+            on_bold_starts_toggled=self._handle_bold_starts_toggled,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             highlight_offset_px=self.settings_store.highlight_offset_px,
@@ -137,6 +138,7 @@ class RSVPApp(ctk.CTk):
             scrub_pause_enabled=self.settings_store.scrub_pause_enabled,
             peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
             letter_spacing_level=self.settings_store.letter_spacing_level,
+            bold_starts_enabled=self.settings_store.bold_starts_enabled,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -635,6 +637,13 @@ class RSVPApp(ctk.CTk):
         matching it rather than as an edit."""
         self.store.set_transcript_normalization(transcript.id, result.pre_normalize_text, result.normalized_text)
         self._handle_draft_changed(transcript, result.text)
+
+    def _handle_bold_starts_toggled(self, enabled: bool) -> None:
+        """The bold word starts button was clicked in the main edit box or in
+        the detached window's. Saved straight away so the look is still there
+        next time; the canvas has already changed the other edit box. It is a
+        global setting and not part of a reading profile."""
+        self.settings_store.set_bold_starts_enabled(enabled)
 
     def _handle_wpm_changed(self, wpm: int) -> None:
         if not self._current_transcript:
