@@ -72,6 +72,20 @@ def choose_fonts(dyslexia_font_enabled, present_files: Iterable[str]) -> FontCho
     return replace(STANDARD_FONTS, fell_back=True)
 
 
+def bold_family(family: str) -> str:
+    """The family to draw bold text in, when the plain text is drawn in `family`.
+
+    Nearly every family is its own bold: ask for bold in the same family and the
+    system picks the bold face, or fakes one. OpenDyslexic is the exception. Its
+    Regular file is the family "OpenDyslexic 3" and its Bold file is a different
+    family, "OpenDyslexic3" (see the note on DYSLEXIA_FONTS), so asking for bold
+    in the regular one would get a faked bold instead of the face the font ships
+    with. Names are compared without regard to case, as Windows does."""
+    if family.casefold() == DYSLEXIA_FONTS.body.casefold():
+        return DYSLEXIA_FONTS.heading
+    return family
+
+
 # ---- Notes shown under the Settings switch ----
 
 RESTART_NOTE = (
