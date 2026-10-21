@@ -1,3 +1,4 @@
+import re
 import tkinter as tk
 
 import customtkinter as ctk
@@ -20,9 +21,42 @@ LONG_LINES_NOTE = "Long lines stay plain"
 # them, and a few hundred small calls are quicker than one enormous one.
 _TAG_BATCH = 500
 
+# The body of the Tcl procedure that stands in front of the edit box's Text
+# command, see _EditBox._watch_edits for why it is Tcl and not Python. The @...@
+# words are filled in with the real command names. An insert, a delete or a
+# replace first asks @BEFORE@ which lines it will touch, runs the real command,
+# and only if that worked tells @AFTER@. Whatever the real command answers, a
+# result or an error, is handed back exactly as it came. (The level is raised by
+# one first because catch reports 0, which would make return carry on to the
+# last line instead of leaving.) Every other call is passed straight on.
+_FORWARDER_BODY = """
+switch -exact -- [lindex $args 0] {
+    insert - delete - replace {
+        set span [@BEFORE@ {*}$args]
+        set code [catch {@ORIG@ {*}$args} result options]
+        if {$code == 0 && $span ne {}} {
+            @AFTER@ {*}$span
+        }
+        dict incr options -level
+        return -options $options $result
+    }
+}
+tailcall @ORIG@ {*}$args
+"""
+
 # How many columns this Tk gives a character outside the Basic Multilingual
 # Plane (an emoji). Found out the first time it is needed, see _tk_astral_width.
 _astral_width = None
+
+
+def _tcl_word(text: str) -> str:
+    """text as a single word of a Tcl script. The names it is used for here, a
+    widget's path and the commands tkinter registers, are made of letters, digits
+    and . ! _ only, which Tcl takes exactly as they are. Anything else would need
+    quoting, and is refused rather than guessed at."""
+    if not re.fullmatch(r"[\w.!]+", text):
+        raise ValueError(f"not safe to use as a Tcl command name: {text!r}")
+    return text
 
 
 def _tk_astral_width(widget) -> int:
@@ -55,7 +89,7 @@ class _EditBox(ctk.CTkTextbox):
 
     The edits. Typing, pasting and cutting do not go through any Python method:
     Tk's own key bindings call the Text widget's command directly. So the
-    command is put behind a small forwarder (the same trick Python's IDLE editor
+    command is put behind a small forwarder (the idea Python's IDLE editor
     uses): every call passes through it, unchanged, and when it is an insert, a
     delete or a replace, on_edited(first, last) is called afterwards with the
     first and last line the edit touched, counted from 1. When the lines cannot
@@ -87,12 +121,32 @@ class _EditBox(ctk.CTkTextbox):
 
     def _watch_edits(self) -> None:
         """Put the forwarder in front of the Text widget's own command. The real
-        command is renamed out of the way and called from _forward_to_tk."""
+        command is renamed out of the way, and a small Tcl procedure (see
+        _FORWARDER_BODY) takes over its name.
+
+        The forwarder is Tcl and not a Python function on purpose. Tk's own
+        bindings call the widget command inside a Tcl catch where an error is
+        part of the plan: copy and cut with nothing selected, and paste on
+        Windows, which first tries to delete the selection. A Python command that
+        raised there would be caught by Tcl, but tkinter still remembers the
+        exception and raises it again out of mainloop(), which closed the whole
+        app. As a Tcl procedure every error goes back to the caller untouched, as
+        it does on a plain Text widget. Only the two small Python hooks below are
+        called, and register() wraps them so that they cannot raise into Tcl."""
         inner = self._textbox
         name = str(inner)
-        self._tk_original = name + "_original"
-        inner.tk.call("rename", name, self._tk_original)
-        inner.tk.createcommand(name, self._forward_to_tk)
+        original = name + "_original"
+        words = {
+            "@ORIG@": original,
+            "@BEFORE@": self.register(self._before_edit),
+            "@AFTER@": self.register(self._after_edit),
+        }
+        body = _FORWARDER_BODY
+        for placeholder, word in words.items():
+            body = body.replace(placeholder, _tcl_word(word))
+        self._tk_original = original
+        inner.tk.call("rename", name, original)
+        inner.tk.call("proc", name, "args", body)
 
     def _unwatch_edits(self) -> None:
         """Take the forwarder out again and give the real command its name back."""
@@ -110,15 +164,22 @@ class _EditBox(ctk.CTkTextbox):
         self._unwatch_edits()
         super().destroy()
 
-    def _forward_to_tk(self, *args):
-        """Every call to the Text widget lands here first. It is passed on as it
-        is, and its result or its error comes back to the caller untouched. An
-        edit is reported to on_edited once it has been done."""
-        edited = self._on_edited is not None and self._edit_lines(args)
-        result = self.tk.call((self._tk_original,) + args)
-        if edited:
-            self._on_edited(*edited)
-        return result
+    def _before_edit(self, *args):
+        """Called by the forwarder before an insert, a delete or a replace. The
+        lines it will touch as Tcl text, "first last" with "none" for a line that
+        cannot be told, or an empty string when there is nothing to report."""
+        if self._on_edited is None:
+            return ""
+        edited = self._edit_lines(args)
+        if not edited:
+            return ""
+        return " ".join("none" if line is None else str(line) for line in edited)
+
+    def _after_edit(self, first, last):
+        """Called by the forwarder once the edit has gone through."""
+        if self._on_edited is None:
+            return
+        self._on_edited(*(None if line == "none" else int(line) for line in (first, last)))
 
     def _edit_lines(self, args):
         """For a call that changes the text: the (first, last) line it touches,
