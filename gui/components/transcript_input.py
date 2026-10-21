@@ -6,7 +6,9 @@ import customtkinter as ctk
 from core.bold_spans import MAX_BOLD_LINE, has_long_line, tk_spans
 from core.font_choice import bold_family
 from core.normalizer import can_revert, toggle_normalization
+from core.rich_copy import cf_html, segments_text
 from gui.icons import bold_starts_icon, normalize_icon, revert_icon
+from gui.rich_clipboard import copy_rich
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_BODY
 
 # The Tk text tag that draws the start of every word in bold.
@@ -16,6 +18,11 @@ BOLD_TAG = "bold_starts"
 # core/bold_spans.py for why there is a limit. Short, since it has to fit beside
 # Start reading in the narrow detached window.
 LONG_LINES_NOTE = "Long lines stay plain"
+
+# What the feedback label says after Copy with bold in the right-click menu. When
+# the bold could not go along, the words are still copied, and the label says so.
+COPIED_WITH_BOLD = "Copied with bold"
+COPIED_PLAIN = "Copied without bold"
 
 # How many bold stretches go into one tag_add call. A book has a great many of
 # them, and a few hundred small calls are quicker than one enormous one.
@@ -246,11 +253,16 @@ class TranscriptInput(ctk.CTkFrame):
     Whether a click also splits long paragraphs is a global Settings
     toggle, passed in and kept current through set_split_long_paragraphs().
 
-    Right-clicking a selection in the edit box opens a small Play / Detach
-    context menu (see _show_selection_menu), for running just the
-    highlighted part of the transcript. The owner decides what those do
-    by passing on_play_selection and on_detach_selection; when neither is
-    given, no menu appears."""
+    Right-clicking a selection in the edit box opens a small context menu (see
+    _show_selection_menu). Play and Detach run just the highlighted part of the
+    transcript, and the owner decides what those do by passing
+    on_play_selection and on_detach_selection. Copy with bold is there while the
+    bold look is on. When none of them is on offer, no menu appears.
+
+    With the bold look on, copying a selection (Ctrl+C or that menu entry) puts
+    the bold on the Windows clipboard next to the plain text, so that Word shows
+    it. Notepad and everything else that only reads plain text gets the same
+    words without it. See _copy_with_bold."""
 
     FEEDBACK_MS = 2000
 
@@ -301,11 +313,15 @@ class TranscriptInput(ctk.CTkFrame):
         self.textbox.bind("<<Modified>>", self._handle_text_modified)
 
         # Right-click on a selection offers to Play or Detach just that
-        # part of the transcript. Bound on the underlying tkinter Text,
-        # since that's where the selection and the mouse event live.
+        # part of the transcript, or to copy it with its bold. Bound on the
+        # underlying tkinter Text, since that's where the selection and the
+        # mouse event live.
         inner_textbox = getattr(self.textbox, "_textbox", None)
         if inner_textbox is not None:
             inner_textbox.bind("<Button-3>", self._show_selection_menu)
+            # Ctrl+C. Tk's own copy puts plain text on the clipboard, so with the
+            # bold look on this one goes first and carries the bold along too.
+            inner_textbox.bind("<<Copy>>", self._handle_copy_event)
 
         # Three columns: Normalize and the bold word starts button at the far
         # left, lined up with the text box's left edge, and Start reading in
@@ -552,9 +568,10 @@ class TranscriptInput(ctk.CTkFrame):
 
     def _show_selection_menu(self, event):
         # Only open the menu when text is actually selected and at least
-        # one action is wired up; otherwise a right-click does nothing.
+        # one action is on offer (Play, Detach, or Copy with bold while the
+        # bold look is on); otherwise a right-click does nothing.
         text = self._selected_text()
-        if not text or not (self.on_play_selection or self.on_detach_selection):
+        if not text or not (self.on_play_selection or self.on_detach_selection or self._bold_starts):
             return None
         self._close_selection_menu()
         self._open_selection_menu(text, event.x_root, event.y_root)
@@ -611,6 +628,8 @@ class TranscriptInput(ctk.CTkFrame):
             rows.append(("Play", self._dispatch_play))
         if self.on_detach_selection:
             rows.append(("Detach", self._dispatch_detach))
+        if self._bold_starts:
+            rows.append(("Copy with bold", self._dispatch_copy_with_bold))
         for label, dispatch in rows:
             row = tk.Label(
                 inner, text=label, bg=HEARTH_PAPER, fg=COCOA_INK,
@@ -720,3 +739,70 @@ class TranscriptInput(ctk.CTkFrame):
     def _dispatch_detach(self, text: str) -> None:
         if self.on_detach_selection:
             self.on_detach_selection(text)
+
+    def _selection_pieces(self):
+        """The selected text as (text, is_bold) pieces in reading order, as it is
+        shown right now, or None when nothing is selected. Read off the screen
+        with Tk's dump, which reports where the bold tag starts and stops, so what
+        is copied is exactly what is seen (lines left plain stay plain) and no
+        column has to be turned into a position by hand, which is where an emoji
+        would go wrong. The selection may begin in the middle of a bold stretch,
+        which dump does not report, so that is asked first. Called with the raw
+        Tcl command: tkinter's own dump() groups the answer in Python and takes
+        about twice as long on a long selection."""
+        inner = self._inner_text()
+        if inner is None or not inner.tag_ranges("sel"):
+            return None
+        start, end = str(inner.index("sel.first")), str(inner.index("sel.last"))
+        bold = BOLD_TAG in inner.tag_names(start)
+        pieces = []
+        events = inner.tk.call(str(inner), "dump", "-tag", "-text", start, end)
+        for kind, value in zip(events[0::3], events[1::3]):
+            if kind == "tagon" and value == BOLD_TAG:
+                bold = True
+            elif kind == "tagoff" and value == BOLD_TAG:
+                bold = False
+            elif kind == "text" and value:
+                pieces.append((value, bold))
+        return pieces
+
+    def _copy_with_bold(self) -> bool:
+        """Put the selection on the clipboard as text with its bold, for Word. True
+        when that worked. False when it did not (not on Windows, the clipboard was
+        busy, nothing is selected), and then nothing is promised about the
+        clipboard and the caller copies the plain text the ordinary way."""
+        inner = self._inner_text()
+        try:
+            pieces = self._selection_pieces()
+            if pieces is None:
+                return False
+            plain = inner.get("sel.first", "sel.last")
+        except tk.TclError:
+            return False
+        # The pieces must add up to exactly the text Tk itself would copy. If they
+        # ever did not, a plain copy is safer than a wrong rich one.
+        if segments_text(pieces) != plain:
+            return False
+        return copy_rich(inner.winfo_id(), plain, cf_html(pieces))
+
+    def _handle_copy_event(self, event):
+        # Ctrl+C. With the bold look off, or when the rich copy did not work, this
+        # does nothing and Tk's own plain copy carries on. Cut is left to Tk too:
+        # the text is gone from the box afterwards, so there is nothing to look at.
+        if self._bold_starts and self._copy_with_bold():
+            return "break"
+        return None
+
+    def _dispatch_copy_with_bold(self, text: str) -> None:
+        if self._copy_with_bold():
+            self._show_feedback(COPIED_WITH_BOLD)
+            return
+        # The bold could not go along, so copy the words the ordinary way and say
+        # so. The selection may have changed since the menu opened, so it is read
+        # again, and the text the menu was opened with is the fallback.
+        inner = self._inner_text()
+        if inner is not None and inner.tag_ranges("sel"):
+            text = inner.get("sel.first", "sel.last")
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self._show_feedback(COPIED_PLAIN)
