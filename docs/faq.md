@@ -104,6 +104,45 @@ reverts, as long as you have not edited the box in between. It only changes how
 the text is laid out, never which words get read. Optionally (a setting, off by
 default) it also splits very long walls of text into paragraphs.
 
+### What does the bold button next to Normalize do?
+
+It makes the start of every word in the edit box bold, so each word begins with
+a stronger anchor. Click it again to turn it off. Short words get their first
+letter or two in bold and longer ones up to six, so "hello world" shows as
+**hel**lo **wor**ld. It only changes how the text looks: the words are never
+touched, so saving, **Start reading** and Normalize's undo all work as before,
+and the reader itself is not affected.
+
+The choice is remembered between launches, and it works with the OpenDyslexic
+font too. In the main window and in the window opened by a transcript's
+**Detach** button it is one setting, so a click in either changes both. A window
+that plays or detaches a selection opens with the look the app has at that
+moment, and its own button changes only that window.
+
+A few things are left plain on purpose: web and email addresses, words with a
+digit stuck to them (3rd, H2O), and letters outside the Latin, Cyrillic and
+Greek scripts. Hyphenated words get bold on each part, as in
+**we**ll-**kno**wn. A line longer than about 4,000 characters (roughly 650
+words) stays plain too, because bolding a line that long makes the box slow to
+type in. That usually means text pasted as one huge paragraph. The box says "Long
+lines stay plain" when it happens, and splitting the text into shorter lines
+brings the bold back.
+
+### How do I copy text with its bold into Word?
+
+With the bold look on, select text in the edit box and press **Ctrl+C**, or
+right-click and choose **Copy with bold**. Paste into Word and the bold comes
+along. Word uses its own font and spacing, so only the bold carries over.
+Copying a very large selection, a whole book say, can take a few seconds.
+
+Programs that only take plain text, Notepad for one, get the same words without
+the bold, because a plain-text field has no way to hold it. That is expected and
+not a fault. **Ctrl+X** always cuts plain text, and with the look off a copy is
+the ordinary plain copy. Copying with bold works on Windows; on macOS and Linux
+a copy is plain. After the right-click choice, a short note at the end of the
+button row says "Copied with bold" or, when the bold could not go along,
+"Copied without bold" (the words are copied either way).
+
 ## Reading and controls
 
 ### How do I skip forward or back? I don't see any buttons
@@ -270,6 +309,39 @@ its wider spacing, not the shape of its letters (Marinus and others,
 *Dyslexia*, 2016). Those studies used running text, not words flashed one at a
 time, so how much any of this carries over to an RSVP reader is not known. Try
 the levels by eye, and keep whatever feels comfortable.
+
+### Does bold word starts actually help?
+
+The app does not claim it does. It is an optional look, off by default, for
+people who find it easier to follow. The studies so far do not show a gain in
+speed or understanding, and they did not test RSVP, so they cannot say much
+about this app. Three that used eye trackers:
+
+- Beelders, *Journal of Eye Movement Research*, 2025
+  ([doi:10.3390/jemr18050049](https://doi.org/10.3390/jemr18050049)): 53 adults
+  read at 131.1 words per minute in plain text and 130.8 with bold word starts,
+  and their eyes did not move toward the word starts.
+- Možina and others, *Sage Open*, 2025
+  ([doi:10.1177/21582440251376158](https://doi.org/10.1177/21582440251376158)):
+  114 adults. On screen the bold text took slightly longer to read (37.6
+  against 36.6 seconds per text), and comprehension did not differ overall.
+- Parker and others, *Royal Society Open Science*, 2026, a registered report
+  with 90 skilled readers reading single sentences: the bold pulled the first
+  look toward the start of long words, but reading time and comprehension did
+  not change, and readers rated plain text as more readable.
+
+None of these tested readers with dyslexia or ADHD, so what bold word starts
+does for them is not known. Try it by eye, and keep it only if it feels
+comfortable.
+
+### Is this the same as Bionic Reading?
+
+It is a similar look, but this app is not made by, affiliated with or endorsed
+by the people behind it. "Bionic Reading" is a trademark of BRCG Casutt GmbH,
+and the company says the method is also protected by patents and copyright. The
+app has its own rules for where the bold goes and does not use that company's
+software or name, which is why the feature is called bold word starts. This is
+not legal advice.
 
 ### I switched to Dark theme but my reading colors didn't change
 

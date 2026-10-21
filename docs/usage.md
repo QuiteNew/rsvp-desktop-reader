@@ -130,16 +130,22 @@ text: it removes list markers and page numbers, strips any timestamps that
 slipped through, rejoins lines that were broken mid-sentence, and repairs
 PDF-extraction damage. It is a toggle, clicking it again reverts if you have
 not changed the box, and it does nothing if there is nothing to tidy.
-Normalizing only changes how the text is laid out in the box, never which
-words get read. Optionally (a setting, off by default) it also splits very
-long walls of text into paragraphs at sentence ends.
+Normalizing only changes how the text is laid out in the box, never which words
+get read. Optionally (a setting, off by default) it also splits very long
+walls of text into paragraphs at sentence ends.
+
+Next to Normalize is a small bold button that makes the start of every word
+bold. It is a look for the edit box and does not change the text, see
+[Bold word starts and copying with bold](#bold-word-starts-and-copying-with-bold).
 
 ### Reading just a selection
 
 You do not have to read a whole transcript. Select a portion of text in the
 edit box, right-click it, and choose **Play** to read just that selection, or
 **Detach** to open it in its own window. Selection reading is independent, it
-never changes the transcript's saved text, position, or stats.
+never changes the transcript's saved text, position, or stats. With the bold
+look on, the same menu also offers **Copy with bold**, described under
+[Bold word starts and copying with bold](#bold-word-starts-and-copying-with-bold).
 
 ### Renaming, moving, and deleting
 
@@ -360,6 +366,89 @@ either one helps. The research is mixed, and the studies used running text, not
 words flashed one at a time. The FAQ has the details, under
 [Do the OpenDyslexic font and letter spacing actually help?](faq.md#do-the-opendyslexic-font-and-letter-spacing-actually-help).
 
+## Bold word starts and copying with bold
+
+A small button right next to **Normalize** in the edit box makes the start of
+every word bold, so each word begins with a stronger anchor. Click it again to
+turn it off. It is off by default, and it is a look for the edit box, not a
+setting of the reader: it never shows in the reader or in the surrounding-words
+line, and it is not part of a [reading profile](#profiles).
+
+**What it changes, and what it does not.** Only how the text looks. The words
+themselves are never touched, because the bold is drawn over the text, so
+saving, **Start reading**, the transcript's stored text and Normalize's undo all
+work as before. Typing, pasting or deleting bolds again just the lines you
+touched.
+
+**Where it shows, and how it is remembered.** The button is in every edit view:
+the main window, the window opened by a transcript's **Detach** button, and the
+windows that play or detach a selection.
+
+- The main window and the detached window are one setting. A click in either
+  changes both, it is saved at once, and it is still on the next time you start
+  the app. It is stored as `bold_starts_enabled` (see
+  [Data and export format](data.md)).
+- A window that plays or detaches a selection opens with the look the app has at
+  that moment and has its own button. A click there changes only that window, is
+  not saved, and later changes elsewhere do not reach it.
+- It works with the OpenDyslexic font too: the bold uses that font's bold face.
+
+**Where the bold goes.** A word is a run of letters in the Latin, Cyrillic or
+Greek script, and how much of it is bold depends on its length:
+
+| Letters in the word | Letters in bold |
+| --- | --- |
+| 1 | 1 |
+| 2 | 1 |
+| 3 | 2 |
+| 4 | 2 |
+| 5 | 3 |
+| 6 | 3 |
+| 7 to 10 | 4 |
+| 11 to 14 | 5 |
+| 15 or more | 6 |
+
+In words of seven letters or more the cut can move by up to two letters to land
+between a vowel and a consonant, so it falls at a natural break. "hello world"
+shows as **hel**lo **wor**ld.
+
+- A hyphen, dash, slash, underscore, digit or other punctuation ends a word, so
+  each part of "well-known" is bolded on its own: **we**ll-**kno**wn. An
+  apostrophe between letters stays inside the word, as in "don't".
+- A word with a digit right against it (3rd, H2O, mp3) is left plain, and so are
+  web addresses, email addresses and letters of other scripts (Chinese,
+  Japanese, Arabic, Hebrew, Thai).
+- ALL CAPS and CamelCase count as one word.
+
+**Long lines stay plain.** A line longer than about 4,000 characters (roughly 650
+words) is not bolded, because bolding a line that long makes the box slow to
+type in. The most common cause is text pasted as one huge paragraph, for example
+from a PDF. When it happens the feedback label at the end of the button row says
+"Long lines stay plain". The other lines are bolded as usual, and splitting the
+long one into shorter lines brings its bold back.
+
+**Copying with bold.** With the look on, select text in the edit box and press
+**Ctrl+C**, or right-click the selection and choose **Copy with bold**. Paste it
+into Word and the bold comes along. Word uses its own font and spacing, so only
+the bold carries over. A very large selection, a whole book say, can take a few
+seconds.
+
+- A program that only takes plain text, Notepad for one, gets the same words
+  without the bold, since a plain-text field cannot hold it. That is expected.
+- **Ctrl+X** always cuts plain text, and with the look off a copy is the
+  ordinary plain copy.
+- It works on Windows. On macOS and Linux a copy is plain.
+- After the right-click choice, the feedback label says "Copied with bold" or,
+  when the bold could not go along, "Copied without bold". The words are copied
+  either way.
+
+**Does it help?** The app does not claim that it does. It is an optional look,
+and the studies so far found no gain in reading speed or understanding. None of
+them tested RSVP. The FAQ has the details, under
+[Does bold word starts actually help?](faq.md#does-bold-word-starts-actually-help),
+and a note on the name under
+[Is this the same as Bionic Reading?](faq.md#is-this-the-same-as-bionic-reading).
+
 ## The detached window
 
 The **Detach** button pops the current transcript out into its own standalone
@@ -391,6 +480,10 @@ a text field (the search box, a rename field, or the edit box).
 | C | Snap the words back to the centre after panning with the horizontal scrollbar (see [Wide flashes](#wide-flashes-auto-fit-and-the-scrollbar)) |
 | Esc | Stop: ends the session and returns to the edit view. Works in both the main and detached windows |
 | F | Toggle focus mode (main window only) |
+
+In the edit box, **Ctrl+C** copies the selected text as usual. With the
+[bold look](#bold-word-starts-and-copying-with-bold) on, it carries the bold
+along to Word as well.
 
 ## Settings
 
@@ -525,7 +618,8 @@ last:
 its text, its position, or its own speed and size. It does not change your
 Defaults colours (font, highlight and background), the chunking settings, the
 layout, the data folder, the Light / Dark theme, or the OpenDyslexic font switch
-(a font only changes when the app starts). Speed and Word size are the
+(a font only changes when the app starts). The bold word starts button is not
+part of a profile either, it is remembered on its own. Speed and Word size are the
 Defaults sliders, so they only decide where the next *new* transcript starts.
 The transcript you have open keeps the speed and size it already has. To keep
 different texts apart, use [Spaces](#spaces).
@@ -605,5 +699,8 @@ compare against the latest release on the project's Releases page.
   deleting a profile are saved at once, and applying one takes effect at once
   and closes Settings. Saving, updating and applying first apply any pending
   changes from the other tabs.
+- **When you click the bold button:** the look changes at once and is saved at
+  once. See
+  [Bold word starts and copying with bold](#bold-word-starts-and-copying-with-bold).
 - **Next launch:** the Appearance theme and the OpenDyslexic font switch. Both
   are saved when you press **Apply**.

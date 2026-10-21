@@ -65,8 +65,8 @@ of its own. The passage of time is the GUI's job.
   throttle so rapid updates do not hammer the disk, and an explicit flush forces
   a write when a session ends.
 - `settings_store.py` does the same for application settings: the new-transcript
-  defaults, layout sizes, data location, theme, the font switch and letter
-  spacing level, and the saved reading profiles.
+  defaults, layout sizes, data location, theme, the font switch, the letter
+  spacing level, the bold word starts choice, and the saved reading profiles.
 - `data_bundle.py` builds and applies the single-file export used to move
   transcripts, Spaces, and settings between machines, deliberately leaving the
   machine-specific data path out of the bundle.
@@ -149,6 +149,41 @@ OpenDyslexic files are missing it falls back to the standard set and says so.
 The same module words the grey notes Settings shows under the switch, which
 keeps that wording testable too.
 
+### Bold word starts and copying with bold
+
+Four small pieces sit behind the bold button and the copy, and all of them are
+pure.
+
+`bold_starts.py` decides which letters are bold. `bold_ranges()` takes a piece of
+text and returns sorted, non-overlapping (start, end) pairs counted in Python
+characters, and `fixation_length()` is the one place the length curve lives. A
+word never runs across a line break, so a whole text and its lines one by one
+give the same answer, which is what lets the edit box re-bold only the lines
+someone typed in. The rules for what counts as a word are in there too, with the
+reasoning: Latin, Cyrillic and Greek letters, apostrophes inside a word, and
+digits stuck to a word or an address meaning it is left alone.
+
+`bold_spans.py` turns those pairs into places a Tk text widget understands,
+"line.column". Two facts shape it. Tk 8.6, the version that comes with Python
+3.13 on Windows, counts a character outside the Basic Multilingual Plane (an
+emoji, say) as two columns, and Tk 9 counts it as one, so the widget asks Tk
+which and passes the answer in. And the time Tk needs to tag a line grows with
+the square of the number of tags in it, about 0.1 seconds for a line of 1,000
+words, 0.8 for 3,000 and 8 for 12,000. Lines over 4,000 characters
+(`MAX_BOLD_LINE`) are therefore left plain, rather than freezing the window.
+
+`rich_copy.py` builds what goes on the clipboard when the bold is copied.
+`cf_html()` writes the Windows "HTML Format": a header of byte offsets (counted
+in UTF-8 bytes, in fixed-width numbers), then one paragraph per line with `<b>`
+around the bold runs. Spaces that HTML would squeeze are written as non-breaking
+ones, so the text pastes back the way it was. `segments_text()` joins the same
+pieces into the plain text that travels beside it.
+
+`font_choice.py`, which already picks the font set, also has `bold_family()`.
+Nearly every family is its own bold, but OpenDyslexic registers its Bold file as
+a different family from its Regular one, and asking for bold in the regular
+family would get a faked bold instead of the face the font ships with.
+
 ## The GUI layer
 
 ### App identity
@@ -208,6 +243,31 @@ with its own session and its own copies of the relevant settings, kept in sync
 with the main window. It can do almost everything the main reader can, including
 its own skipping buttons, and deliberately cannot enter focus mode, since it has
 no chrome to hide.
+
+The edit box, `gui/components/transcript_input.py`, draws the bold word starts
+as a Tk tag on the inner text widget, with a bold copy of the font the box really
+uses (CustomTkinter refuses a font in its own tag setting). Typing, pasting and
+deleting re-bold only the lines that were touched. To learn which lines those
+are, edits pass through a small Tcl procedure and not a Python callback. Tk runs
+the text command inside a Tcl `catch`, so a Python function that raised there
+would escape through the main loop, which is what used to break pasting.
+
+Copying reads the bold back off the screen: it asks Tk to dump the selection with
+its tag boundaries, rebuilds the pieces, and goes on only if the pieces spell
+exactly the selected text. It then hands them to `gui/rich_clipboard.py`. Tk's own
+clipboard takes plain text only, so that module calls the Windows clipboard
+functions through `ctypes` and puts the plain text and the HTML on in one go.
+`_Win32Api` is a thin wrapper with one method per Windows function, and
+`copy_rich()` holds the order of the steps and works on any object with those
+methods, which is how it is tested away from Windows. It never raises and says
+whether it worked. When it did not, the box copies the plain text the ordinary
+way, so a copy is never lost.
+
+A click on the button updates the main edit box and the detached window through
+`Canvas`, which then tells `RSVPApp`, and that saves the choice with
+`SettingsStore.set_bold_starts_enabled`. A window that plays a selection is given
+the look at the moment it opens and keeps it, so it is never touched by a click
+elsewhere.
 
 Reading profiles reach the screen through the Profiles tab of the Settings
 window, `gui/components/profiles_tab.py`, with a name popup and a confirm popup

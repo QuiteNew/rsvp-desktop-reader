@@ -155,6 +155,7 @@ A flat object, one key per setting. Defaults shown.
 | `data_directory` | `~/.rsvp_reader` | Where `data.json` is written. |
 | `appearance_mode` | `light` | Theme: `light`, `dark`, or `system`. |
 | `dyslexia_font_enabled` | false | Use the OpenDyslexic font for the whole app. Only `true` turns it on. Like the theme, it is read once at startup, so a change shows on the next launch. |
+| `bold_starts_enabled` | false | Show the start of every word in bold in the edit box. Only `true` turns it on, so anything else in the file reads as off. It is a look only: the text is never changed, and it is not saved in reading profiles. A click on the button saves it at once, and the main window and the detached window share it. |
 
 ### A reading profile
 
@@ -181,9 +182,11 @@ A profile can hold these settings: `highlight_offset_px`,
 `split_long_paragraphs_enabled`, `scrub_pause_enabled` and
 `letter_spacing_level`. It never holds a transcript's own values, the Defaults
 colours, the chunking defaults, the window and layout sizes, the data
-directory, the theme, or the `dyslexia_font_enabled` font switch. The font is
-left out because it is only read at startup, so a profile could not switch it
-on the spot the way it does everything else.
+directory, the theme, the `dyslexia_font_enabled` font switch, or the
+`bold_starts_enabled` look. The font is left out because it is only read at
+startup, so a profile could not switch it on the spot the way it does
+everything else. The bold look is left out because it is a choice about how the
+edit box looks, not a reading setting, and it is remembered on its own.
 
 - A setting that is missing from `values` means "leave that setting alone" when
   the profile is applied. That is how a profile saved before a setting joined
@@ -213,8 +216,8 @@ by default named `rsvp-reader-export.json`, with this shape:
 - `data` is exactly the contents of `data.json`.
 - `settings` is everything from `settings.json` **except `data_directory`**,
   which is left out on purpose: it is a machine-specific path that would be
-  meaningless, or wrong, on another computer. Your saved reading profiles are
-  part of it.
+  meaningless, or wrong, on another computer. Your saved reading profiles and
+  the bold word starts choice are part of it.
 - `bundle_format` is the format version, currently `1`. A bundle from a
   different format version is refused rather than misread.
 
