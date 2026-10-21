@@ -96,6 +96,10 @@ reading this way (including where it helps and where it does not), see [The scie
 - Optional letter spacing (Off, Small, Medium or Large) for the flashing word,
   and an OpenDyslexic font switch for the whole app. Both are comfort settings
   you can try by eye, not a treatment, and the app does not claim they help
+- Optional bold word starts in the edit box - one button next to Normalize
+  bolds the beginning of every word, and Ctrl+C (or right-click, **Copy with
+  bold**) carries the bold into Word. It is a look you can try by eye, it is
+  remembered between launches, and the app does not claim it helps
 - Light / Dark / System theme support with reading colors that
   automatically follow the active theme unless you've customized them
 - Fully offline and self-contained - no browser or internet needed, and the
@@ -164,6 +168,9 @@ rsvp-desktop-reader/
 │   ├── scroll.py            # Pure geometry for the reader's horizontal pan
 │   ├── letter_spacing.py    # Letter spacing levels and the thin-space plan that builds each gap
 │   ├── font_choice.py       # Which fonts the app uses (standard or OpenDyslexic) and the notes for the font switch
+│   ├── bold_starts.py       # Which letters at the start of each word are bold in the edit box
+│   ├── bold_spans.py        # Turns those letters into Tk text positions, and keeps very long lines plain
+│   ├── rich_copy.py         # Builds the clipboard HTML and plain text for copying the selection with its bold
 │   ├── settings_search.py   # Pure matching for the Settings search (name, keywords, description)
 │   ├── profiles.py          # Reading profiles: which settings a profile holds, name rules, loading saved ones
 │   ├── profile_apply.py     # Works out what applying a profile does (clamping, guide mark colour vs. theme)
@@ -176,10 +183,16 @@ rsvp-desktop-reader/
 │   ├── app.py               # Main application window
 │   ├── theme.py             # Central design tokens: colors, fonts, theme resolution
 │   ├── icons.py             # Hand-drawn icons (avoids font-glyph rendering issues)
+│   ├── rich_clipboard.py    # Puts text and its bold on the Windows clipboard together, so Word keeps the bold
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
 ├── tests/                   # Automated test suite covering core engine modules
 │   ├── conftest.py
 │   ├── test_app_info.py
+│   ├── test_bold_family.py
+│   ├── test_bold_spans.py
+│   ├── test_bold_starts.py
+│   ├── test_bold_starts_app.py
+│   ├── test_bold_starts_wiring.py
 │   ├── test_chunking.py
 │   ├── test_colors.py
 │   ├── test_data_bundle.py
@@ -197,9 +210,12 @@ rsvp-desktop-reader/
 │   ├── test_punctuation.py
 │   ├── test_reader.py
 │   ├── test_reader_letter_spacing.py
+│   ├── test_rich_clipboard.py
+│   ├── test_rich_copy.py
 │   ├── test_scroll.py
 │   ├── test_settings_search.py
 │   ├── test_settings_store.py
+│   ├── test_settings_store_bold_starts.py
 │   ├── test_settings_store_dyslexia.py
 │   ├── test_settings_store_profiles.py
 │   ├── test_storage.py
@@ -207,6 +223,10 @@ rsvp-desktop-reader/
 │   ├── test_theme_following_colours.py
 │   ├── test_timing.py
 │   ├── test_tokenizer.py
+│   ├── test_transcript_input_bold_live.py
+│   ├── test_transcript_input_bold_starts.py
+│   ├── test_transcript_input_edit_forwarder.py
+│   ├── test_transcript_input_rich_copy.py
 │   └── test_transcript_store.py
 ├── main.py                  # Entry point
 ├── RELEASING.md             # How a release is made, step by step
@@ -295,7 +315,8 @@ project on GitHub.
 - ~~Automated tests and repo cleanup~~
 - ~~Setting profiles~~
 - ~~Dyslexia-friendly font and letter spacing~~
-- Bionic Reading
+- ~~Bold word starts in the edit box, with copying the bold into Word~~
+- Upgrading the test suite 2.0
 
 
 ## License
@@ -306,6 +327,11 @@ The bundled Fredoka, Quicksand and OpenDyslexic fonts are each released under
 the SIL Open Font License, not the MIT license. A copy of each font's license
 sits next to the font files in [assets/fonts](assets/fonts), and the fonts are
 credited under Acknowledgments. The MIT license covers the project's own code.
+
+The bold word starts look is similar to the one sold as Bionic Reading, a
+trademark of BRCG Casutt GmbH. This project is not affiliated with or endorsed by
+them and does not use their software. The
+[FAQ](docs/faq.md#is-this-the-same-as-bionic-reading) has more.
 
 ## Acknowledgments
 
