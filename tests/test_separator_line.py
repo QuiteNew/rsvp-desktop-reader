@@ -261,16 +261,16 @@ def _settings_window(owner):
 
 
 @pytest.fixture
-def settings(root):
-    """A Settings window at its default size. It is opened from a shown window,
-    because Tk keeps a transient window hidden while its owner is hidden."""
+def settings(root, wait_until_shown):
+    """A Settings window at its default size. It is opened from a window that
+    is fully shown first, because Tk keeps a transient window hidden while its
+    owner is hidden."""
     owner = ctk.CTkToplevel(root)
     owner.geometry("600x700+0+0")
-    owner.update()
+    wait_until_shown(owner)
     window = _settings_window(owner)
     window.geometry("500x650+10+10")
-    _settle(window)
-    assert window.winfo_ismapped(), "Settings did not appear"
+    wait_until_shown(window)
     yield window
     for timer in window.tk.splitlist(window.tk.call("after", "info")):
         window.tk.call("after", "cancel", timer)

@@ -13,8 +13,11 @@ sees the real value.
 
 It also holds fresh_widget_image_caches, which a test module that builds the
 toolbar (so, a Canvas or the whole app) asks for when it makes a Tk root of its
-own. See that fixture for why.
+own, and wait_until_shown, for a test that needs a window to actually be on
+screen. See each fixture for why.
 """
+import time
+
 import pytest
 
 import core.settings_store as settings_store
@@ -78,3 +81,37 @@ def fresh_widget_image_caches():
     _forget_cached_widget_images()
     yield _forget_cached_widget_images
     _forget_cached_widget_images()
+
+
+@pytest.fixture
+def wait_until_shown():
+    """For a test that needs a window on screen. Hands back a function that
+    runs the event loop until the window is shown and has had time to lay
+    itself out, and fails with the window's state if that doesn't happen.
+
+    A fixed wait isn't enough on Windows. A new CTkToplevel hides itself to
+    colour its title bar and comes back on a timer, and Settings does that
+    twice. How long that takes changes from run to run: the same Settings
+    window sometimes wasn't back after 300 ms and sometimes was.
+
+    The loop runs in steps of 300 ms and stops at the end of a step where the
+    window is shown. Stopping as soon as it shows would be too early, because
+    the second round of hiding can still be coming."""
+    def wait(window, timeout=5.0, step=0.3):
+        deadline = time.monotonic() + timeout
+        while True:
+            end = time.monotonic() + step
+            while time.monotonic() < end:
+                window.update()
+                time.sleep(0.005)
+            if window.winfo_ismapped():
+                return
+            if time.monotonic() > deadline:
+                owner = window.master.winfo_toplevel()
+                raise AssertionError(
+                    f"{type(window).__name__} did not appear within {timeout} s: "
+                    f"its state is {window.state()!r}, its owner's is {owner.state()!r} "
+                    f"and the owner is {'shown' if owner.winfo_ismapped() else 'not shown'}"
+                )
+
+    return wait

@@ -284,7 +284,7 @@ def _wrapping_labels(widget):
 
 
 @pytest.fixture
-def settings(root):
+def settings(root, wait_until_shown):
     """A Settings window at its smallest size, with one transcript whose long
     title has to wrap on the Stats tab. Shown and settled; destroyed after."""
     from core.models import Transcript
@@ -296,14 +296,14 @@ def settings(root):
     # Settings marks itself as transient to the window that opened it, and Tk
     # keeps a transient window hidden for as long as its owner is hidden. The
     # module's root is hidden, so Settings is opened from a shown window here,
-    # the way the app opens it from the main window.
+    # the way the app opens it from the main window. The owner is fully shown
+    # first, like the app's main window always is by the time Settings opens.
     owner = ctk.CTkToplevel(root)
     owner.geometry("600x700+0+0")
-    owner.update()
+    wait_until_shown(owner)
     window = _settings_window(owner, [transcript])
     window.geometry("420x650+10+10")
-    _settle(window)
-    assert window.winfo_ismapped(), "Settings did not appear"
+    wait_until_shown(window)
     yield window
     # The window's own timers (the input grab, the reveal) are cancelled through
     # Tcl directly: after_cancel() only works for a timer the same widget made.
