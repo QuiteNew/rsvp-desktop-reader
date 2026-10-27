@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from tkinter import filedialog
 
@@ -29,7 +30,10 @@ from gui.theme import (
     LIGHT_READING_GUIDE_MARK_COLOR, DARK_READING_GUIDE_MARK_COLOR,
 )
 from core.transcript_store import TranscriptStore
-from core.settings_store import SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE
+from core.settings_store import (
+    SettingsStore, SIDEBAR_WIDTH_RANGE, BOTTOM_BAND_HEIGHT_RANGE,
+    WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE,
+)
 from core.profiles import PROFILE_KEYS, ProfileError, build_values
 from core.profile_apply import plan_profile
 from core import data_bundle
@@ -69,6 +73,9 @@ class RSVPApp(ctk.CTk):
         self._pending_value = None
         self._settings_window = None  # set whenever Settings is open, see _open_settings_window()
         self._space_selection_dialog = None  # set whenever it's open, see _open_space_selection_dialog()
+        # The window size the Layout tab showed when Settings was last opened,
+        # see _apply_window_size().
+        self._window_size_in_settings = (self.settings_store.window_width, self.settings_store.window_height)
 
         self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
@@ -711,10 +718,15 @@ class RSVPApp(ctk.CTk):
         # Settings, and the new one can end up drawn behind it. See the
         # docstrings on _handle_export_requested() and
         # _handle_import_requested() below.
+        #
+        # The Layout tab shows the size the window has right now, not the saved
+        # one, so a window resized by dragging its edge shows its real size.
+        self._window_size_in_settings = self._current_window_size()
+        width, height = self._window_size_in_settings
         self._settings_window = SettingsWindow(
             self,
-            window_width=self.settings_store.window_width,
-            window_height=self.settings_store.window_height,
+            window_width=width,
+            window_height=height,
             sidebar_width=self.settings_store.sidebar_width,
             bottom_band_height=self.settings_store.bottom_band_height,
             freeform_resize_enabled=self.settings_store.freeform_resize_enabled,
@@ -758,8 +770,7 @@ class RSVPApp(ctk.CTk):
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
-        self.settings_store.set_window_size(values["window_width"], values["window_height"])
-        self.geometry(f"{values['window_width']}x{values['window_height']}")
+        self._apply_window_size(values["window_width"], values["window_height"])
 
         self.settings_store.set_layout_sizes(
             values["sidebar_width"], values["bottom_band_height"]
@@ -825,6 +836,38 @@ class RSVPApp(ctk.CTk):
         # (gui/theme.py), so they are saved here and take effect next launch.
         self.settings_store.set_dyslexia_font_enabled(values["dyslexia_font_enabled"])
         self.settings_store.set_appearance_mode(values["appearance_mode"])
+
+    def _current_window_size(self) -> tuple[int, int]:
+        """The main window's size right now, in the same units as the Layout
+        tab. CustomTkinter's geometry() gives it back with the display scaling
+        already taken out, so on a 200% screen this is not twice the size.
+
+        Kept inside the range the Layout tab accepts. A maximized window on a
+        big screen can be wider than that, and showing a number Apply would
+        then refuse would block applying anything else."""
+        match = re.match(r"(\d+)x(\d+)", self.geometry())
+        width, height = int(match.group(1)), int(match.group(2))
+        width = max(WINDOW_WIDTH_RANGE[0], min(WINDOW_WIDTH_RANGE[1], width))
+        height = max(WINDOW_HEIGHT_RANGE[0], min(WINDOW_HEIGHT_RANGE[1], height))
+        return width, height
+
+    def _apply_window_size(self, width: int, height: int) -> None:
+        """Resize the main window to the Layout tab's numbers, but only when
+        they were changed there. Apply always sends every setting, the window
+        size included, so resizing every time would put a window that was
+        resized by dragging its edge back to the old size whenever anything at
+        all was applied.
+
+        Changed means different from what the Layout tab showed when Settings
+        opened, which is the window's size at that moment (see
+        _open_settings_window()). Comparing with the saved size instead missed
+        one case: typing the saved size back in, to undo a resize by hand, did
+        nothing, because it matched what was saved."""
+        if (width, height) == self._window_size_in_settings:
+            return
+        self.settings_store.set_window_size(width, height)
+        self.geometry(f"{width}x{height}")
+        self._window_size_in_settings = (width, height)
 
     # ---- Reading profiles ----
     # A profile is a snapshot of the app-wide settings in PROFILE_KEYS (see

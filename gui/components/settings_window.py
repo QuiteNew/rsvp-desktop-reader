@@ -207,7 +207,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.apply_button = ctk.CTkButton(
             button_row, text="Apply", width=90, corner_radius=10,
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
-            font=self.button_font, command=self._handle_apply,
+            font=self.button_font, command=self._handle_apply_clicked,
         )
         self.apply_button.pack(side="right")
 
@@ -266,8 +266,8 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _handle_tab_changed(self) -> None:
         """Runs when someone clicks a tab. CustomTkinter only calls this for a
-        click, not when code switches tabs with tabview.set(), which is fine
-        here because nothing in the app does that."""
+        click, not when code switches tabs with tabview.set(), so the one place
+        that does (_show_problem()) updates the Apply button itself."""
         self._update_apply_button()
 
     def _update_apply_button(self) -> None:
@@ -1309,32 +1309,91 @@ class SettingsWindow(ctk.CTkToplevel):
 
     # ---- Apply ----
 
+    def _handle_apply_clicked(self) -> None:
+        """The Apply button: apply everything, then close the window, the way
+        most settings windows work. When a value is wrong nothing is applied and
+        the window stays open, showing where the problem is (see
+        _show_problem())."""
+        if self._handle_apply():
+            self.destroy()
+
+    def _number_fields(self) -> list:
+        """Every typed number the window checks before applying, in the order
+        they are checked: (settings key, entry, lowest, highest, the name shown
+        in a message, the tab the entry is on). The name is what the person
+        sees next to the box, shortened where the label is a whole sentence."""
+        return [
+            ("window_width", self.window_width_entry, *WINDOW_WIDTH_RANGE, "Window width", "Layout"),
+            ("window_height", self.window_height_entry, *WINDOW_HEIGHT_RANGE, "Window height", "Layout"),
+            ("sidebar_width", self.sidebar_width_entry, *SIDEBAR_WIDTH_RANGE, "Sidebar width", "Layout"),
+            ("bottom_band_height", self.bottom_band_height_entry, *BOTTOM_BAND_HEIGHT_RANGE, "Bottom band height", "Layout"),
+            ("font_size_step", self.font_size_step_entry, *FONT_SIZE_STEP_RANGE, "The word size step for +/-", "Defaults"),
+            ("guide_mark_thickness_px", self.guide_mark_thickness_entry, *GUIDE_MARK_THICKNESS_RANGE, "The guide mark thickness", "Defaults"),
+            ("resume_rewind_words", self.resume_rewind_words_entry, *RESUME_REWIND_WORDS_RANGE, "Words to rewind on resume", "Defaults"),
+        ]
+
+    def _show_problem(self, entry, tab: str, message: str) -> None:
+        """Show what is wrong and take the person straight to it: the message on
+        the error line, the tab the box is on, the box scrolled into view on the
+        Defaults list, and the cursor in it with its text selected, so typing
+        replaces it. A search that hides the box is cleared first, since a box
+        that isn't shown can't be fixed."""
+        self.error_label.configure(text=message)
+        self.tabview.set(tab)
+        self._update_apply_button()
+        if tab == "Defaults":
+            self._bring_into_view(entry)
+        entry.focus_set()
+        entry.select_range(0, "end")
+
+    def _bring_into_view(self, entry) -> None:
+        """Scroll the Defaults list so the entry holding this box is near the
+        top. Reaches into CTkScrollableFrame's `_parent_canvas`, the same
+        private attribute the search and the slider scrolling already use; if it
+        is ever missing the list simply stays where it was."""
+        holder = next((item.holder for item in self._defaults_items if self._is_inside(entry, item.holder)), None)
+        if holder is None:
+            return
+        if holder.winfo_manager() == "":
+            self._defaults_search.set_text("")
+        self.update_idletasks()
+        try:
+            canvas = self._defaults_scroll._parent_canvas
+            region = canvas.bbox("all")
+        except AttributeError:
+            return
+        if not region or region[3] <= 0:
+            return
+        top = max(0, holder.winfo_y() - 20)
+        canvas.yview_moveto(top / region[3])
+
+    @staticmethod
+    def _is_inside(widget, ancestor) -> bool:
+        while widget is not None:
+            if widget is ancestor:
+                return True
+            widget = widget.master
+        return False
+
     def _handle_apply(self) -> bool:
         """Check what is typed and chosen in the tabs and, if it is all fine,
         hand it to the app to apply. Returns whether that happened. On a bad
-        value it shows the reason on the error line, applies nothing and returns
-        False. The Apply button ignores the result; the Profiles tab uses it to
-        stop when there is something to fix first."""
-        entries = {
-            "window_width": (self.window_width_entry, *WINDOW_WIDTH_RANGE),
-            "window_height": (self.window_height_entry, *WINDOW_HEIGHT_RANGE),
-            "sidebar_width": (self.sidebar_width_entry, *SIDEBAR_WIDTH_RANGE),
-            "bottom_band_height": (self.bottom_band_height_entry, *BOTTOM_BAND_HEIGHT_RANGE),
-            "font_size_step": (self.font_size_step_entry, *FONT_SIZE_STEP_RANGE),
-            "guide_mark_thickness_px": (self.guide_mark_thickness_entry, *GUIDE_MARK_THICKNESS_RANGE),
-            "resume_rewind_words": (self.resume_rewind_words_entry, *RESUME_REWIND_WORDS_RANGE),
-        }
+        value it applies nothing, shows where the problem is (see
+        _show_problem()) and returns False.
 
+        The Apply button closes the window when this worked (see
+        _handle_apply_clicked()). The Profiles tab calls this too, before
+        saving, updating or applying a profile, and needs the window to stay
+        open, which is why closing is not done here."""
         values = {}
-        for key, (entry, low, high) in entries.items():
+        for key, entry, low, high, name, tab in self._number_fields():
             text = entry.get().strip()
-            label = key.replace("_", " ").title()
             if not text.isdigit():
-                self.error_label.configure(text=f"{label} must be a whole number.")
+                self._show_problem(entry, tab, f"{name} must be a whole number.")
                 return False
             number = int(text)
             if not (low <= number <= high):
-                self.error_label.configure(text=f"{label} must be between {low} and {high}.")
+                self._show_problem(entry, tab, f"{name} must be between {low} and {high}.")
                 return False
             values[key] = number
 
@@ -1342,11 +1401,12 @@ class SettingsWindow(ctk.CTkToplevel):
         digits = offset_text[1:] if offset_text.startswith("-") else offset_text
         offset_value = int(offset_text) if digits and digits.isdigit() else None
         low, high = HIGHLIGHT_OFFSET_RANGE
+        offset_name = "The highlighted letter shift"
         if offset_value is None:
-            self.error_label.configure(text="Highlight Position must be a whole number.")
+            self._show_problem(self.highlight_offset_entry, "Defaults", f"{offset_name} must be a whole number.")
             return False
         if not (low <= offset_value <= high):
-            self.error_label.configure(text=f"Highlight Position must be between {low} and {high}.")
+            self._show_problem(self.highlight_offset_entry, "Defaults", f"{offset_name} must be between {low} and {high}.")
             return False
         values["highlight_offset_px"] = offset_value
 
