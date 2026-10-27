@@ -227,9 +227,11 @@ class ReaderDisplay(ctk.CTkFrame):
         # a position set once comfortably holds for the whole session.
         self._pan_offset_px = 0.0
         self._scrollbar_visible = False
+        # No colours of its own: it takes CustomTkinter's default grey, the
+        # same one every other scrollbar in the app uses (the transcript list,
+        # Settings, the dialogs), so they all look alike.
         self._scrollbar = ctk.CTkScrollbar(
             self, orientation="horizontal", command=self._handle_scroll,
-            button_color=EMBER_GLOW, button_hover_color=EMBER_GLOW_HOVER,
             fg_color="transparent",
         )
 
