@@ -2,18 +2,41 @@ import tkinter
 
 from customtkinter.windows.widgets.scaling.scaling_tracker import ScalingTracker
 
-# The line is plain black in both themes. It is meant to look the same whatever
-# the theme, so it doesn't come from gui/theme.py's palette.
-LINE_COLOR = "#000000"
+from core.colors import blend_colors
+from gui.theme import CTK_APPEARANCE_MODE, DARK_PALETTE, LIGHT_PALETTE
+
+# The line's colour depends on the theme. In Light it is the warm brown of the
+# app's own divider lines (the one under the transcript list's search row, for
+# example), so it matches them rather than standing out.
+LIGHT_LINE_COLOR = LIGHT_PALETTE["warm_line"]
+
+# In Dark it is the window's dark background with a little of the theme's cream
+# text colour mixed in: just enough to catch the eye as a soft line, not enough
+# to stand out as a bright stripe against the dark. DARK_LINE_BLEND is how much
+# cream goes in (0 would be invisible, 1 would be the full cream of the text).
+DARK_LINE_BLEND = 0.15
+DARK_LINE_COLOR = blend_colors(DARK_PALETTE["hearth_paper"], DARK_PALETTE["cocoa_ink"], DARK_LINE_BLEND)
+
+
+def line_color(appearance_mode: str) -> str:
+    """The line colour for CustomTkinter's appearance mode, "Dark" or "Light"."""
+    return DARK_LINE_COLOR if appearance_mode == "Dark" else LIGHT_LINE_COLOR
+
+
+# The theme is settled once at startup (see gui/theme.py), and so is this. A
+# change of theme in Settings takes effect on the next launch, like everything
+# else that follows the theme.
+LINE_COLOR = line_color(CTK_APPEARANCE_MODE)
 
 # How much of the row's width the line takes, centred, so it never touches the
 # sides of the window.
-WIDTH_FRACTION = 0.6
+WIDTH_FRACTION = 0.8
 
 # Thickness of the line, in logical pixels, the same unit as every other size in
-# the app. It is turned into real screen pixels by the display scaling (see
-# _scale()), and so is the space around the line.
-THICKNESS = 1
+# the app, and the same thickness as the divider lines it matches. It is turned
+# into real screen pixels by the display scaling (see _scale()), and so is the
+# space around the line.
+THICKNESS = 2
 
 # The space wanted on each side of the line, between the explanation above it
 # and the setting below it. Each place that adds a line says how much of that
@@ -22,11 +45,11 @@ GAP = 20
 
 
 class SeparatorLine(tkinter.Frame):
-    """A thin black line, centred under a setting's explanation, that keeps the
+    """A thin line, centred under a setting's explanation, that keeps the
     settings in a long list apart.
 
     It is a plain tkinter.Frame and not a CTkFrame. CustomTkinter draws its
-    frames on a canvas, and that drawing doesn't show anything at 1 pixel thick
+    frames on a canvas, and that drawing can fail to show anything this thin
     (the same thing that once hid the horizontal guide ticks), while a plain
     frame with a background colour always paints. The cost is that Tk doesn't
     scale a plain frame for the display, so this does it itself: the thickness

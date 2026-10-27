@@ -1,10 +1,12 @@
-"""Tests for the thin black lines between settings
-(gui/components/separator_line.py), and for where the Settings window puts them.
+"""Tests for the thin lines between settings (gui/components/separator_line.py),
+and for where the Settings window puts them.
 
-The rules for the lines, as agreed: they go on the Defaults, Layout and
-Appearance tabs only, only under a setting's explanation (never under a setting
-that is just a switch or a slider), never after the last thing on a tab, and
-always plain black, centred and not touching the sides.
+The rules for the lines, as agreed: they go on the Defaults tab only, only under
+a setting's explanation (never under a setting that is just a switch or a
+slider), never after the last setting shown, 80% of the width and centred, 2
+pixels thick, the warm brown of the app's divider lines in the Light theme, and
+in the Dark theme the dark background with a little cream mixed in, so the line
+is only slightly lighter than what is around it.
 
 These run against a real Tk with one hidden root for the whole module, like
 test_wrapping_label.py, and for the same reasons every window is given real time
@@ -18,7 +20,10 @@ from dataclasses import asdict
 import customtkinter as ctk
 import pytest
 
-from gui.components.separator_line import GAP, LINE_COLOR, THICKNESS, WIDTH_FRACTION, SeparatorLine
+from core.colors import blend_colors
+from gui.components.separator_line import (
+    DARK_LINE_BLEND, GAP, LINE_COLOR, THICKNESS, WIDTH_FRACTION, SeparatorLine, line_color,
+)
 from gui.components.wrapping_label import WrappingLabel
 
 
@@ -92,10 +97,38 @@ def pady_of(line) -> tuple[int, int]:
 
 # ---- the line on its own ----
 
-def test_the_line_is_black(root):
+def test_the_agreed_size():
+    assert WIDTH_FRACTION == 0.8
+    assert THICKNESS == 2
+
+
+def test_the_colour_follows_the_theme():
+    """In Light the same warm brown as the divider lines (the light palette's
+    warm_line, #D6C4AC). In Dark the dark background (#1D1712) with 15% of the
+    theme's cream text colour (#F2E8DC) mixed in."""
+    assert line_color("Light") == "#D6C4AC"
+    assert DARK_LINE_BLEND == 0.15
+    assert line_color("Dark") == blend_colors("#1D1712", "#F2E8DC", 0.15) == "#3D3630"
+
+
+def test_the_dark_line_is_only_slightly_lighter_than_the_dark_background():
+    """Lighter on every channel than the background, so it shows at all, but
+    much closer to the background than to the cream, so it stays soft."""
+    def channels(color):
+        return [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+
+    background, cream, line = channels("#1D1712"), channels("#F2E8DC"), channels(line_color("Dark"))
+    for b, c, mixed in zip(background, cream, line):
+        assert b < mixed < c
+        assert (mixed - b) < (c - mixed) / 4
+
+
+def test_the_line_uses_the_colour_of_the_theme_the_app_started_with(root):
+    from gui.theme import CTK_APPEARANCE_MODE
+
     top, _, line = shown_line(root)
     try:
-        assert line.cget("bg") == LINE_COLOR == "#000000"
+        assert line.cget("bg") == LINE_COLOR == line_color(CTK_APPEARANCE_MODE)
     finally:
         top.destroy()
 
@@ -137,7 +170,7 @@ def test_thickness_and_space_follow_the_display_scaling(root):
 @pytest.mark.parametrize("factor", [1.5, 2.0])
 def test_on_a_scaled_display_the_line_is_thicker_and_the_space_larger(root, scaling, factor):
     """A plain Tk frame is not scaled by CustomTkinter, so the line has to do it
-    itself. At 2.0 or more a 1 pixel line is 2 real pixels."""
+    itself. At 2.0 the 2 pixel line is 4 real pixels."""
     scaling(factor)
     top, _, line = shown_line(root, above=5, below=16)
     try:
@@ -269,23 +302,20 @@ def _shown_items(settings):
     return [item for item in settings._defaults_items if item.holder.winfo_manager() == "pack"]
 
 
-def test_only_defaults_layout_and_appearance_have_lines(settings):
+def test_only_defaults_has_lines(settings):
     assert len(_lines(settings.tabview.tab("Defaults"))) == 13
-    assert len(_lines(settings.tabview.tab("Layout"))) == 1
-    assert len(_lines(settings.tabview.tab("Appearance"))) == 2
-    for tab in ("Storage", "Profiles", "Stats"):
+    for tab in ("Layout", "Storage", "Appearance", "Profiles", "Stats"):
         assert _lines(settings.tabview.tab(tab)) == [], f"{tab} should have no lines"
 
 
 def test_every_line_sits_right_under_an_explanation(settings):
     """The widget packed just before each line is the grey explanation text, so
     a line is never under a switch, a slider or a number box on its own."""
-    for tab in ("Defaults", "Layout", "Appearance"):
-        for line in _shown_lines(settings.tabview.tab(tab)):
-            before = line.master.pack_slaves()
-            above = before[before.index(line) - 1]
-            assert isinstance(above, ctk.CTkLabel), f"a line on {tab} is under a {type(above).__name__}"
-            assert above.cget("font") is settings.small_font, f"a line on {tab} is under a setting name"
+    for line in _shown_lines(settings.tabview.tab("Defaults")):
+        before = line.master.pack_slaves()
+        above = before[before.index(line) - 1]
+        assert isinstance(above, ctk.CTkLabel), f"a line is under a {type(above).__name__}"
+        assert above.cget("font") is settings.small_font, "a line is under a setting name"
 
 
 def test_every_defaults_setting_with_an_explanation_has_a_line_and_no_other_does(settings):
@@ -299,14 +329,11 @@ def test_every_defaults_setting_with_an_explanation_has_a_line_and_no_other_does
         assert (item.separator is not None) == explained, item.name
 
 
-def test_no_line_after_the_last_thing_on_a_tab(settings):
-    """Defaults ends with the skip settings and the reset button, and the last
-    explanation on Appearance (letter spacing) is the end of the tab, so neither
-    tab ends with a line."""
+def test_no_line_after_the_last_thing_on_the_tab(settings):
+    """Defaults ends with the skip settings and the reset button, so the tab
+    never ends with a line."""
     shown = _shown_items(settings)
     assert shown[-1].separator is None or shown[-1].separator.winfo_manager() == ""
-    appearance = settings._appearance_scroll
-    assert not isinstance(appearance.pack_slaves()[-1], SeparatorLine)
 
 
 def test_all_defaults_lines_show_when_nothing_is_searched(settings):

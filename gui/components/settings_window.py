@@ -1028,9 +1028,6 @@ class SettingsWindow(ctk.CTkToplevel):
             tab, text="When on, hover over the sidebar or bottom-band border in the main window and drag it directly.",
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 15))
-        # The explanation leaves 15 below it and the first size row 4 above it,
-        # so the line adds 5 and 16 to sit 20 from each.
-        SeparatorLine(tab, above=5, below=16).pack_line()
 
         self.window_width_entry = self._number_row(tab, "Window width", window_width)
         self.window_height_entry = self._number_row(tab, "Window height", window_height)
@@ -1159,8 +1156,6 @@ class SettingsWindow(ctk.CTkToplevel):
             ),
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 10))
-        # The note leaves 10 below it and the Font heading 10 above it.
-        SeparatorLine(scroll, above=10, below=10).pack_line()
 
         # The font. The notes under the switch come from core/font_choice.py,
         # so their wording is tested without a window.
@@ -1177,9 +1172,6 @@ class SettingsWindow(ctk.CTkToplevel):
             label = WrappingLabel(scroll, text=note, text_color=COCOA_INK, font=self.small_font)
             label.pack(fill="x", pady=(0, 8))
             self.dyslexia_font_notes.append(label)
-        # The last note leaves 8 below it and the Letter spacing heading 10
-        # above it.
-        SeparatorLine(scroll, above=12, below=10).pack_line()
 
         # The letter spacing. One button per level, named in core/letter_spacing.py.
         ctk.CTkLabel(
