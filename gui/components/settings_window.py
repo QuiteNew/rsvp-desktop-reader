@@ -20,6 +20,7 @@ from core.timing import format_duration
 from gui.components.about_dialog import AboutDialog
 from gui.components.profiles_tab import ProfilesTab
 from gui.components.search_box import SearchBox
+from gui.components.separator_line import SeparatorLine
 from gui.components.wrapping_label import WrappingLabel
 from gui.icons import description_icon, info_icon
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, DYSLEXIA_FONT_FELL_BACK, apply_app_icon, center_over_parent
@@ -44,12 +45,17 @@ class _DefaultsItem:
     hiding the entry is one pack or forget of that holder and nothing inside is
     touched. Searchable entries are settings, found by name, keywords and
     description. The others (the grey notes and the reset row) have nothing to
-    search and are simply hidden while a search is active."""
+    search and are simply hidden while a search is active.
+
+    separator is the thin line under the entry's explanation, if it has one
+    (see _separate()). It lives inside the holder, so it comes and goes with
+    the entry, and _layout_separators() leaves it off the last entry shown."""
     holder: ctk.CTkFrame
     searchable: bool
     name: str = ""
     keywords: str = ""
     description: str = ""
+    separator: SeparatorLine | None = None
 
 class SettingsWindow(ctk.CTkToplevel):
     """App-wide settings: new-transcript defaults, layout sizing (including
@@ -476,6 +482,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 visible = not searching
             if visible:
                 item.holder.pack(fill="x")
+        self._layout_separators()
         # The reset row is one of the hidden non-searchable items while
         # searching; a short note takes its place so its absence is explained,
         # unless nothing matched at all, when only the no-match message shows.
@@ -483,6 +490,31 @@ class SettingsWindow(ctk.CTkToplevel):
             self._defaults_no_match.pack(anchor="w", pady=(5, 15))
         elif searching:
             self._defaults_reset_note.pack(anchor="w", pady=(20, 0))
+
+    def _separate(self, holder) -> None:
+        """Put a separator line under the explanation just added to this
+        Defaults entry. Only entries with an explanation get one; a setting that
+        is only a switch or a slider doesn't. _layout_separators() decides
+        whether it is actually shown."""
+        for item in self._defaults_items:
+            if item.holder is holder:
+                item.separator = SeparatorLine(holder)
+                return
+        raise ValueError("_separate() needs the holder of a Defaults entry")
+
+    def _layout_separators(self) -> None:
+        """Show the separator of every entry on screen except the last one, so
+        a line only ever sits between two settings, never after the last thing
+        in the list. That last entry changes while searching, which is why this
+        runs after every layout. Each line is taken off and put back, which puts
+        it back at the bottom of its entry, under the explanation."""
+        shown = [item for item in self._defaults_items if item.holder.winfo_manager() == "pack"]
+        for item in self._defaults_items:
+            if item.separator is not None:
+                item.separator.pack_forget()
+        for item in shown[:-1]:
+            if item.separator is not None:
+                item.separator.pack_line()
 
     def _build_defaults_tab(self, tab, wpm, font_color, highlight_color, background_color, font_size, font_size_step, highlight_offset_px, skip_word_count, pause_on_skip, length_pacing_enabled, split_long_paragraphs_enabled, resume_rewind_enabled, resume_rewind_words, warm_up_enabled, scrub_pause_enabled, peripheral_context_enabled, guide_mark_horizontal_enabled, guide_mark_thickness_px, guide_mark_length_percent, guide_mark_color) -> None:
 
@@ -575,6 +607,7 @@ class SettingsWindow(ctk.CTkToplevel):
             holder, text="Changes for the WPM slider take effect after clicking Apply.",
             text_color=COCOA_INK, font=self.small_font,
         ).pack(anchor="w", pady=(0, 20))
+        self._separate(holder)
 
         chunking_description = "Flash several words at once instead of one at a time, so your eyes move less across each flash. Opens a window where you can turn this on for the transcript open now or for new transcripts, pick a fixed number of words or an adaptive width, and set the size."
         holder = self._defaults_item(
@@ -588,6 +621,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=chunking_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         holder = self._defaults_item(
             scroll, "Increase the word size by this many pixels each time +/- is clicked",
@@ -626,6 +660,7 @@ class SettingsWindow(ctk.CTkToplevel):
             holder, text=offset_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         low, high = GUIDE_MARK_THICKNESS_RANGE
         thickness_description = f"Applies globally, to every transcript. Allowed range: {low} to {high}."
@@ -649,6 +684,7 @@ class SettingsWindow(ctk.CTkToplevel):
             holder, text=thickness_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         length_description = "Length of the vertical guide marks, as a percentage of the current word so they keep scaling with the Word Size setting above. Applies globally."
         holder = self._defaults_item(
@@ -674,6 +710,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=length_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         mark_color_description = "Colour of the vertical guide marks above and below the highlighted letter. Applies globally, to every transcript."
         holder = self._defaults_item(
@@ -688,6 +725,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=mark_color_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         horizontal_description = "Adds a fixed grey line above and below the vertical guide marks, sized close to the width of the reading area, to help keep your eyes centered while reading."
         holder = self._defaults_item(
@@ -703,6 +741,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=horizontal_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         pacing_description = "Gives longer words a bit more time on screen, in three steps based on length (short words are unaffected). If a word is both long and ends a sentence or clause, only the longer of the two pauses applies, since they don't stack. Applies globally, takes effect after clicking Apply."
         holder = self._defaults_item(
@@ -718,6 +757,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=pacing_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         warm_up_description = "Starts each reading session at about half speed and builds up to your chosen speed over the first several words, so you settle in instead of being hit with full speed right away. It stacks with the pacing above. Applies globally, to the main and detached windows, and takes effect after clicking Apply."
         holder = self._defaults_item(
@@ -733,6 +773,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=warm_up_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         split_description = "When you click Normalize, also break a long wall of text into paragraphs at sentence ends, so it's easier to read in the edit box. This only changes how the text is laid out for editing, never what gets read or the reading speed. Applies globally; takes effect the next time you click Normalize."
         holder = self._defaults_item(
@@ -748,6 +789,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=split_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         low, high = RESUME_REWIND_WORDS_RANGE
         rewind_description = (
@@ -781,6 +823,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=rewind_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         scrub_description = "When you drag the progress bar to a new spot and let go, reading pauses there, so you can get your bearings before pressing play. Turn this off to have reading keep going from the new spot if it was already playing. Applies globally, to the main and detached windows, and takes effect after clicking Apply."
         holder = self._defaults_item(
@@ -796,6 +839,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=scrub_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         peripheral_description = "Shows a dim line beneath the flashing word with the words just before and after it, so you keep a little sense of the sentence around what you're reading without your eyes leaving the centre. Applies globally, to the main and detached windows, and takes effect after clicking Apply."
         holder = self._defaults_item(
@@ -811,6 +855,7 @@ class SettingsWindow(ctk.CTkToplevel):
             text=peripheral_description,
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
 
         holder = self._defaults_item(scroll, searchable=False)
         WrappingLabel(
@@ -983,6 +1028,9 @@ class SettingsWindow(ctk.CTkToplevel):
             tab, text="When on, hover over the sidebar or bottom-band border in the main window and drag it directly.",
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 15))
+        # The explanation leaves 15 below it and the first size row 4 above it,
+        # so the line adds 5 and 16 to sit 20 from each.
+        SeparatorLine(tab, above=5, below=16).pack_line()
 
         self.window_width_entry = self._number_row(tab, "Window width", window_width)
         self.window_height_entry = self._number_row(tab, "Window height", window_height)
@@ -1111,6 +1159,8 @@ class SettingsWindow(ctk.CTkToplevel):
             ),
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 10))
+        # The note leaves 10 below it and the Font heading 10 above it.
+        SeparatorLine(scroll, above=10, below=10).pack_line()
 
         # The font. The notes under the switch come from core/font_choice.py,
         # so their wording is tested without a window.
@@ -1127,6 +1177,9 @@ class SettingsWindow(ctk.CTkToplevel):
             label = WrappingLabel(scroll, text=note, text_color=COCOA_INK, font=self.small_font)
             label.pack(fill="x", pady=(0, 8))
             self.dyslexia_font_notes.append(label)
+        # The last note leaves 8 below it and the Letter spacing heading 10
+        # above it.
+        SeparatorLine(scroll, above=12, below=10).pack_line()
 
         # The letter spacing. One button per level, named in core/letter_spacing.py.
         ctk.CTkLabel(
