@@ -2583,8 +2583,16 @@ def test_the_appearance_tab_keeps_the_theme_selector_and_its_two_notes(settings)
     labels = _labels_by_text(settings.tabview.tab("Appearance"))
     assert "Colour theme" in labels
     assert "Takes effect the next time you launch the app." in labels
-    assert any(text.startswith("Note: a new transcript's reading colours") for text in labels)
+    assert any(text.startswith("The reading colours follow the theme too.") for text in labels)
     assert settings.appearance_mode_selector.get() in ("Light", "Dark", "System")
+
+
+def test_the_appearance_tab_no_longer_says_reading_colours_ignore_the_theme(settings):
+    """The old note said a new transcript's colours come from the Defaults tab
+    and won't match Light or Dark. In Dark they don't come from the Defaults tab
+    at all (see tests/test_reading_colours_follow_theme.py)."""
+    for text in _labels_by_text(settings.tabview.tab("Appearance")):
+        assert "won't automatically match" not in text, text
 
 
 def test_the_appearance_tab_scrolls_and_fits_the_smallest_settings_window(app, settings):

@@ -1144,15 +1144,19 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 10))
 
+        # How the reading colours follow the theme is decided in gui/app.py,
+        # _current_theme_reading_colors() and _resync_theme_default_colors(),
+        # and tests/test_reading_colours_follow_theme.py checks it.
         WrappingLabel(
             scroll,
             text=(
-                "Note: a new transcript's reading colours (font, highlight, "
-                "background) come from the Defaults tab, not from this theme "
-                "setting, so they won't automatically match Light or Dark. "
-                "Adjust them under Defaults, or per-transcript from the "
-                "control band at the bottom of the main window, if you'd "
-                "like the reading canvas itself to match."
+                "The reading colours follow the theme too. A transcript's font, "
+                "highlight and background colour each follow it until you pick "
+                "that colour yourself from the control band at the bottom of "
+                "the main window. In Light they come from the Defaults tab, and "
+                "in Dark from the app's own dark reading colours. They change "
+                "the next time you launch the app, and a colour you picked "
+                "yourself stays the same in both themes."
             ),
             text_color=COCOA_INK, font=self.small_font,
         ).pack(fill="x", pady=(0, 10))
