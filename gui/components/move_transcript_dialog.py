@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 
@@ -51,6 +52,10 @@ class MoveTranscriptDialog(ctk.CTkToplevel):
                 text_color=WARM_LINE, font=row_font,
                 command=lambda s=space_name: self._handle_select(s),
             ).pack(fill="x", pady=3, padx=2)
+
+        # Esc closes without moving. There is no Enter, because nothing is
+        # picked until a space is clicked.
+        bind_dialog_keys(self, on_escape=self.destroy)
 
         self.lift()
         self.transient(master)

@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 
@@ -56,6 +57,9 @@ class MessageDialog(ctk.CTkToplevel):
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
             font=button_font, command=self._handle_dismiss,
         ).pack(pady=(0, 20))
+
+        # Both keys do what the one button does, on_close included.
+        bind_dialog_keys(self, on_enter=self._handle_dismiss, on_escape=self._handle_dismiss)
 
         self.lift()
         self.transient(master)

@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.components.dialog_keys import bind_dialog_keys, focus_for_typing
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 class AddTranscriptDialog(ctk.CTkToplevel):
@@ -50,15 +51,12 @@ class AddTranscriptDialog(ctk.CTkToplevel):
         )
         self.title_entry.pack(fill="x", padx=20)
         if initial_title:
-            # Pre-filled from the picked file's name for a file import:
-            # selected (not just inserted) and given keyboard focus, so
-            # the user can immediately overwrite it by typing, without
-            # first having to clear it themselves. Left untouched for the
-            # blank-transcript flow, where initial_title is always "".
+            # Pre-filled from the picked file's name for a file import. It is
+            # selected once the popup is on screen (see _reveal_now()), so the
+            # user can overwrite it by typing without clearing it first. Left
+            # empty for the blank-transcript flow, where initial_title is "".
             self.title_entry.insert(0, initial_title)
-            self.title_entry.select_range(0, "end")
-            self.title_entry.icursor("end")
-            self.title_entry.focus_set()
+        self._select_title = bool(initial_title)
 
         ctk.CTkLabel(self, text="Space", text_color=COCOA_INK, font=label_font).pack(anchor="w", padx=20, pady=(16, 4))
         self.space_menu = ctk.CTkOptionMenu(
@@ -96,6 +94,8 @@ class AddTranscriptDialog(ctk.CTkToplevel):
             font=button_font, command=self._handle_create,
         ).pack(side="right")
 
+        bind_dialog_keys(self, on_enter=self._handle_create, on_escape=self.destroy)
+
         self.lift()
         self.transient(master)
         self.after(10, self.grab_set)
@@ -113,8 +113,11 @@ class AddTranscriptDialog(ctk.CTkToplevel):
         self.after(80, self._reveal_now)
 
     def _reveal_now(self) -> None:
+        if not self.winfo_exists():
+            return
         self.update_idletasks()
         self.attributes("-alpha", 1)
+        focus_for_typing(self.title_entry, select=self._select_title)
 
     @staticmethod
     def _use_chevron_dropdown_arrow(option_menu: ctk.CTkOptionMenu) -> None:

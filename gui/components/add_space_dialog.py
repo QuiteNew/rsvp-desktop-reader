@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.components.dialog_keys import bind_dialog_keys, focus_for_typing
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 
@@ -48,6 +49,8 @@ class AddSpaceDialog(ctk.CTkToplevel):
             font=button_font, command=self._handle_create,
         ).pack(side="right")
 
+        bind_dialog_keys(self, on_enter=self._handle_create, on_escape=self.destroy)
+
         self.lift()
         self.transient(master)
         self.after(10, self.grab_set)
@@ -65,8 +68,13 @@ class AddSpaceDialog(ctk.CTkToplevel):
         self.after(80, self._reveal_now)
 
     def _reveal_now(self) -> None:
+        if not self.winfo_exists():
+            return
         self.update_idletasks()
         self.attributes("-alpha", 1)
+        # The cursor goes in the name box once the popup is on screen, so the
+        # name can be typed straight away.
+        focus_for_typing(self.name_entry)
 
     def _handle_create(self) -> None:
         name = self.name_entry.get().strip()

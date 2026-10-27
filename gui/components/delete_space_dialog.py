@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 
@@ -48,6 +49,10 @@ class DeleteSpaceDialog(ctk.CTkToplevel):
             fg_color="#A33636", hover_color="#7E2929", text_color="#FFFFFF",
             font=button_font, command=self._handle_delete,
         ).pack(side="right")
+
+        # Esc cancels. There is no Enter: deleting can't be undone, so it
+        # takes a click on the button.
+        bind_dialog_keys(self, on_escape=self.destroy)
 
         self.lift()
         self.transient(master)
