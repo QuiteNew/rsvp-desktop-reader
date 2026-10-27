@@ -4,6 +4,7 @@ from core.colors import blend_colors
 from core.profiles import ProfileError
 from gui.components.profile_confirm_dialog import ProfileConfirmDialog
 from gui.components.profile_name_dialog import ProfileNameDialog
+from gui.components.wrapping_label import WrappingLabel
 from gui.theme import COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
 
 # Explains what a profile is, and what it is not. The second part matters: a
@@ -29,10 +30,6 @@ APPLY_FIRST_NOTE = (
     "Saving, updating or applying a profile first applies any changes you've "
     "made in the other tabs."
 )
-
-# Wide enough to read comfortably, narrow enough for the smallest the Settings
-# window can be made (its tabs are about 400px wide there).
-WRAP_LENGTH = 370
 
 # How tall the list asks to be. It grows to fill the tab when there is room, and
 # this is all it needs at the smallest Settings window, where it scrolls.
@@ -94,14 +91,10 @@ class ProfilesTab(ctk.CTkFrame):
         self.button_font = ctk.CTkFont(family=FONT_BODY, size=13)
         self._disabled_text = blend_colors(COCOA_INK, WARM_TAUPE, 0.45)
 
-        ctk.CTkLabel(
-            self, text=EXPLANATION, text_color=COCOA_INK, font=self.small_font,
-            wraplength=WRAP_LENGTH, justify="left",
-        ).pack(anchor="w", pady=(5, 4))
-        ctk.CTkLabel(
-            self, text=APPLY_FIRST_NOTE, text_color=COCOA_INK, font=self.small_font,
-            wraplength=WRAP_LENGTH, justify="left",
-        ).pack(anchor="w", pady=(0, 8))
+        # Both notes wrap to the width the tab has, the same way as the
+        # descriptions on the other Settings tabs (see wrapping_label.py).
+        WrappingLabel(self, text=EXPLANATION, text_color=COCOA_INK, font=self.small_font).pack(fill="x", pady=(5, 4))
+        WrappingLabel(self, text=APPLY_FIRST_NOTE, text_color=COCOA_INK, font=self.small_font).pack(fill="x", pady=(0, 8))
 
         self.save_button = self._make_button(self, "Save current settings as…", self._handle_save_clicked, width=200)
         self.save_button.pack(anchor="w", pady=(0, 8))
@@ -158,11 +151,11 @@ class ProfilesTab(ctk.CTkFrame):
         self._rows = {}
 
         if not names:
-            ctk.CTkLabel(
+            WrappingLabel(
                 self.list_frame,
                 text="No profiles yet. Set things up the way you like in Settings, then save them here.",
-                text_color=COCOA_INK, font=self.small_font, wraplength=WRAP_LENGTH - 30, justify="left",
-            ).pack(anchor="w", padx=8, pady=8)
+                text_color=COCOA_INK, font=self.small_font,
+            ).pack(fill="x", padx=8, pady=8)
         for name in names:
             self._add_row(name)
 
