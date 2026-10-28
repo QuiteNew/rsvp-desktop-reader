@@ -3,9 +3,17 @@
 The one thing worth centralizing: making sure no test can ever read or write
 the real ~/.rsvp_reader. Tests that build a store with an explicit tmp_path are
 already isolated, but a store constructed with no arguments falls back to the
-on-disk default location. This points those fallbacks at a throwaway session
-temp directory, as a safety net, so a no-argument SettingsStore() or
+on-disk default location. This points those fallbacks at a throwaway temp
+directory, as a safety net, so a no-argument SettingsStore() or
 TranscriptStore() in any test (today or later) stays off your real data.
+
+It has to happen before any test file is even loaded, not just before the
+first test runs. gui/theme.py reads the saved settings the moment it is
+imported, to pick the colour theme and the fonts, and test files import it
+while pytest is still collecting them. When this was a session fixture, that
+read still reached the real settings, so the whole suite ran in whatever theme
+and font the app on that machine was set to, and a test about the font failed
+on a machine with the OpenDyslexic font switched on.
 
 It deliberately leaves core.storage.DEFAULT_DATA_DIR itself untouched, so
 test_storage.py's check that the default sits under the home directory still
@@ -16,7 +24,10 @@ toolbar (so, a Canvas or the whole app) asks for when it makes a Tk root of its
 own, and wait_until_shown, for a test that needs a window to actually be on
 screen. See each fixture for why.
 """
+import shutil
+import tempfile
 import time
+from pathlib import Path
 
 import pytest
 
@@ -37,19 +48,26 @@ _FALLBACK_LOCATION_NAMES = (
 )
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _never_touch_real_user_data(tmp_path_factory):
-    """Redirect the on-disk default data location to a session temp folder for
-    every test, then restore it when the session ends."""
-    safe_dir = tmp_path_factory.mktemp("rsvp_no_real_data")
-    originals = [(mod, name, getattr(mod, name)) for mod, name in _FALLBACK_LOCATION_NAMES]
+# The redirect in place for this run: (safe folder, the values it replaced).
+_redirect = {}
+
+
+def pytest_configure(config):
+    """Point the default data location at a fresh temp folder before pytest
+    loads any test file (see the module docstring for why it can't wait)."""
+    safe_dir = Path(tempfile.mkdtemp(prefix="rsvp_no_real_data_"))
+    _redirect["safe_dir"] = safe_dir
+    _redirect["originals"] = [(mod, name, getattr(mod, name)) for mod, name in _FALLBACK_LOCATION_NAMES]
     for mod, name in _FALLBACK_LOCATION_NAMES:
         setattr(mod, name, safe_dir)
-    try:
-        yield
-    finally:
-        for mod, name, value in originals:
-            setattr(mod, name, value)
+
+
+def pytest_unconfigure(config):
+    """Put the real locations back and remove the temp folder."""
+    for mod, name, value in _redirect.get("originals", []):
+        setattr(mod, name, value)
+    if "safe_dir" in _redirect:
+        shutil.rmtree(_redirect["safe_dir"], ignore_errors=True)
 
 
 def _forget_cached_widget_images() -> None:
