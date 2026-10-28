@@ -98,6 +98,11 @@ class AppSettings:
     bold_starts_enabled: bool = False  # global, not per-transcript: draw the start of every word in the edit box in bold.
                                        # Off by default. It is only a look: it never changes the text, and it is not
                                        # part of a reading profile. See core/bold_starts.py.
+    reopen_last_transcript: bool = True  # global: at launch, open the transcript that was open when the app was
+                                         # last closed. On by default. Not part of a reading profile.
+    last_transcript_id: int | None = None  # the transcript open in the reader, kept up to date by the app so the
+                                           # one above can find it at the next launch. None when nothing is open.
+                                           # Not shown in Settings.
     profiles: list = field(default_factory=list)  # saved reading profiles, each a plain dict with a "name" and a
                                                    # "values" dict (see core/profiles.py). Kept as dicts so
                                                    # they go to settings.json and into export bundles as they
@@ -360,6 +365,21 @@ class SettingsStore:
         # takes with the font switch.
         return self._settings.bold_starts_enabled is True
 
+    @property
+    def reopen_last_transcript(self) -> bool:
+        # On unless it is strictly False, since on is the default: a settings
+        # file with something odd in this spot keeps the default.
+        return self._settings.reopen_last_transcript is not False
+
+    @property
+    def last_transcript_id(self) -> int | None:
+        # Only a real whole number is an id. Anything else in the file (text,
+        # true/false, a fraction) reads as no transcript.
+        value = self._settings.last_transcript_id
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        return None
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
@@ -476,6 +496,18 @@ class SettingsStore:
 
     def set_bold_starts_enabled(self, enabled: bool) -> None:
         self._settings.bold_starts_enabled = enabled
+        self._save()
+
+    def set_reopen_last_transcript(self, enabled: bool) -> None:
+        self._settings.reopen_last_transcript = enabled
+        self._save()
+
+    def set_last_transcript_id(self, transcript_id: int | None) -> None:
+        """Remember which transcript is open, or None for none. Opening the
+        same transcript again doesn't write the file again."""
+        if self._settings.last_transcript_id == transcript_id:
+            return
+        self._settings.last_transcript_id = transcript_id
         self._save()
 
     def set_appearance_mode(self, mode: str) -> None:

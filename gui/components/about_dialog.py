@@ -103,8 +103,8 @@ class AboutDialog(ctk.CTkToplevel):
         )
         self._link.pack(anchor="w", pady=(4, 0))
         self._link.bind("<Button-1>", self._open_repo)
-        self._link.bind("<Enter>", lambda _event: self._link.configure(text_color=COCOA_INK))
-        self._link.bind("<Leave>", lambda _event: self._link.configure(text_color=self._link_color))
+        self._link.bind("<Enter>", self._show_link_hovered)
+        self._link.bind("<Leave>", self._show_link_resting)
 
         ctk.CTkButton(
             self, text="Close", width=90, corner_radius=10,
@@ -145,6 +145,14 @@ class AboutDialog(ctk.CTkToplevel):
         """Opens the project page in the user's own browser. The only thing in
         the app that reaches outside it, and only when this link is clicked."""
         webbrowser.open(REPO_URL)
+
+    def _show_link_hovered(self, _event=None) -> None:
+        """Darkens the link to the ink colour while the pointer is over it."""
+        self._link.configure(text_color=COCOA_INK)
+
+    def _show_link_resting(self, _event=None) -> None:
+        """Puts the link back to its own blue once the pointer leaves it."""
+        self._link.configure(text_color=self._link_color)
 
     def _reveal_now(self) -> None:
         self.update_idletasks()

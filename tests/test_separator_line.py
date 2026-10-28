@@ -303,7 +303,7 @@ def _shown_items(settings):
 
 
 def test_only_defaults_has_lines(settings):
-    assert len(_lines(settings.tabview.tab("Defaults"))) == 13
+    assert len(_lines(settings.tabview.tab("Defaults"))) == 14
     for tab in ("Layout", "Storage", "Appearance", "Profiles", "Stats"):
         assert _lines(settings.tabview.tab(tab)) == [], f"{tab} should have no lines"
 
@@ -337,7 +337,7 @@ def test_no_line_after_the_last_thing_on_the_tab(settings):
 
 
 def test_all_defaults_lines_show_when_nothing_is_searched(settings):
-    assert len(_shown_lines(settings.tabview.tab("Defaults"))) == 13
+    assert len(_shown_lines(settings.tabview.tab("Defaults"))) == 14
 
 
 def test_a_search_shows_lines_between_its_matches_but_not_after_the_last(settings):
@@ -355,7 +355,7 @@ def test_a_search_shows_lines_between_its_matches_but_not_after_the_last(setting
 def test_clearing_the_search_brings_the_lines_back(settings):
     _search(settings, "mark")
     _search(settings, "")
-    assert len(_shown_lines(settings.tabview.tab("Defaults"))) == 13
+    assert len(_shown_lines(settings.tabview.tab("Defaults"))) == 14
     for item in _shown_items(settings):
         if item.separator is not None:
             assert item.holder.pack_slaves()[-1] is item.separator, f"{item.name}'s line is not at the bottom"

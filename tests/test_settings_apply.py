@@ -188,6 +188,23 @@ def test_a_value_that_is_not_a_number_is_named_and_shown(settings, applied, key)
 
 
 @pytest.mark.parametrize("key", FIELD_KEYS)
+def test_the_box_is_on_screen_before_it_gets_the_cursor(settings, key):
+    """Right after switching tabs the box isn't on screen yet, and on Windows a
+    box given the cursor in that state sometimes lost it to the window itself
+    (it happened to the Layout boxes). The window is drawn first now, so the
+    box is on screen at the moment it gets the cursor."""
+    _, entry, *_ = _field(settings, key)
+    settings.tabview.set("Stats")
+    _settle(settings, 150)
+    seen = []
+    real_focus_set = entry.focus_set
+    entry.focus_set = lambda: (seen.append(bool(entry._entry.winfo_viewable())), real_focus_set())
+    settings._set_entry_value(entry, "abc")
+    settings._handle_apply()
+    assert seen == [True]
+
+
+@pytest.mark.parametrize("key", FIELD_KEYS)
 def test_a_number_out_of_range_is_named_with_its_range(settings, applied, key):
     _, entry, low, high, name, tab = _field(settings, key)
     settings._set_entry_value(entry, high + 1)

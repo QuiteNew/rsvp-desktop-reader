@@ -105,6 +105,7 @@ class SettingsWindow(ctk.CTkToplevel):
         on_skip_word_count_changed=None,
         on_pause_on_skip_changed=None,
         on_configure_chunking=None,
+        reopen_last_transcript=True,
     ):
         super().__init__(master)
 
@@ -150,6 +151,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._defaults_items = []  # the Defaults tab's entries, in display order; see _defaults_item()
         self._defaults_search = None  # the Defaults tab's SearchBox, once built
         self._about_dialog = None  # the About popup while it is open, see _open_about()
+        self._reopen_last_transcript_at_start = reopen_last_transcript  # read by _build_defaults_tab()
 
         self.label_font = ctk.CTkFont(family=FONT_BODY, size=13)
         self.small_font = ctk.CTkFont(family=FONT_BODY, size=11)
@@ -865,6 +867,22 @@ class SettingsWindow(ctk.CTkToplevel):
         ).pack(fill="x", pady=(0, 20))
         self._separate(holder)
 
+        reopen_description = "When the app starts, it opens the transcript that was open when you last closed it, at the same word and paused, so nothing starts playing on its own. Turn this off to start with no transcript open. Takes effect the next time you launch the app."
+        holder = self._defaults_item(
+            scroll, "Reopen the last transcript at launch",
+            "start startup open launch previous last remember resume restore session continue",
+            reopen_description,
+        )
+        self.reopen_last_transcript_switch = self._styled_switch(holder, "Reopen the last transcript at launch")
+        (self.reopen_last_transcript_switch.select() if self._reopen_last_transcript_at_start else self.reopen_last_transcript_switch.deselect())
+        self.reopen_last_transcript_switch.pack(anchor="w", pady=(0, 5))
+        WrappingLabel(
+            holder,
+            text=reopen_description,
+            text_color=COCOA_INK, font=self.small_font,
+        ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
+
         holder = self._defaults_item(scroll, searchable=False)
         WrappingLabel(
             holder, text="Skip controls below apply immediately, to the current transcript and all future ones",
@@ -1016,6 +1034,8 @@ class SettingsWindow(ctk.CTkToplevel):
         (self.scrub_pause_switch.select() if original.scrub_pause_enabled else self.scrub_pause_switch.deselect())
 
         (self.peripheral_context_switch.select() if original.peripheral_context_enabled else self.peripheral_context_switch.deselect())
+
+        (self.reopen_last_transcript_switch.select() if original.reopen_last_transcript else self.reopen_last_transcript_switch.deselect())
 
         self.skip_word_count_slider.set(original.skip_word_count)
         self.skip_word_count_label.configure(text=f"{original.skip_word_count} words")
@@ -1349,12 +1369,19 @@ class SettingsWindow(ctk.CTkToplevel):
         the error line, the tab the box is on, the box scrolled into view on the
         Defaults list, and the cursor in it with its text selected, so typing
         replaces it. A search that hides the box is cleared first, since a box
-        that isn't shown can't be fixed."""
+        that isn't shown can't be fixed.
+
+        The window is drawn before the box gets the cursor. Right after the tab
+        switch the box isn't on screen yet, and the boxes on the Layout tab
+        haven't been drawn at all if that tab wasn't opened before. On Windows
+        a box given the cursor in that state sometimes lost it to the window
+        itself, so the cursor wasn't in the box."""
         self.error_label.configure(text=message)
         self.tabview.set(tab)
         self._update_apply_button()
         if tab == "Defaults":
             self._bring_into_view(entry)
+        self.update_idletasks()  # draw the tab and the box first, see above
         entry.focus_set()
         entry.select_range(0, "end")
 
@@ -1437,6 +1464,7 @@ class SettingsWindow(ctk.CTkToplevel):
         values["resume_rewind_enabled"] = bool(self.resume_rewind_switch.get())
         values["scrub_pause_enabled"] = bool(self.scrub_pause_switch.get())
         values["peripheral_context_enabled"] = bool(self.peripheral_context_switch.get())
+        values["reopen_last_transcript"] = bool(self.reopen_last_transcript_switch.get())
         values["guide_mark_length_percent"] = self.default_guide_mark_length_percent
         values["guide_mark_color"] = self.default_guide_mark_color
         values["data_directory"] = self._data_directory

@@ -36,6 +36,7 @@ from core.settings_store import (
 )
 from core.profiles import PROFILE_KEYS, ProfileError, build_values
 from core.profile_apply import plan_profile
+from core.reopen import transcript_to_reopen
 from core import data_bundle
 from core import importers
 from core.tokenizer import tokenize
@@ -190,6 +191,29 @@ class RSVPApp(ctk.CTk):
         self._bind_shortcuts()
         self._apply_freeform_resize_state()
         self._refresh_transcript_list()
+        self._reopen_last_transcript()
+
+    def _reopen_last_transcript(self) -> None:
+        """At launch, open the transcript that was open when the app was last
+        closed, if the setting for it is on and the transcript still exists (see
+        core/reopen.py).
+
+        It always comes back paused. A transcript that was playing when the app
+        closed is still saved as playing, and opening it as it is would start
+        reading the moment the window appears. Pausing it first means nothing
+        moves until the person presses play, and then it carries on from the
+        same word, with the usual rewind on resume if that is turned on. A
+        transcript left in the edit box comes back in the edit box."""
+        transcript = transcript_to_reopen(
+            self.settings_store.reopen_last_transcript,
+            self.settings_store.last_transcript_id,
+            self.store.transcripts,
+        )
+        if transcript is None:
+            return
+        if not transcript.is_stopped and not transcript.is_paused:
+            self.store.set_transcript_paused(transcript.id, True)
+        self._handle_open_transcript(transcript)
 
     def _apply_layout_sizes(self) -> None:
         self.grid_columnconfigure(0, weight=0, minsize=self.settings_store.sidebar_width)
@@ -589,6 +613,8 @@ class RSVPApp(ctk.CTk):
     def _handle_open_transcript(self, transcript) -> None:
         self._current_transcript = transcript
         self.list_body.set_current(transcript.id)
+        # Remembered for the next launch, see _reopen_last_transcript().
+        self.settings_store.set_last_transcript_id(transcript.id)
         self.header.set_title(transcript.title)
         self.canvas.load_transcript(transcript)
         self.footer.load_transcript(transcript)
@@ -768,6 +794,7 @@ class RSVPApp(ctk.CTk):
             on_configure_chunking=self._open_chunking_settings,
             appearance_mode=self.settings_store.appearance_mode,
             transcripts=self.store.transcripts,
+            reopen_last_transcript=self.settings_store.reopen_last_transcript,
         )
 
     def _handle_settings_applied(self, values: dict) -> None:
@@ -832,6 +859,9 @@ class RSVPApp(ctk.CTk):
 
         self.settings_store.set_letter_spacing_level(values["letter_spacing_level"])
         self.canvas.set_letter_spacing_level(values["letter_spacing_level"])
+
+        # Only used at the next launch, so there is nothing to change live.
+        self.settings_store.set_reopen_last_transcript(values["reopen_last_transcript"])
 
         # The font switch and the Light/Dark mode are only read at startup
         # (gui/theme.py), so they are saved here and take effect next launch.
@@ -1106,6 +1136,8 @@ class RSVPApp(ctk.CTk):
         self.canvas.handle_transcript_deleted(transcript.id)
         self.store.delete_transcript(transcript.id)
         self._refresh_transcript_list()
+        if self.settings_store.last_transcript_id == transcript.id:
+            self.settings_store.set_last_transcript_id(None)
 
         if was_current:
             self._current_transcript = None

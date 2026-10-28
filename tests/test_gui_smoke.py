@@ -1050,10 +1050,11 @@ def test_closing_the_about_dialog_hands_the_grab_back_to_settings(app, settings,
 def test_about_dialog_colours_follow_the_palette(app, settings, monkeypatch):
     """The dialog has to read well in both themes, not just the one the tests
     happen to run in. Swaps in each full palette for the colours the dialog
-    imports, builds it, and checks its fill, its text colours and the contrast
-    of the two blended ones against the paper. The blends are computed from the
-    palette, so the dark dialog's greys and blues must also come out different
-    from the light one's, which a hard-coded value would not."""
+    imports, builds it, and checks its fill, its text colours (the link's hover
+    colour included) and the contrast of the two blended ones against the
+    paper. The blends are computed from the palette, so the dark dialog's greys
+    and blues must also come out different from the light one's, which a
+    hard-coded value would not."""
     from core.app_info import APP_NAME, APP_VERSION
     import gui.components.about_dialog as about_module
     from gui import theme
@@ -1079,7 +1080,24 @@ def test_about_dialog_colours_follow_the_palette(app, settings, monkeypatch):
                 assert dialog.cget("fg_color") == paper
                 assert labels[APP_NAME].cget("text_color") == ink
                 assert labels[f"Version {APP_VERSION}"].cget("text_color") == dialog._muted_color
-                assert labels[dialog._link.cget("text")].cget("text_color") == dialog._link_color
+
+                # The link turns ink-coloured while the pointer is over it, and
+                # if the mouse happens to be resting where the dialog opens, Tk
+                # tells it so straight away, so its colour at this point depends
+                # on where the mouse is. Calling the two handlers directly checks
+                # both colours whatever the mouse is doing. Sending real Enter and
+                # Leave events would not work everywhere: Tk drops them while the
+                # dialog is not on screen, and on some machines it never is here.
+                link = labels[dialog._link.cget("text")]
+                assert "_show_link_hovered" in link._label.bind("<Enter>")
+                assert "_show_link_resting" in link._label.bind("<Leave>")
+                dialog._show_link_resting()
+                assert link.cget("text_color") == dialog._link_color
+                dialog._show_link_hovered()
+                assert link.cget("text_color") == ink
+                dialog._show_link_resting()
+                assert link.cget("text_color") == dialog._link_color
+
                 assert _contrast_ratio(dialog._muted_color, paper) >= 4.5
                 assert _contrast_ratio(dialog._link_color, paper) >= 4.5
 
