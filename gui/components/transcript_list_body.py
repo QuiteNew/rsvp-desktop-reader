@@ -2,9 +2,19 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 import customtkinter as ctk
+from core.colors import blend_colors
 from gui.components.divider import Divider
 from gui.components.search_box import SearchBox
 from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
+
+# The row of the transcript that is open in the reader: the paper colour with a
+# little of the ember accent mixed in, and an ember border, so it is easy to
+# find in the list in both themes. Every row has a border of this width; on the
+# other rows it is the same colour as the row, so it doesn't show, and a row
+# doesn't move when it becomes the open one.
+OPEN_ROW_FILL = blend_colors(HEARTH_PAPER, EMBER_GLOW, 0.18)
+OPEN_ROW_BORDER = EMBER_GLOW
+ROW_BORDER_WIDTH = 2
 
 
 class TranscriptListBody(ctk.CTkFrame):
@@ -72,6 +82,13 @@ class TranscriptListBody(ctk.CTkFrame):
         # for something this low-stakes to get wrong or stale.
         self._all_transcripts: list = []
         self._sort_label = self.DEFAULT_SORT_LABEL
+
+        # The id of the transcript open in the reader, or None, and the row
+        # frame shown for each transcript in the list right now, so the open
+        # one can be marked without building the list again (see
+        # set_current()).
+        self._current_id = None
+        self._rows: dict = {}
 
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.pack(fill="x", padx=8, pady=(8, 6))
@@ -187,8 +204,13 @@ class TranscriptListBody(ctk.CTkFrame):
             self.add_entry(t)
 
     def add_entry(self, transcript) -> None:
-        row = ctk.CTkFrame(self.entries_frame, fg_color=HEARTH_PAPER, corner_radius=10)
+        row = ctk.CTkFrame(
+            self.entries_frame, fg_color=HEARTH_PAPER, corner_radius=10,
+            border_width=ROW_BORDER_WIDTH, border_color=HEARTH_PAPER,
+        )
         row.pack(fill="x", pady=3, padx=2)
+        self._rows[transcript.id] = row
+        self._style_row(transcript.id)
 
         # delete_button is packed before title_label, even though it sits
         # on the right visually: Tk's pack carves cavity in packing
@@ -372,7 +394,27 @@ class TranscriptListBody(ctk.CTkFrame):
         label.bind("<Configure>", apply_truncation)
         label.after(10, apply_truncation)
 
+    def set_current(self, transcript_id) -> None:
+        """Mark the transcript open in the reader, or none when given None.
+        Only the row losing the mark and the row getting it are changed, so the
+        list keeps its scroll position. The id is kept, so the mark comes back
+        whenever the list is built again (a search, a new sort, a rename). A
+        transcript that isn't in the list shown, say after a switch to another
+        space, simply has no row to mark."""
+        previous, self._current_id = self._current_id, transcript_id
+        for changed in {previous, transcript_id}:
+            if changed in self._rows:
+                self._style_row(changed)
+
+    def _style_row(self, transcript_id) -> None:
+        row = self._rows[transcript_id]
+        if transcript_id == self._current_id:
+            row.configure(fg_color=OPEN_ROW_FILL, border_color=OPEN_ROW_BORDER)
+        else:
+            row.configure(fg_color=HEARTH_PAPER, border_color=HEARTH_PAPER)
+
     def clear(self) -> None:
+        self._rows = {}
         for widget in self.entries_frame.winfo_children():
             widget.destroy()
 

@@ -588,6 +588,7 @@ class RSVPApp(ctk.CTk):
 
     def _handle_open_transcript(self, transcript) -> None:
         self._current_transcript = transcript
+        self.list_body.set_current(transcript.id)
         self.header.set_title(transcript.title)
         self.canvas.load_transcript(transcript)
         self.footer.load_transcript(transcript)
@@ -1108,6 +1109,7 @@ class RSVPApp(ctk.CTk):
 
         if was_current:
             self._current_transcript = None
+            self.list_body.set_current(None)
             self.header.set_title("No transcript selected")
             self.footer.set_enabled(False)
 
