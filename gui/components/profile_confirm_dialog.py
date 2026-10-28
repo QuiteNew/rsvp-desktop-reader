@@ -1,5 +1,6 @@
 import customtkinter as ctk
 
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 
@@ -58,6 +59,10 @@ class ProfileConfirmDialog(ctk.CTkToplevel):
             font=button_font, command=self._handle_confirm, **confirm_colors,
         )
         self.confirm_button.pack(side="right")
+
+        # Esc cancels. There is no Enter: deleting a profile and replacing
+        # what one holds can't be undone, so they take a click.
+        bind_dialog_keys(self, on_escape=self._handle_cancel)
 
         self.lift()
         self.transient(master)

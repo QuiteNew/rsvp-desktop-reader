@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from core.profiles import clean_name, name_problem
+from gui.components.dialog_keys import bind_dialog_keys, focus_for_typing
 from gui.theme import (
     HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER,
     FONT_BODY, apply_app_icon, center_over_parent,
@@ -63,7 +64,6 @@ class ProfileNameDialog(ctk.CTkToplevel):
         self.name_entry.pack(fill="x", padx=20)
         if initial_name:
             self.name_entry.insert(0, initial_name)
-        self.name_entry.bind("<Return>", self._handle_submit)
 
         self.error_label = ctk.CTkLabel(
             self, text="", text_color=ERROR_COLOR, font=small_font,
@@ -85,6 +85,11 @@ class ProfileNameDialog(ctk.CTkToplevel):
             font=button_font, command=self._handle_submit,
         ).pack(side="right")
 
+        # Enter saves and Esc cancels. Enter used to be bound on the name box
+        # alone; bound on the popup it works wherever the cursor is, so the box
+        # no longer needs its own.
+        bind_dialog_keys(self, on_enter=self._handle_submit, on_escape=self._handle_cancel)
+
         self.lift()
         self.transient(master)
         self.after(10, self.grab_set)
@@ -94,18 +99,14 @@ class ProfileNameDialog(ctk.CTkToplevel):
         self.after(80, self._reveal_now)
 
     def _reveal_now(self) -> None:
-        self.update_idletasks()
-        self.attributes("-alpha", 1)
-        self._focus_name_entry()
-
-    def _focus_name_entry(self) -> None:
-        """Put the cursor in the box so the person can type straight away. When
-        renaming, the current name is selected so typing replaces it."""
         if not self.winfo_exists():
             return
-        self.name_entry.focus()
-        self.name_entry.select_range(0, "end")
-        self.name_entry.icursor("end")
+        self.update_idletasks()
+        self.attributes("-alpha", 1)
+        # The cursor goes in the box so the person can type straight away. When
+        # renaming, the current name is selected so typing replaces it. The
+        # helper waits a moment first, see focus_for_typing() for why.
+        focus_for_typing(self.name_entry, select=True)
 
     def _handle_submit(self, _event=None) -> None:
         name = self.name_entry.get()

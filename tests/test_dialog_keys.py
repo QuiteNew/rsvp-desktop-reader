@@ -5,11 +5,11 @@ What was agreed:
 
 - Esc does what the popup's Cancel or close button does, in every popup.
 - Enter only where there is one safe answer: creating a space or a transcript
-  from what was just typed, and closing a message.
+  from what was just typed, saving a profile name, and closing a message.
 - The popups that delete or replace something get no Enter at all, so a stray
   key can never confirm them.
-- New Space and New Transcript put the cursor in their name box, so the name
-  can be typed straight away.
+- New Space, New Transcript and the profile name popup put the cursor in
+  their name box, so the name can be typed straight away.
 
 The keys are sent the way a key press arrives: to the widget that has the
 keyboard, which is the popup's text box where it has one. They run against a
@@ -282,6 +282,28 @@ def make_import_confirm(owner):
     return ImportConfirmDialog(owner, on_replace=lambda: chosen("replace"), on_expand=lambda: chosen("expand")), chosen
 
 
+def make_profile_confirm(owner):
+    from gui.components.profile_confirm_dialog import ProfileConfirmDialog
+
+    confirmed = Calls()
+    closed = Calls()
+    dialog = ProfileConfirmDialog(
+        owner, "Delete profile", "Delete the profile?", "Delete",
+        on_confirm=confirmed, destructive=True, on_close=closed,
+    )
+    dialog.closed = closed
+    return dialog, confirmed
+
+
+def make_chooser(owner):
+    from gui.components.add_transcript_chooser_dialog import AddTranscriptChooserDialog
+
+    chosen = Calls()
+    return AddTranscriptChooserDialog(
+        owner, on_choose_blank=lambda: chosen("blank"), on_choose_file=lambda: chosen("file"),
+    ), chosen
+
+
 def make_move(owner):
     from gui.components.move_transcript_dialog import MoveTranscriptDialog
 
@@ -294,6 +316,8 @@ ESC_ONLY = {
     "delete space": make_delete_space,
     "import": make_import_confirm,
     "move transcript": make_move,
+    "profile confirm": make_profile_confirm,
+    "add transcript chooser": make_chooser,
 }
 
 
@@ -317,6 +341,15 @@ def test_esc_closes_without_doing_anything(owner, shown, name):
     assert not is_open(dialog), f"Esc did not close {name}"
 
 
+def test_esc_in_the_profile_confirm_still_hands_back_to_settings(owner, shown):
+    """Its Cancel button calls on_close, which lets Settings take back the
+    input grab. Esc has to do the same."""
+    dialog, _ = make_profile_confirm(owner)
+    shown(dialog)
+    press(dialog, "Escape")
+    assert dialog.closed.calls == [()]
+
+
 # ---- a message ----
 
 def make_message(owner):
@@ -335,6 +368,82 @@ def test_enter_and_esc_close_a_message_like_its_button(owner, shown, key):
     press(dialog, key)
     assert not is_open(dialog)
     assert closed.calls == [()]
+
+
+# ---- a profile name ----
+
+def make_profile_name(owner, existing=(), initial_name=""):
+    from gui.components.profile_name_dialog import ProfileNameDialog
+
+    submitted = Calls()
+    closed = Calls()
+    dialog = ProfileNameDialog(
+        owner, "Save profile", "Save", existing_names=list(existing),
+        on_submit=submitted, on_close=closed, initial_name=initial_name,
+    )
+    dialog.closed = closed
+    return dialog, submitted
+
+
+def test_the_profile_name_popup_puts_the_cursor_in_the_box(owner, shown):
+    dialog, _ = make_profile_name(owner)
+    shown(dialog)
+    assert typing_goes_to(dialog, dialog.name_entry)
+    dialog.destroy()
+
+
+def test_renaming_selects_the_current_name_so_typing_replaces_it(owner, shown):
+    dialog, _ = make_profile_name(owner, initial_name="Fast skim")
+    shown(dialog)
+    assert typing_goes_to(dialog, dialog.name_entry)
+    assert dialog.name_entry._entry.selection_present()
+    dialog.destroy()
+
+
+def test_the_profile_name_keeps_the_cursor_when_the_keyboard_is_handed_back_late(owner, shown):
+    from gui.components.profile_name_dialog import ProfileNameDialog
+
+    behind = ctk.CTkEntry(owner)
+    behind.pack()
+    dialog = with_late_hand_back(ProfileNameDialog, behind)(
+        owner, "Rename profile", "Rename", existing_names=[], on_submit=Calls(), initial_name="Fast skim",
+    )
+    shown(dialog)
+    assert keyboard_is_in(dialog, dialog.name_entry)
+    assert dialog.name_entry._entry.selection_present()
+    dialog.destroy()
+
+
+def test_enter_saves_a_profile_name_once(owner, shown):
+    """Enter moved from the name box to the popup. It still saves, and only
+    once."""
+    dialog, submitted = make_profile_name(owner)
+    shown(dialog)
+    dialog.name_entry.insert(0, "Fast skim")
+    press(dialog, "Return")
+    assert submitted.calls == [("Fast skim",)]
+    assert dialog.closed.calls == [()]
+
+
+def test_enter_with_a_name_that_is_taken_keeps_the_popup_open(owner, shown):
+    dialog, submitted = make_profile_name(owner, existing=["Fast skim"])
+    shown(dialog)
+    dialog.name_entry.insert(0, "Fast skim")
+    press(dialog, "Return")
+    assert submitted.calls == []
+    assert is_open(dialog)
+    assert dialog.error_label.cget("text")
+    dialog.destroy()
+
+
+def test_esc_cancels_a_profile_name(owner, shown):
+    dialog, submitted = make_profile_name(owner)
+    shown(dialog)
+    dialog.name_entry.insert(0, "Fast skim")
+    press(dialog, "Escape")
+    assert submitted.calls == []
+    assert not is_open(dialog)
+    assert dialog.closed.calls == [()]
 
 
 # ---- the helper itself ----

@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import HEARTH_PAPER, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, apply_app_icon, center_over_parent
 
 
@@ -49,6 +50,10 @@ class AddTranscriptChooserDialog(ctk.CTkToplevel):
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
             font=button_font, command=self._handle_choose_file,
         ).pack(fill="x", padx=20, pady=(0, 20))
+
+        # Esc closes. There is no Enter, because neither choice is the
+        # obvious one.
+        bind_dialog_keys(self, on_escape=self.destroy)
 
         self.lift()
         self.transient(master)
