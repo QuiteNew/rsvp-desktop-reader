@@ -18,6 +18,7 @@ from core.settings_store import (
 )
 from core.timing import format_duration
 from gui.components.about_dialog import AboutDialog
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.components.profiles_tab import ProfilesTab
 from gui.components.search_box import SearchBox
 from gui.components.separator_line import SeparatorLine
@@ -210,6 +211,13 @@ class SettingsWindow(ctk.CTkToplevel):
             font=self.button_font, command=self._handle_apply_clicked,
         )
         self.apply_button.pack(side="right")
+
+        # Esc does what Close does: the window goes away and anything not yet
+        # applied is left unapplied. There is no Enter, so a key press can't
+        # apply settings by accident. A popup opened from here (About, a
+        # message, the chunking window) is a window of its own, so Esc there
+        # closes only that popup.
+        bind_dialog_keys(self, on_escape=self.destroy)
 
         self.lift()
         self.transient(master)

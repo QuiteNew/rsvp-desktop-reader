@@ -2,6 +2,7 @@ import customtkinter as ctk
 
 from core.reader import CHUNK_MODE_FIXED, CHUNK_MODE_ADAPTIVE
 from core.settings_store import CHUNK_SIZE_RANGE, CHUNK_CHAR_TARGET_RANGE
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import (
     HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER,
     FONT_BODY, apply_app_icon, center_over_parent,
@@ -166,6 +167,10 @@ class ChunkingSettingsWindow(ctk.CTkToplevel):
         button_row.pack(fill="x", padx=18, pady=(0, 16))
         self._styled_button(button_row, "Close", self.destroy, width=90).pack(side="left")
         self._styled_button(button_row, "Apply", self._handle_apply, width=90).pack(side="right")
+
+        # Esc does what Close does. There is no Enter, so a key press can't
+        # apply anything by accident.
+        bind_dialog_keys(self, on_escape=self.destroy)
 
         self.lift()
         self.transient(master)

@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent
 
 class SpaceSelectionDialog(ctk.CTkToplevel):
@@ -55,6 +56,10 @@ class SpaceSelectionDialog(ctk.CTkToplevel):
 
         for space_name in spaces:
             self._add_space_row(space_name, is_current=(space_name == current_space))
+
+        # Esc closes without switching. While a name is being edited, Esc
+        # cancels that edit instead and the window stays (see cancel_rename()).
+        bind_dialog_keys(self, on_escape=self.destroy)
 
         self.lift()
         self.transient(master)
@@ -193,10 +198,14 @@ class SpaceSelectionDialog(ctk.CTkToplevel):
                     space_state["name"] = new_name
                     name_widget.configure(text=new_name)
 
-        def cancel_rename(event=None) -> None:
+        def cancel_rename(event=None):
             if not rename_state["editing"]:
-                return
+                return None
             end_rename()
+            # Stop this Esc here, so it doesn't also reach the window's own
+            # Esc and close the whole window (the same as the bookmarks
+            # popover's rename does).
+            return "break"
 
         name_entry.bind("<Return>", commit_rename)
         name_entry.bind("<FocusOut>", commit_rename)

@@ -6,6 +6,7 @@ from PIL import Image
 
 from core.app_info import APP_NAME, APP_VERSION, LICENSE_NAME, REPO_URL
 from core.colors import blend_colors
+from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import (
     HEARTH_PAPER, COCOA_INK, DUSK_BLUE, EMBER_GLOW, EMBER_GLOW_HOVER,
     FONT_HEADING, FONT_BODY, apply_app_icon, center_over_parent,
@@ -110,6 +111,10 @@ class AboutDialog(ctk.CTkToplevel):
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
             font=button_font, command=self._handle_dismiss,
         ).pack(pady=(0, 20))
+
+        # Esc does what Close does, on_close included, so Settings still gets
+        # its input grab back.
+        bind_dialog_keys(self, on_escape=self._handle_dismiss)
 
         self.lift()
         self.transient(master)
