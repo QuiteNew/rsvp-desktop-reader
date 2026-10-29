@@ -3,6 +3,7 @@ import tkinter.font as tkfont
 
 import customtkinter as ctk
 from core.colors import blend_colors
+from core.transcript_sort import DEFAULT_SORT, SORT_ORDERS, known_sort, sort_transcripts
 from gui.components.divider import Divider
 from gui.components.search_box import SearchBox
 from gui.theme import WARM_TAUPE, HEARTH_PAPER, COCOA_INK, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY
@@ -22,66 +23,32 @@ class TranscriptListBody(ctk.CTkFrame):
     menu pinned above it. Each row has a delete ("X") button that only
     becomes clearly visible when hovering that row, a double-click-to-
     rename title, and a right-click menu to move the transcript to
-    another space."""
+    another space.
 
-    # Every available sort mode: label -> (key function, reverse). A
-    # plain dict rather than a list of tuples, since Python dicts keep
-    # insertion order, so this doubles as the menu's display order in
-    # _show_sort_menu() below, while also giving _rerender() a direct
-    # O(1) lookup instead of a linear scan.
-    #
-    # "Date added" has no dedicated timestamp field to sort by (see
-    # core/models.py: Transcript has no created_at/last_opened_at of
-    # any kind). id stands in for it instead: TranscriptStore._next_id
-    # only ever increases and ids are never reused or reassigned, and
-    # add_transcript() always appends, never inserts, so id order is
-    # creation order, exactly.
-    #
-    # "Most read" and "Most time spent reading" repurpose two of the
-    # Stats tab's own running totals (times_read, total_time_spent_seconds;
-    # see core/models.py and TranscriptStore.add_session_stats()) as
-    # sort keys. Both are single-direction (most-first) only, not offered
-    # in a "least first" variant: unlike title/date, there's no obvious
-    # everyday reason to want to see your LEAST-read transcripts surfaced
-    # first, so that direction was left out rather than doubling the menu
-    # for a combination nothing asked for.
-    SORT_MODES = {
-        "Title (A–Z)": (lambda t: t.title.lower(), False),
-        "Title (Z–A)": (lambda t: t.title.lower(), True),
-        "Date added (newest first)": (lambda t: t.id, True),
-        "Date added (oldest first)": (lambda t: t.id, False),
-        "Most read": (lambda t: t.times_read, True),
-        "Most time spent reading": (lambda t: t.total_time_spent_seconds, True),
-    }
+    sort is the order to start in, one of the ids in core/transcript_sort.py.
+    on_sort_changed, if given, is called with the new id whenever another
+    order is picked from the sort menu, so the app can save it."""
 
-    # Matches the list's own pre-existing, sort-feature-free order
-    # (self._transcripts in TranscriptStore is only ever appended to,
-    # never reordered; see add_transcript()), so a freshly launched
-    # app looks exactly as it always has until the user deliberately
-    # picks a different sort.
-    DEFAULT_SORT_LABEL = "Date added (oldest first)"
-
-    def __init__(self, master, on_select=None, on_delete_requested=None, on_rename_requested=None, on_move_requested=None):
+    def __init__(
+        self, master, on_select=None, on_delete_requested=None, on_rename_requested=None,
+        on_move_requested=None, sort=DEFAULT_SORT, on_sort_changed=None,
+    ):
         super().__init__(master, fg_color=WARM_TAUPE, corner_radius=0)
         self.on_select = on_select
         self.on_delete_requested = on_delete_requested
         self.on_rename_requested = on_rename_requested
         self.on_move_requested = on_move_requested
+        self.on_sort_changed = on_sort_changed
 
-        # The full, unfiltered/unsorted list handed in by the most recent
-        # render_transcripts() call. Search and sort both re-derive what
-        # they display from this each time (see _rerender()) rather than
-        # needing app.py to re-supply it on every keystroke or menu pick,
-        # since neither the search text nor the chosen sort mode is
-        # something app.py or TranscriptStore has any need to know about;
-        # it's purely a display-layer concern local to this widget, and
-        # both are deliberately left un-persisted (in-memory only, same
-        # as e.g. AddTranscriptDialog's own transient state): they reset
-        # to "no search, default sort" on every launch, same as the list
-        # itself always has, rather than adding a settings-store field
-        # for something this low-stakes to get wrong or stale.
+        # The full, unfiltered and unsorted list handed in by the most recent
+        # render_transcripts() call. Search and sort both work out what to
+        # show from this each time (see _rerender()), so app.py doesn't have
+        # to hand the list over again on every keystroke or menu pick. The
+        # search text starts empty at every launch. The sort is remembered:
+        # the app passes in the saved one, and saves a new one through
+        # on_sort_changed.
         self._all_transcripts: list = []
-        self._sort_label = self.DEFAULT_SORT_LABEL
+        self._sort = known_sort(sort)
 
         # The id of the transcript open in the reader, or None, and the row
         # frame shown for each transcript in the list right now, so the open
@@ -144,7 +111,7 @@ class TranscriptListBody(ctk.CTkFrame):
         each click is cheap and avoids keeping a persistent one around).
 
         Uses add_radiobutton bound to a fresh StringVar seeded with the
-        currently active sort label, rather than add_command, purely for
+        currently active sort, rather than add_command, purely for
         the free radio-dot next to whichever mode is already selected: a
         small, genuinely useful "what am I sorted by right now" cue that
         a plain command menu wouldn't give without extra work. The
@@ -154,11 +121,11 @@ class TranscriptListBody(ctk.CTkFrame):
         which keeps it alive until the menu (and this function's local
         scope, which is what actually holds it) is done."""
         menu = tk.Menu(self, tearoff=0)
-        sort_var = tk.StringVar(value=self._sort_label)
-        for label in self.SORT_MODES:
+        sort_var = tk.StringVar(value=self._sort)
+        for sort_id, order in SORT_ORDERS.items():
             menu.add_radiobutton(
-                label=label, value=label, variable=sort_var,
-                command=lambda lbl=label: self._handle_sort_selected(lbl),
+                label=order.label, value=sort_id, variable=sort_var,
+                command=lambda chosen=sort_id: self._handle_sort_selected(chosen),
             )
         x = self._sort_button.winfo_rootx()
         y = self._sort_button.winfo_rooty() + self._sort_button.winfo_height()
@@ -167,9 +134,11 @@ class TranscriptListBody(ctk.CTkFrame):
         finally:
             menu.grab_release()
 
-    def _handle_sort_selected(self, label: str) -> None:
-        self._sort_label = label
+    def _handle_sort_selected(self, sort_id: str) -> None:
+        self._sort = sort_id
         self._rerender()
+        if self.on_sort_changed:
+            self.on_sort_changed(sort_id)
 
     def _rerender(self) -> None:
         """Re-derive the displayed rows from self._all_transcripts,
@@ -181,8 +150,7 @@ class TranscriptListBody(ctk.CTkFrame):
         search_text = self._search_box.get().strip().lower()
         filtered = [t for t in self._all_transcripts if search_text in t.title.lower()]
 
-        key_func, reverse = self.SORT_MODES[self._sort_label]
-        ordered = sorted(filtered, key=key_func, reverse=reverse)
+        ordered = sort_transcripts(filtered, self._sort)
 
         self.clear()
 

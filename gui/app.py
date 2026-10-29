@@ -122,6 +122,8 @@ class RSVPApp(ctk.CTk):
             on_delete_requested=self._handle_delete_requested,
             on_rename_requested=self._handle_rename_requested,
             on_move_requested=self._handle_move_requested,
+            sort=self.settings_store.transcript_sort,
+            on_sort_changed=self.settings_store.set_transcript_sort,
         )
         self.list_body.grid(row=2, column=0, sticky="nsew")
 

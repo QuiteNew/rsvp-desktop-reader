@@ -136,7 +136,7 @@ def test_the_mark_stays_when_the_list_is_given_again(body):
 
 def test_the_mark_stays_when_the_sort_changes(body):
     body.set_current(2)
-    body._handle_sort_selected("Title (Z–A)")
+    body._handle_sort_selected("title_za")
     assert marked_ids(body) == [2]
 
 

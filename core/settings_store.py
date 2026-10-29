@@ -6,6 +6,7 @@ from dataclasses import dataclass, asdict, field, fields
 from core.letter_spacing import MAX_LEVEL
 from core.profiles import Profile, ProfileError, clean_name, clean_profile_list, name_problem, sanitize_values
 from core.storage import DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
+from core.transcript_sort import DEFAULT_SORT, known_sort
 
 SETTINGS_DIR = DEFAULT_DATA_DIR
 
@@ -106,6 +107,8 @@ class AppSettings:
     last_transcript_id: int | None = None  # the transcript open in the reader, kept up to date by the app so the
                                            # one above can find it at the next launch. None when nothing is open.
                                            # Not shown in Settings.
+    transcript_sort: str = DEFAULT_SORT  # global: how the sidebar sorts the transcripts, picked from its sort
+                                         # menu. One of the ids in core/transcript_sort.py. Not part of a profile.
     profiles: list = field(default_factory=list)  # saved reading profiles, each a plain dict with a "name" and a
                                                    # "values" dict (see core/profiles.py). Kept as dicts so
                                                    # they go to settings.json and into export bundles as they
@@ -403,6 +406,19 @@ class SettingsStore:
     def window_maximized(self) -> bool:
         # Strictly True, so something odd in the file reads as not maximized.
         return self._settings.window_maximized is True
+
+    @property
+    def transcript_sort(self) -> str:
+        # An id this version doesn't know reads as the default sort.
+        return known_sort(self._settings.transcript_sort)
+
+    def set_transcript_sort(self, sort_id: str) -> None:
+        """Remember how the sidebar sorts the transcripts. Picking the order
+        that is already in use doesn't write the file again."""
+        if self._settings.transcript_sort == sort_id:
+            return
+        self._settings.transcript_sort = sort_id
+        self._save()
 
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
