@@ -207,7 +207,9 @@ def test_the_app_opens_in_the_saved_order_and_saves_a_new_one(tmp_path, monkeypa
         application = RSVPApp()
     except tkinter.TclError as exc:
         pytest.skip(f"Tk can't start a display here: {exc}")
-    application.withdraw()
+    # Left on screen: on Linux, destroying an app that was hidden with
+    # withdraw() makes the next window that takes the keyboard focus crash Tk,
+    # in whatever test comes next.
     try:
         _settle(application)
         assert application.list_body._sort == "title_za"

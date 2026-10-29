@@ -5,7 +5,7 @@ from dataclasses import dataclass, asdict, field, fields
 
 from core.letter_spacing import MAX_LEVEL
 from core.profiles import Profile, ProfileError, clean_name, clean_profile_list, name_problem, sanitize_values
-from core.storage import DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
+from core.storage import DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS, DamagedFile, keep_damaged_copy
 from core.transcript_sort import DEFAULT_SORT, known_sort
 
 SETTINGS_DIR = DEFAULT_DATA_DIR
@@ -147,20 +147,37 @@ class SettingsStore:
     def __init__(self, settings_directory: str | None = None):
         self._settings_dir = Path(settings_directory) if settings_directory else SETTINGS_DIR
         self._settings_file = self._settings_dir / "settings.json"
+        # Set by _load() when there was a settings.json that couldn't be read.
+        self.damaged_file: DamagedFile | None = None
         self._settings = self._load()
         # 0.0 rather than time.monotonic() at startup. See the matching
         # comment on TranscriptStore._last_live_save.
         self._last_live_save = 0.0
 
     def _load(self) -> AppSettings:
+        """The saved settings, or the defaults when there are none. A
+        settings.json that is there but can't be read is copied aside first,
+        because the next save would write over it, and damaged_file says
+        where the copy went (see core/storage.py). The app tells the person
+        at launch."""
         if not self._settings_file.exists():
             return AppSettings()
+        settings = self._read_settings_file()
+        if settings is None:
+            self.damaged_file = DamagedFile(self._settings_file, keep_damaged_copy(self._settings_file))
+            return AppSettings()
+        return settings
+
+    def _read_settings_file(self) -> AppSettings | None:
+        """The settings in settings.json, or None if it can't be read: it isn't
+        text at all (half-written bytes after a crash, say), isn't JSON, or is
+        JSON but not settings."""
         try:
             data = json.loads(self._settings_file.read_text(encoding="utf-8"))
             # Valid JSON that is not an object (a list, null, a bare number)
-            # cannot be settings, so start from the defaults.
+            # cannot be settings.
             if not isinstance(data, dict):
-                return AppSettings()
+                return None
             # guide_mark_color predates guide_mark_color_is_default. For an
             # old settings.json missing the flag, infer it from whether the
             # stored color still equals the one-and-only historical default
@@ -176,8 +193,8 @@ class SettingsStore:
             # whole load fail and reset every other setting to its default.
             data["profiles"] = clean_profile_list(data.get("profiles"))
             return AppSettings(**_known_settings(data))
-        except (json.JSONDecodeError, KeyError, TypeError):
-            return AppSettings()
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError):
+            return None
 
     def _save(self) -> None:
         self._settings_dir.mkdir(exist_ok=True, parents=True)

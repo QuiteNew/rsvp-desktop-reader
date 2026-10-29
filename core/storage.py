@@ -1,6 +1,9 @@
 import json
+import shutil
+from datetime import datetime
 from pathlib import Path
 from dataclasses import asdict, fields as dataclass_fields
+from typing import NamedTuple
 
 from core.models import Transcript, Bookmark
 
@@ -98,18 +101,74 @@ def parse_data(data: dict) -> dict | None:
             "spaces": data["spaces"],
             "transcripts": transcripts,
         }
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, AttributeError):
+        # AttributeError is for a transcript or bookmark that isn't an object
+        # at all, a bare number in the list say.
         return None
+
+
+class DamagedFile(NamedTuple):
+    """A save file that was there but couldn't be read, and where the copy of
+    it went. copy is None if making the copy failed."""
+    original: Path
+    copy: Path | None
+
+
+def keep_damaged_copy(path: Path, now: datetime | None = None) -> Path | None:
+    """Copy a file that couldn't be read to a new name next to it, before the
+    app saves over it, so whatever is still in it isn't lost. data.json becomes
+    something like data.damaged-20261029-153012.json, and the copy is the file
+    exactly as it was, byte for byte.
+
+    If an earlier copy has exactly the same contents, nothing new is written
+    and that copy is given back instead. The same damaged file is read more
+    than once in one launch (gui/theme.py reads the settings twice before the
+    app does), and again at every launch until something saves over it, and
+    one copy of it is enough.
+
+    Gives back where the copy is, or None if it couldn't be made (a folder that
+    can't be written to, say). Never raises, so a failed copy can't stop the
+    app from starting."""
+    try:
+        contents = path.read_bytes()
+        pattern = f"{path.stem}.damaged-*{path.suffix}"
+        for earlier in sorted(path.parent.glob(pattern)):
+            if earlier.is_file() and earlier.read_bytes() == contents:
+                return earlier
+        stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
+        copy = path.with_name(f"{path.stem}.damaged-{stamp}{path.suffix}")
+        number = 2
+        while copy.exists():
+            copy = path.with_name(f"{path.stem}.damaged-{stamp}-{number}{path.suffix}")
+            number += 1
+        shutil.copy2(path, copy)
+        return copy
+    except OSError:
+        return None
+
+
+def read_state(directory: str) -> tuple[dict | None, DamagedFile | None]:
+    """Read saved state from the given directory. Gives back the state, or
+    None when there is no valid save, so the caller can fall back to sensible
+    defaults, together with a DamagedFile when there was a data.json that
+    couldn't be read. That file is copied aside first (see
+    keep_damaged_copy()), because the next save would write over it.
+
+    A file counts as damaged when it isn't text at all (half-written bytes
+    after a crash, say), isn't JSON, or is JSON but not a save file."""
+    data_file = Path(directory) / "data.json"
+    if not data_file.exists():
+        return None, None
+    try:
+        state = parse_data(json.loads(data_file.read_text(encoding="utf-8")))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        state = None
+    if state is None:
+        return None, DamagedFile(data_file, keep_damaged_copy(data_file))
+    return state, None
 
 
 def load_state(directory: str):
-    """Read saved state from the given directory. Returns None if no valid
-    save exists there yet, so the caller can fall back to sensible defaults."""
-    data_file = Path(directory) / "data.json"
-    if not data_file.exists():
-        return None
-    try:
-        data = json.loads(data_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    return parse_data(data)
+    """Just the state from read_state(), for callers that don't need to know
+    whether a damaged file was found."""
+    return read_state(directory)[0]

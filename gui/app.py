@@ -202,6 +202,8 @@ class RSVPApp(ctk.CTk):
         self._apply_freeform_resize_state()
         self._refresh_transcript_list()
         self._reopen_last_transcript()
+        self._damaged_notice_after_id = None
+        self._tell_about_damaged_files()
 
     def _reopen_last_transcript(self) -> None:
         """At launch, open the transcript that was open when the app was last
@@ -1015,9 +1017,10 @@ class RSVPApp(ctk.CTk):
                 setattr(self, name, None)
 
     def destroy(self):
-        """The timers above go first, so neither can run after the window is
-        gone."""
+        """The timers above, and the one waiting to tell about a damaged save
+        file, go first, so none of them can run after the window is gone."""
         self._cancel_placement_timers()
+        self._cancel_damaged_file_notice()
         super().destroy()
 
     def _window_state(self) -> str:
@@ -1076,6 +1079,69 @@ class RSVPApp(ctk.CTk):
             except (AttributeError, OSError):
                 pass  # fall back to the main screen below
         return 0 <= x < self.winfo_screenwidth() and 0 <= y < self.winfo_screenheight()
+
+    # ---- Save files that couldn't be read ----
+    # A data.json or settings.json that is there but can't be read is copied
+    # aside by the store that found it (see core/storage.py), and the app starts
+    # without it. These say so at launch, so an empty transcript list or the
+    # default settings don't come as a silent surprise.
+
+    def _tell_about_damaged_files(self) -> None:
+        """Called once, at the end of __init__. Never shows anything straight
+        away, it only queues _show_damaged_file_notices(), and only when there
+        is something to say.
+
+        The wait matters even though the window is already drawn by then (some
+        widgets ask Tk to lay them out while they are built, which puts the
+        window up). On Windows, CustomTkinter hides the window and shows it once
+        more when mainloop() starts, and a message opened before that could end
+        up hidden behind it. Queued, it runs inside mainloop(), after that."""
+        if self._damaged_file_notices():
+            self._damaged_notice_after_id = self.after(100, self._show_damaged_file_notices)
+
+    def _show_damaged_file_notices(self) -> None:
+        """Show the messages once the window is on screen, checking again every
+        100 ms until it is."""
+        self._damaged_notice_after_id = None
+        if not self.winfo_viewable():
+            self._damaged_notice_after_id = self.after(100, self._show_damaged_file_notices)
+            return
+        self._show_notices(self._damaged_file_notices())
+
+    def _damaged_file_notices(self) -> list[tuple[str, str]]:
+        """A title and a message for each save file that couldn't be read,
+        settings first. The copy is named on a line of its own, without its
+        folder: a whole path doesn't fit the message box, and the copy is
+        always in the same folder as the file it was made from."""
+        notices = []
+        for damaged, title, what_happened in (
+            (self.settings_store.damaged_file, "Couldn't read your settings",
+             "Your settings couldn't be read, so the app is using its default settings."),
+            (self.store.damaged_file, "Couldn't read your transcripts",
+             "Your saved transcripts couldn't be read, so the list starts empty."),
+        ):
+            if damaged is None:
+                continue
+            if damaged.copy is None:
+                message = (f"{what_happened} Keeping a copy of the old file didn't work either, so it "
+                           "will be replaced the next time the app saves.")
+            else:
+                message = f"{what_happened} The old file was kept, in the same folder, as:\n\n{damaged.copy.name}"
+            notices.append((title, message))
+        return notices
+
+    def _show_notices(self, notices: list[tuple[str, str]]) -> None:
+        """One message for each notice, the next one once the last is closed."""
+        if not notices:
+            return
+        title, message = notices[0]
+        MessageDialog(self, title, message, on_close=lambda: self._show_notices(notices[1:]))
+
+    def _cancel_damaged_file_notice(self) -> None:
+        after_id = getattr(self, "_damaged_notice_after_id", None)
+        if after_id is not None:
+            self.after_cancel(after_id)
+            self._damaged_notice_after_id = None
 
     # ---- Reading profiles ----
     # A profile is a snapshot of the app-wide settings in PROFILE_KEYS (see

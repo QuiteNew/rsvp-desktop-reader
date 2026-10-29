@@ -3,7 +3,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 from core.models import Transcript, Bookmark
-from core.storage import save_state, load_state, DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
+from core.storage import save_state, read_state, DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
 
 DEFAULT_SPACE = "General"
 
@@ -24,7 +24,10 @@ class TranscriptStore:
     def __init__(self, data_directory: str | None = None):
         self._data_directory = data_directory or str(DEFAULT_DATA_DIR)
 
-        loaded = load_state(self._data_directory)
+        # damaged_file is set when there was a data.json that couldn't be read.
+        # It has been copied aside by then (see core/storage.py), and the app
+        # tells the person at launch.
+        loaded, self.damaged_file = read_state(self._data_directory)
         if loaded:
             self._spaces = loaded["spaces"]
             self._current_space_index = min(loaded["current_space_index"], len(self._spaces) - 1)
