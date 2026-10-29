@@ -35,8 +35,11 @@ LETTER_SPACING_LEVEL_RANGE = (0, MAX_LEVEL)  # 0 is Off. The top level comes fro
 
 @dataclass
 class AppSettings:
-    window_width: int = 1000
-    window_height: int = 650
+    window_width: int = 1000  # the main window's size when it is not maximized, saved when the app closes and
+    window_height: int = 650  # when it is changed on the Layout tab. The app opens at this size.
+    window_x: int | None = None  # where the main window was on the screen when the app was last closed, in screen
+    window_y: int | None = None  # pixels. None until the app has been closed once, and the system places it then.
+    window_maximized: bool = False  # whether the main window was maximized when the app was last closed.
     sidebar_width: int = 220
     bottom_band_height: int = 100
     default_wpm: int = 300
@@ -107,6 +110,14 @@ class AppSettings:
                                                    # "values" dict (see core/profiles.py). Kept as dicts so
                                                    # they go to settings.json and into export bundles as they
                                                    # are. Use SettingsStore's profile methods, not this list.
+
+def _whole_number_or_none(value) -> int | None:
+    """value if it is a real whole number, otherwise None. Text, true or false,
+    or a fraction in the settings file all read as None."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
 
 # The names of AppSettings' own fields, used by _known_settings() below.
 _SETTINGS_FIELDS = {f.name for f in fields(AppSettings)}
@@ -380,9 +391,35 @@ class SettingsStore:
             return value
         return None
 
+    @property
+    def window_x(self) -> int | None:
+        return _whole_number_or_none(self._settings.window_x)
+
+    @property
+    def window_y(self) -> int | None:
+        return _whole_number_or_none(self._settings.window_y)
+
+    @property
+    def window_maximized(self) -> bool:
+        # Strictly True, so something odd in the file reads as not maximized.
+        return self._settings.window_maximized is True
+
     def set_window_size(self, width: int, height: int) -> None:
         self._settings.window_width = width
         self._settings.window_height = height
+        self._save()
+
+    def set_window_placement(
+        self, width: int, height: int, x: int | None, y: int | None, maximized: bool,
+    ) -> None:
+        """Remember the main window the way it was when the app closed: its
+        size and position when not maximized, and whether it was maximized.
+        See core/window_placement.py for what the numbers mean."""
+        self._settings.window_width = width
+        self._settings.window_height = height
+        self._settings.window_x = x
+        self._settings.window_y = y
+        self._settings.window_maximized = maximized
         self._save()
 
     def set_layout_sizes(self, sidebar_width: int, bottom_band_height: int) -> None:

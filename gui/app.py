@@ -1,5 +1,7 @@
 import json
 import re
+import sys
+import tkinter
 from pathlib import Path
 from tkinter import filedialog
 
@@ -37,6 +39,7 @@ from core.settings_store import (
 from core.profiles import PROFILE_KEYS, ProfileError, build_values
 from core.profile_apply import plan_profile
 from core.reopen import transcript_to_reopen
+from core.window_placement import clamp, geometry_string, parse_geometry, position_is_usable
 from core import data_bundle
 from core import importers
 from core.tokenizer import tokenize
@@ -58,6 +61,9 @@ class RSVPApp(ctk.CTk):
     # count the reading engine will process, not a rough len(text.split())
     # guess that could disagree with it.
     LARGE_IMPORT_WORD_WARNING_THRESHOLD = 30_000
+    # How long the window has to stay still before its size and position are
+    # noted, see _track_window_placement().
+    PLACEMENT_SETTLE_MS = 300
 
     def __init__(self):
         super().__init__()
@@ -78,8 +84,10 @@ class RSVPApp(ctk.CTk):
         # see _apply_window_size().
         self._window_size_in_settings = (self.settings_store.window_width, self.settings_store.window_height)
 
-        self.geometry(f"{self.settings_store.window_width}x{self.settings_store.window_height}")
+        self._restore_window_placement()
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
+        # add="+" keeps CustomTkinter's own handler for this event.
+        self.bind("<Configure>", self._track_window_placement, add="+")
 
         self.grid_columnconfigure(2, weight=1)
         self.grid_rowconfigure(2, weight=1)
@@ -899,6 +907,173 @@ class RSVPApp(ctk.CTk):
         self.settings_store.set_window_size(width, height)
         self.geometry(f"{width}x{height}")
         self._window_size_in_settings = (width, height)
+        self._remember_normal_size(width, height)
+
+    # ---- Window size, position and maximized state ----
+    # Noted as they change, saved when the app closes and put back at the next
+    # launch. The rules, and which numbers are in which units, are in
+    # core/window_placement.py.
+
+    def _restore_window_placement(self) -> None:
+        """Size and place the window the way it was when the app was last
+        closed. The saved position is only used if the window's title bar would
+        be on a screen (see position_is_usable()). Otherwise the system places
+        the window, the same as on the very first launch.
+
+        Maximizing waits for after(0). When the app starts on Windows,
+        CustomTkinter hides the window and shows it again to colour its title
+        bar, and a window maximized before that can come back at its normal
+        size. Maximizing once Tk is handling events is the usual way round
+        that."""
+        width, height = self.settings_store.window_width, self.settings_store.window_height
+        x, y = self.settings_store.window_x, self.settings_store.window_y
+        if x is not None and y is not None:
+            if not position_is_usable(x, y, self._screen_pixels(width), self._point_is_on_a_screen):
+                x = y = None
+        self.geometry(geometry_string(width, height, x, y))
+
+        # What gets saved if the window never shows at its normal size this
+        # time, for example when it opens maximized and is closed that way.
+        # _note_window_placement() keeps both up to date from here on.
+        self._normal_window_placement = (width, height, x, y)
+        self._window_maximized = self.settings_store.window_maximized
+        self._placement_note_after_id = None
+        self._maximize_after_id = None
+        if self._window_maximized:
+            self._maximize_after_id = self.after(0, self._maximize_window)
+
+    def _track_window_placement(self, event) -> None:
+        """Runs each time the window, or anything in it, changes size or moves.
+        Only the window itself matters here, and it is noted once it has stayed
+        still for PLACEMENT_SETTLE_MS.
+
+        Noting it straight away would catch it halfway through being maximized.
+        On Linux the window is moved and resized in steps first, and one of the
+        steps reports itself as a normal window, with a size that is neither
+        the old one nor the maximized one. Un-maximizing would then go back to
+        that size. Waiting also means a window being dragged is only noted once
+        the drag ends."""
+        if event.widget is not self:
+            return
+        if self._placement_note_after_id is not None:
+            self.after_cancel(self._placement_note_after_id)
+        self._placement_note_after_id = self.after(self.PLACEMENT_SETTLE_MS, self._note_settled_placement)
+
+    def _note_settled_placement(self) -> None:
+        self._placement_note_after_id = None
+        self._note_window_placement()
+
+    def _note_window_placement(self) -> None:
+        """Note the window's size and position, and whether it is maximized.
+        The size and position are only noted while the window is neither
+        maximized nor minimized, so they are always the ones to go back to.
+        While it is minimized nothing changes, so closing it from the taskbar
+        remembers how it was before."""
+        state = self._window_state()
+        if state == "maximized":
+            self._window_maximized = True
+        elif state == "normal":
+            self._window_maximized = False
+            placement = parse_geometry(self.geometry())
+            if placement is not None:
+                self._normal_window_placement = placement
+
+    def _remember_normal_size(self, width: int, height: int) -> None:
+        """A size set on the Layout tab is the new normal size, even when the
+        window is maximized at the time and so never reports it."""
+        _, _, x, y = self._normal_window_placement
+        self._normal_window_placement = (width, height, x, y)
+
+    def _save_window_placement(self) -> None:
+        """Save the window's normal size and position and whether it is
+        maximized, for the next launch.
+
+        The window is looked at once more first, because the notes can miss a
+        change: on Linux its first Configure arrives before it is on screen, so
+        a window that is never moved or resized would never be noted.
+
+        The size is kept inside the range the Layout tab accepts, for the same
+        reason as in _current_window_size()."""
+        self._cancel_placement_timers()
+        self._note_window_placement()
+        width, height, x, y = self._normal_window_placement
+        self.settings_store.set_window_placement(
+            clamp(width, WINDOW_WIDTH_RANGE), clamp(height, WINDOW_HEIGHT_RANGE),
+            x, y, self._window_maximized,
+        )
+
+    def _cancel_placement_timers(self) -> None:
+        """Cancel the waiting placement note and the startup maximize, if
+        either is still waiting. getattr() because destroy() calls this, and a
+        window that failed partway through __init__ never got these."""
+        for name in ("_placement_note_after_id", "_maximize_after_id"):
+            after_id = getattr(self, name, None)
+            if after_id is not None:
+                self.after_cancel(after_id)
+                setattr(self, name, None)
+
+    def destroy(self):
+        """The timers above go first, so neither can run after the window is
+        gone."""
+        self._cancel_placement_timers()
+        super().destroy()
+
+    def _window_state(self) -> str:
+        """One of "maximized", "minimized", "hidden" or "normal". Windows and
+        macOS call a maximized window "zoomed", while on Linux being maximized
+        is a separate flag."""
+        state = self.state()
+        if state == "zoomed":
+            return "maximized"
+        if state == "iconic":
+            return "minimized"
+        if state == "withdrawn":
+            return "hidden"
+        if self._on_x11():
+            try:
+                if self.attributes("-zoomed"):
+                    return "maximized"
+            except tkinter.TclError:
+                pass
+        return "normal"
+
+    def _maximize_window(self) -> None:
+        self._maximize_after_id = None
+        try:
+            if self._on_x11():
+                self.attributes("-zoomed", True)
+            else:
+                self.state("zoomed")
+        except tkinter.TclError:
+            pass  # a window that can't be maximized here just stays its normal size
+
+    def _on_x11(self) -> bool:
+        """Whether Tk is drawing on X11, which is Linux here."""
+        return self.tk.call("tk", "windowingsystem") == "x11"
+
+    def _screen_pixels(self, size: int) -> int:
+        """A size in the app's units, turned into screen pixels."""
+        return round(size * ctk.ScalingTracker.get_window_scaling(self))
+
+    def _point_is_on_a_screen(self, x: int, y: int) -> bool:
+        """Whether a point, in screen pixels, is on any screen. On Windows this
+        asks Windows, which knows every monitor, including ones left of or above
+        the main one. Elsewhere only the main screen is known, so a window left
+        on another screen opens where the system puts it, which is the safe way
+        to be wrong."""
+        if sys.platform.startswith("win"):
+            try:
+                import ctypes
+                from ctypes import wintypes
+
+                monitor_from_point = ctypes.windll.user32.MonitorFromPoint
+                monitor_from_point.argtypes = (wintypes.POINT, wintypes.DWORD)
+                monitor_from_point.restype = ctypes.c_void_p
+                no_monitor_if_off_screen = 0  # MONITOR_DEFAULTTONULL
+                return monitor_from_point(wintypes.POINT(x, y), no_monitor_if_off_screen) is not None
+            except (AttributeError, OSError):
+                pass  # fall back to the main screen below
+        return 0 <= x < self.winfo_screenwidth() and 0 <= y < self.winfo_screenheight()
 
     # ---- Reading profiles ----
     # A profile is a snapshot of the app-wide settings in PROFILE_KEYS (see
@@ -1209,6 +1384,7 @@ class RSVPApp(ctk.CTk):
         # and core/settings_store.py). This guarantees whatever was last
         # reached in memory is actually on disk before we quit, even if
         # it hasn't hit the throttle interval yet.
+        self._save_window_placement()
         self.store.flush()
         self.settings_store.flush()
         unregister_fonts()
