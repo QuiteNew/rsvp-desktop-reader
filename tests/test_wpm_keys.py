@@ -277,6 +277,13 @@ def app(tmp_path_factory, fresh_widget_image_caches):
         for mod, name, value in originals:
             setattr(mod, name, value)
         pytest.skip(f"Tk can't start a display here: {exc}")
+    # Let the app draw once while the sidebar list is still empty. Adding
+    # transcripts and rebuilding the list before the window had ever been drawn
+    # made the list's CustomTkinter scrollbar redraw itself without end on
+    # Windows, and the list's own area never got a size. It only got away with
+    # it in the full run, where other windows had come and gone first. See the
+    # matching note in test_detached_routing.py.
+    _settle(application)
     store = application.store
     for title, wpm in (("A", 300), ("B", 450)):
         transcript = store.add_transcript(title, store.current_space)
