@@ -220,16 +220,38 @@ class Canvas(ctk.CTkFrame):
     def set_maximized(self, is_maximized: bool) -> None:
         self.toolbar.set_maximized(is_maximized)
 
+    def _detached_shows_current(self) -> bool:
+        """Whether the transcript open here is the one off in the detached
+        window, so this window only shows the "detached" placeholder for it.
+
+        Only then do this window's controls (its keys, the footer, the
+        toolbar) reach the detached reader, since that is the only one reading
+        this transcript. A different transcript can be open here while another
+        one is detached, and then the controls are for this window's own
+        reader, and the detached window is left alone. Asking only "is a window
+        detached?" used to send them to the detached window in that case too,
+        and save the result onto the transcript open here."""
+        return (
+            self._detached_window is not None
+            and self.current_transcript is not None
+            and self.current_transcript.id == self._detached_transcript_id
+        )
+
+    # The next four are the open transcript's own values (speed, chunking,
+    # colours, word size), so they only reach the detached reader when it is
+    # reading that transcript, see _detached_shows_current(). The settings
+    # further down belong to the whole app and reach both windows always.
+
     def set_wpm(self, wpm: int) -> None:
         self.reader_display.set_wpm(wpm)
-        if self._detached_window:
+        if self._detached_shows_current():
             self._detached_window.reader_display.set_wpm(wpm)
 
     def set_chunking(self, enabled: bool, size: int, mode: str | None = None, char_target: int | None = None) -> None:
         """Re-group the live reader with new chunking settings for the current
-        transcript. Forwarded to the detached window's reader too; while a
-        transcript is detached the main reader is stopped (its session is
-        None), so the call there harmlessly no-ops, the same shape as
+        transcript. Forwarded to the detached window's reader too when that is
+        reading this transcript; this window's own reader is stopped then (its
+        session is None), so the call here harmlessly no-ops, the same shape as
         set_wpm(). The reader keeps its word position, snapped to a chunk
         boundary (see ReaderDisplay.set_chunking), so reading just re-groups in
         place rather than restarting.
@@ -240,17 +262,17 @@ class Canvas(ctk.CTkFrame):
         them, while the Configure-chunking dialog passes them to switch mode or
         width."""
         self.reader_display.set_chunking(enabled, size, mode, char_target)
-        if self._detached_window:
+        if self._detached_shows_current():
             self._detached_window.reader_display.set_chunking(enabled, size, mode, char_target)
 
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
         self.reader_display.set_colors(font_color, highlight_color, background_color)
-        if self._detached_window:
+        if self._detached_shows_current():
             self._detached_window.reader_display.set_colors(font_color, highlight_color, background_color)
 
     def set_font_size(self, size: int) -> None:
         self.reader_display.set_font_size(size)
-        if self._detached_window:
+        if self._detached_shows_current():
             self._detached_window.reader_display.set_font_size(size)
 
     def set_highlight_offset(self, offset_px: int) -> None:
@@ -290,7 +312,7 @@ class Canvas(ctk.CTkFrame):
         self._skip(self._skip_word_count)
 
     def _skip(self, delta: int) -> None:
-        if self._detached_window:
+        if self._detached_shows_current():
             is_paused = self._detached_window.reader_display.skip(delta, force_pause=self._pause_on_skip)
             self._detached_window.toolbar.set_paused(is_paused)
         else:
@@ -602,13 +624,13 @@ class Canvas(ctk.CTkFrame):
             self.on_pause_changed(self.current_transcript, is_paused)
 
     def toggle_pause(self) -> None:
-        # Route to the detached reader while a transcript is detached, the
-        # same way _skip() and the bookmark controls do. Without this, Space
-        # from the main window toggled the stopped main reader instead, and
-        # still persisted is_paused=False onto the detached transcript (whose
-        # current_transcript reference the main canvas keeps) through
-        # _handle_pause_changed below.
-        if self._detached_window:
+        # Route to the detached reader while it is reading the transcript open
+        # here, the same way _skip() and the bookmark controls do. Without
+        # this, Space from the main window toggled the stopped main reader
+        # instead, and still persisted is_paused=False onto the detached
+        # transcript through _handle_pause_changed below. See
+        # _detached_shows_current() for when another transcript is open here.
+        if self._detached_shows_current():
             is_paused = self._detached_window.reader_display.toggle_pause()
             self._detached_window.toolbar.set_paused(is_paused)
         else:
@@ -617,7 +639,7 @@ class Canvas(ctk.CTkFrame):
         self._handle_pause_changed(is_paused)
 
     def restart(self) -> None:
-        if self._detached_window:
+        if self._detached_shows_current():
             self._detached_window.reader_display.restart()
             self._detached_window.toolbar.set_paused(False)
         else:
@@ -627,24 +649,24 @@ class Canvas(ctk.CTkFrame):
 
     def center_pan(self) -> None:
         """Snap the live reader's horizontally panned flash back to centred.
-        Routed to the detached reader while a transcript is detached, the same
-        way pause and restart are. Does nothing when the flash is not panned,
-        including over the paste/edit box."""
-        if self._detached_window:
+        Routed to the detached reader while it is reading the transcript open
+        here, the same way pause and restart are. Does nothing when the flash
+        is not panned, including over the paste/edit box."""
+        if self._detached_shows_current():
             self._detached_window.reader_display.center_pan()
         else:
             self.reader_display.center_pan()
 
     def open_bookmarks(self) -> None:
         """Open (or refocus) the bookmarks popover for the reader that's
-        actually live. While a transcript is detached, the main reader is
-        stopped and this delegates to the detached window, the same way
-        _skip() routes there. Otherwise it needs a real, non-preview
+        actually live. While the transcript open here is detached, the main
+        reader is stopped and this delegates to the detached window, the same
+        way _skip() routes there. Otherwise it needs a real, non-preview
         session on screen: a selection preview (_ephemeral) is a throwaway,
         so it gets no bookmarks, and over the edit box there's no session,
         so the button simply does nothing (as pause/restart already do
         there)."""
-        if self._detached_window:
+        if self._detached_shows_current():
             self._detached_window.open_bookmarks()
             return
         if self._ephemeral or self.current_transcript is None or self.reader_display.session is None:
@@ -667,12 +689,12 @@ class Canvas(ctk.CTkFrame):
     def toggle_bookmark_here(self) -> None:
         """Add a bookmark at the current word, or remove the one that's
         already there (the `B` shortcut and the popover's own toggle both
-        land here). Routes to the detached window when detached, like
-        _skip(); otherwise no-ops over a preview or when no live word
-        exists (current_bookmark_target() returns None). Persists through
-        the on_add_bookmark/on_remove_bookmark callbacks, then refreshes
-        the popover and the scrubber ticks."""
-        if self._detached_window:
+        land here). Routes to the detached window when it is reading the
+        transcript open here, like _skip(); otherwise no-ops over a preview
+        or when no live word exists (current_bookmark_target() returns None).
+        Persists through the on_add_bookmark/on_remove_bookmark callbacks,
+        then refreshes the popover and the scrubber ticks."""
+        if self._detached_shows_current():
             self._detached_window.toggle_bookmark_here()
             return
         if self._ephemeral or self.current_transcript is None:
