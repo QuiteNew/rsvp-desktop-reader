@@ -59,17 +59,33 @@ of its own. The passage of time is the GUI's job.
   draft, its reading position, its own speed, colors, and font size, its
   bookmarks, its reading stats, and which Space it belongs to.
 - `storage.py` is the low-level JSON read and write, and the home of the default
-  data location (`~/.rsvp_reader`).
+  data location (`~/.rsvp_reader`). It also keeps a copy of a save file that
+  cannot be read, under a new name next to it, before anything can save over
+  it (`keep_damaged_copy()`), and both stores report such a file so the app can
+  say so at launch.
 - `transcript_store.py` holds all transcripts and Spaces in memory and persists
   them through `storage`. Live edits such as a position change save on a
   throttle so rapid updates do not hammer the disk, and an explicit flush forces
   a write when a session ends.
 - `settings_store.py` does the same for application settings: the new-transcript
   defaults, layout sizes, data location, theme, the font switch, the letter
-  spacing level, the bold word starts choice, and the saved reading profiles.
+  spacing level, the bold word starts choice, the saved reading profiles, and
+  what the app remembers between launches (the last open transcript, the
+  window's size and place, and the sidebar's sort order).
 - `data_bundle.py` builds and applies the single-file export used to move
   transcripts, Spaces, and settings between machines, deliberately leaving the
   machine-specific data path out of the bundle.
+
+### Picking up where you left off
+
+Three small modules hold the rules for what the app remembers between launches,
+so they are tested without a window. `reopen.py` decides which transcript to
+open at launch, if any. `window_placement.py` turns the saved size, position and
+maximized state back into a window geometry, and decides whether a saved
+position is still on a screen (the GUI says which points are, since only it can
+ask the system). `transcript_sort.py` holds the sidebar's six sort orders, each
+under a short id that is what gets saved, so a menu label can change without
+anyone's saved choice being lost.
 
 ### Reading profiles
 
@@ -114,6 +130,14 @@ pure pieces of that: how far the offset can travel, clamping it to that range,
 and converting between the pixel offset and the pair of fractions a scrollbar
 uses to size and place its thumb. It has no widgets in it, so it is tested
 without a display like the rest of the core.
+
+`text_fit.py` shortens a line of text with an ellipsis to fit a width, which the
+header uses for a long transcript title. It never measures anything itself: the
+caller hands it a function that does.
+
+`wpm_step.py` is the step behind the Up and Down keys: 10 words per minute,
+landing on the same values as the speed slider, within the range Settings
+allows.
 
 The core also owns how a flash's text is assembled. `reader.py` exposes the
 split of each chunk into its before, focus, and after parts, in one place, so
@@ -203,7 +227,10 @@ reading canvas, and drives the clock that the core engine leaves to it.
 out the main regions: the sidebar with its transcript list, search, sort, and
 Space switcher; the header; the reading canvas in the center; and the bottom
 control band for speed and colors. It also binds the keyboard shortcuts and
-opens the dialogs.
+opens the dialogs. It marks the open transcript in the sidebar list, notes the
+window's size and place as it changes and saves them on close, and, when a save
+file could not be read, queues a message for once the window is on screen
+rather than showing it while the window is still being built.
 
 The reading canvas is the busiest piece. It switches between two states for the
 same transcript: the paste-and-edit box when a transcript has no text yet or has
@@ -243,6 +270,13 @@ with its own session and its own copies of the relevant settings, kept in sync
 with the main window. It can do almost everything the main reader can, including
 its own skipping buttons, and deliberately cannot enter focus mode, since it has
 no chrome to hide.
+
+The main window can read a different transcript while one is detached, so
+`Canvas` decides where each of its controls goes by asking one question: is the
+transcript open here the one in the detached window (`_detached_shows_current()`)?
+Only then do the main window's keys, footer and toolbar reach the detached
+reader. Settings that belong to the whole app, like the guide marks, reach both
+windows either way.
 
 The edit box, `gui/components/transcript_input.py`, draws the bold word starts
 as a Tk tag on the inner text widget, with a bold copy of the font the box really
@@ -287,7 +321,10 @@ app's icons by hand rather than relying on font glyphs, which render
 inconsistently across platforms. The many dialogs (the add-transcript chooser,
 the create and move and delete dialogs, the Space dialogs, Settings, the About
 dialog, and the import dialogs) each live in their own component file under
-`gui/components/`.
+`gui/components/`. They share `dialog_keys.py` for Enter and Esc, and for putting
+the cursor in a name box only once CustomTkinter has finished showing the
+window, since it hides and re-shows a new window on Windows and would otherwise
+take the cursor back.
 
 The fonts follow the same pattern as the theme. `theme.py` reads the font switch
 once, when it is first imported, and asks `font_choice.py` which set to use,

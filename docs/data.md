@@ -95,8 +95,11 @@ A flat object, one key per setting. Defaults shown.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `window_width` | 1000 | Main window width. |
-| `window_height` | 650 | Main window height. |
+| `window_width` | 1000 | Main window width when it is not maximized. Saved when the app closes, and when it is changed in Settings. |
+| `window_height` | 650 | Main window height, the same way. |
+| `window_x` | `null` | Where the main window's left edge was on the screen when the app was last closed, in screen pixels. Negative on a screen left of the main one. `null` until the app has been closed once. |
+| `window_y` | `null` | The same for its top edge. |
+| `window_maximized` | false | Whether the main window was maximized when the app was last closed. Only `true` counts. |
 | `sidebar_width` | 220 | Sidebar width. |
 | `bottom_band_height` | 100 | Control-band height. |
 | `freeform_resize_enabled` | false | Whether borders can be dragged directly. |
@@ -130,6 +133,19 @@ A flat object, one key per setting. Defaults shown.
 | `peripheral_context_enabled` | false | Show the dim surrounding-words line. |
 | `highlight_offset_px` | 0 | Shift the focus letter up (positive) or down (negative). |
 | `letter_spacing_level` | 0 | Room between the letters of the flashing word: 0 Off, 1 Small, 2 Medium, 3 Large. A number outside 0 to 3 is treated as the nearest level, and anything that is not a whole number as Off. |
+
+**Picking up where you left off**
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `reopen_last_transcript` | true | Open the transcript that was open last time when the app starts. Anything but `false` keeps it on. |
+| `last_transcript_id` | `null` | The id of the transcript open in the reader, kept up to date by the app. `null` when none is open. Not shown in Settings. |
+| `transcript_sort` | `oldest` | How the sidebar sorts the transcripts: `title_az`, `title_za`, `newest`, `oldest`, `most_read` or `most_time`. Anything else reads as `oldest`. |
+
+A position or id that is not a whole number reads as `null`, the same as when
+nothing has been saved yet. A saved position that would leave the window off
+every screen is ignored when the app starts, and the window opens where the
+system puts it.
 
 **Guide marks** (global)
 
@@ -182,11 +198,12 @@ A profile can hold these settings: `highlight_offset_px`,
 `split_long_paragraphs_enabled`, `scrub_pause_enabled` and
 `letter_spacing_level`. It never holds a transcript's own values, the Defaults
 colours, the chunking defaults, the window and layout sizes, the data
-directory, the theme, the `dyslexia_font_enabled` font switch, or the
-`bold_starts_enabled` look. The font is left out because it is only read at
-startup, so a profile could not switch it on the spot the way it does
-everything else. The bold look is left out because it is a choice about how the
-edit box looks, not a reading setting, and it is remembered on its own.
+directory, the theme, the `dyslexia_font_enabled` font switch, the
+`bold_starts_enabled` look, or the settings that pick up where you left off.
+The font is left out because it is only read at startup, so a profile could not
+switch it on the spot the way it does everything else. The bold look is left
+out because it is a choice about how the edit box looks, not a reading setting,
+and it is remembered on its own.
 
 - A setting that is missing from `values` means "leave that setting alone" when
   the profile is applied. That is how a profile saved before a setting joined
@@ -241,9 +258,25 @@ too). To move to another machine, use Export and Import rather than copying raw
 files, so paths are handled correctly.
 
 The files are plain JSON, so you can read or edit them, but a few cautions. The
-app reads defensively: missing fields are filled in with defaults, fields it
-does not recognize are ignored, and a corrupt or unreadable file is treated as
-"no save yet" and falls back to defaults rather than crashing. That makes the
-format forgiving across versions, but it also means a bad edit can quietly lose
-data. Close the app before editing (it overwrites these files as you use it, and
-saves again on close), and keep a copy first.
+app reads defensively: missing fields are filled in with defaults, and fields it
+does not recognize are ignored, which keeps the format forgiving across
+versions. Close the app before editing (it overwrites these files as you use it,
+and saves again on close), and keep a copy first.
+
+### If a file cannot be read
+
+When `data.json` or `settings.json` is there but cannot be read, because it is
+not valid JSON, is not text at all (half-written after a crash, say), or is JSON
+of the wrong shape, the app does three things:
+
+1. It copies the file, exactly as it is, to a new name next to it, such as
+   `data.damaged-20261029-153012.json`, before anything can save over it.
+2. It starts without it: an empty transcript list for `data.json`, the default
+   settings for `settings.json`.
+3. Once the window is up, it tells you which file could not be read and what the
+   copy is called.
+
+The same damaged file gets one copy, however often it is read. The app does not
+repair the file for you. To get your transcripts or settings back, close the
+app, fix the copy (or take what you need from it), and put it back in place of
+the new file.

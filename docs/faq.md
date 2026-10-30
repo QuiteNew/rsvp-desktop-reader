@@ -182,11 +182,22 @@ in the main window only.
 
 ### What are the keyboard shortcuts?
 
-Space to play or pause, left and right arrows to skip, R to restart, B to
-bookmark the current word, C to centre the words after panning with the
-horizontal scrollbar, Esc to stop, and F for focus mode (main window only).
-Shortcuts are ignored while you are typing in a text field. The full table is on
-the [Usage](usage.md) page.
+Space to play or pause, left and right arrows to skip, up and down arrows to
+make the transcript 10 WPM faster or slower, R to restart, B to bookmark the
+current word, C to centre the words after panning with the horizontal
+scrollbar, Esc to stop, and F for focus mode (main window only). Shortcuts are
+ignored while you are typing in a text field. In the popups and in Settings, Esc
+closes or cancels, and Enter confirms where there is one clear thing to do. The
+full table is on the [Usage](usage.md#keyboard-shortcuts) page.
+
+### I detached a transcript and opened another one. Which one do the keys control?
+
+The one open in the main window. While a transcript is detached you can read a
+different one in the main window, and the main window's keys, toolbar and bottom
+band work on that one, leaving the detached window alone. The detached window's
+own keys and buttons always work on its own transcript. Open the detached
+transcript in the main window again (the "detached" placeholder shows) and the
+main window's keys go back to controlling the detached window.
 
 ## Settings and appearance
 
@@ -345,16 +356,18 @@ not legal advice.
 
 ### I switched to Dark theme but my reading colors didn't change
 
-A transcript's reading colors (word, highlight, background) come from the
-Defaults in Settings, not from the theme, so they do not automatically follow
-Light or Dark. Adjust them under Settings, in the Defaults tab, for new
-transcripts, or change them per transcript from the control band at the bottom
-of the window.
+They change the next time you start the app, like the rest of the theme. A
+transcript's reading colors (word, highlight, background) each follow the theme
+until you pick that color yourself from the control band at the bottom of the
+window, so a color you changed by hand stays as you set it in both themes. In
+Light the colors come from the Defaults tab, and in Dark from the app's own
+dark reading colors.
 
 ### How do I change speed or colors for one transcript versus all new ones?
 
 For the transcript you are reading, use the control band at the bottom of the
-window; those changes apply to that transcript only. For every transcript you
+window, or the up and down arrow keys for the speed; those changes apply to that
+transcript only. For every transcript you
 create from now on, use the Defaults tab in Settings. Changing the defaults does
 not touch transcripts you already have.
 
@@ -365,6 +378,14 @@ the marks at 125% was fixed in v2.10.1. Also check that the guide-mark thickness
 in Settings is not set to its minimum on a display where that renders too thin;
 the allowed range is 2 to 6 pixels. The marks also only appear while words are
 actively flashing, and disappear when you pause or stop.
+
+### The app opened my last transcript when it started. Can I turn that off?
+
+Yes. That is **Reopen the last transcript at launch**, in Settings under
+Defaults, on by default. When it is on, the transcript comes back paused at the
+same word, so nothing plays until you press Play. The app also remembers the
+main window's size, place and whether it was maximized, and the order you picked
+for the sidebar list.
 
 ## Data, backups, and moving machines
 
@@ -406,9 +427,12 @@ refuse to import if it does not match, rather than misreading your data.
 
 The files are plain JSON and you can edit them, but close the app first. It
 overwrites these files as you use it and saves again on close, so edits made
-while it is open are lost. A malformed file is treated as "no save yet" and
-falls back to defaults rather than crashing, which is safe but means a bad edit
-can wipe what was there. Always keep a copy before editing.
+while it is open are lost. A file the app cannot read is not thrown away: it is
+copied to a new name next to it, such as `data.damaged-20261029-153012.json`,
+before anything is saved over it, and the app tells you when it starts. Fix the
+copy and put it back while the app is closed. Still, keep your own copy before
+editing. The details are under
+[If a file cannot be read](data.md#if-a-file-cannot-be-read).
 
 ### Is any of my data sent anywhere?
 

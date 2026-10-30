@@ -164,7 +164,28 @@ A **Search...** box above the list filters the current Space's transcripts by
 title (case-insensitive), it does not search the body text. A small **X** inside
 the right end of the box clears what you have typed. Next to it, a sort button
 offers Title A to Z, Title Z to A, Date added newest or oldest first, Most read,
-and Most time spent reading.
+and Most time spent reading. The order you pick is remembered between launches,
+and it is one order for every Space. The search box always starts empty.
+
+The transcript open in the reader is marked in the list with a soft tint and an
+orange border, so it is easy to spot. Only one row is marked at a time, and the
+mark moves when you open another transcript.
+
+### Picking up where you left off
+
+When you start the app it opens the transcript you had open when you closed it.
+It always comes back paused at the same word, so nothing plays until you press
+Play, and a transcript you left in the edit box comes back in the edit box.
+Nothing is opened if that transcript has been deleted since. You can turn this
+off with **Reopen the last transcript at launch**, in Settings under
+[Defaults](#defaults).
+
+The main window comes back the same way: at the size and place it had when you
+closed the app, and maximized if it was. If the place it was is no longer on any
+screen, for example because a second monitor has been unplugged, the window opens
+where the system puts it instead. On macOS and Linux the app only knows about the
+main screen, so a window closed on another screen also opens where the system
+puts it.
 
 ## The reader
 
@@ -466,6 +487,14 @@ sidebar or chrome to hide), and it cannot detach again. Only one detached
 window exists at a time. To bring it back, click **Bring back** or just close
 the window.
 
+While a transcript is detached you can open a different one in the main window
+and read it there at the same time. The main window's keys, toolbar and bottom
+control band then work on the transcript open in the main window, and the
+detached window is left alone. Open the detached transcript in the sidebar again
+and the main window shows its placeholder, and from then on the main window's
+keys and bottom band control the detached window, since that is the one reading
+it.
+
 ## Keyboard shortcuts
 
 Shortcuts act on the reading controls. They are ignored while you are typing in
@@ -475,6 +504,7 @@ a text field (the search box, a rename field, or the edit box).
 | --- | --- |
 | Space | Play / Pause |
 | Left / Right arrows | Skip backward / forward, by the skip word count set in Settings |
+| Up / Down arrows | Make the open transcript 10 WPM faster / slower, from 100 up to 1000. The bottom band follows. In the detached window they change that window's transcript |
 | R | Restart |
 | B | Bookmark the current word (or remove the bookmark there) |
 | C | Snap the words back to the centre after panning with the horizontal scrollbar (see [Wide flashes](#wide-flashes-auto-fit-and-the-scrollbar)) |
@@ -484,6 +514,12 @@ a text field (the search box, a rename field, or the edit box).
 In the edit box, **Ctrl+C** copies the selected text as usual. With the
 [bold look](#bold-word-starts-and-copying-with-bold) on, it carries the bold
 along to Word as well.
+
+The popups take the keyboard too. **Esc** closes or cancels them, and that
+includes Settings, the chunking window and the About dialog. **Enter** confirms
+the ones with one clear action: creating a Space, creating a transcript, naming a
+profile, and OK on a message. The delete confirmations only take Esc, so Enter
+never deletes anything.
 
 ## Settings
 
@@ -504,10 +540,10 @@ says so.
 
 ### Defaults
 
-The color, speed, and word-size controls at the top are **defaults for newly
-created transcripts** and do not change transcripts you already have. Most of
-the controls below them apply **globally**, to every transcript, and the skip
-controls at the bottom apply **live**.
+The note at the top of the tab says it too: the speed, colour, and word-size
+controls at the top are **what new transcripts start with** and do not change
+transcripts you already have. The controls below them apply **globally**, to
+every transcript, and the skip controls at the bottom apply **live**.
 
 New-transcript defaults:
 
@@ -533,6 +569,8 @@ Global controls:
   rewind** amount (1 to 5, default 3)
 - **Pause after using the scrubber** (default on)
 - **Show surrounding words**, the peripheral line (default off)
+- **Reopen the last transcript at launch** (default on), see
+  [Picking up where you left off](#picking-up-where-you-left-off)
 
 Live controls (take effect immediately, on the current transcript and future
 ones):
@@ -556,6 +594,11 @@ A **Reset to Original Defaults** button restores this tab.
 - **Bottom band height** (80 to 400, default 100)
 - **Reset to Original Defaults**
 
+The window boxes show the main window's size when Settings opens, and changing
+them resizes it. You rarely need them, though: the app also remembers the
+window's size, its place on the screen, and whether it was maximized when you
+close it, and opens the same way next time.
+
 ### Storage
 
 Shows the folder your transcripts are saved in (as a JSON file).
@@ -571,6 +614,11 @@ Shows the folder your transcripts are saved in (as a JSON file).
   **Cancel**. Either way the app closes afterward so the change can take
   effect, reopen it when you are ready.
 - **Reset to Original Defaults** restores the default data folder.
+
+If `data.json` or `settings.json` cannot be read when the app starts, the app
+keeps a copy of it next to the original before it saves anything over it, and
+tells you so once the window is up. See
+[Data and export format](data.md#if-a-file-cannot-be-read).
 
 ### Appearance
 
@@ -588,10 +636,12 @@ This tab scrolls when the Settings window is too small to show all of it.
 Both are described under
 [Letter spacing and the OpenDyslexic font](#letter-spacing-and-the-opendyslexic-font).
 
-Note that a new transcript's reading colors come from the Defaults tab, not
-from the theme, so they will not automatically match Light or Dark. Adjust them
-under Defaults, or per transcript from the control band at the bottom of the
-window.
+The reading colors follow the theme too. A transcript's font, highlight and
+background color each follow it until you pick that color yourself from the
+control band at the bottom of the window. In Light they come from the Defaults
+tab, and in Dark from the app's own dark reading colors, so the Defaults tab
+colors only show in Light. They change the next time you launch the app, and a
+color you picked yourself stays the same in both themes.
 
 ### Profiles
 
