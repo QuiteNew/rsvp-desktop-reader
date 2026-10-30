@@ -202,6 +202,13 @@ class Footer(ctk.CTkFrame):
         self._font_size = size
         self.size_label.configure(text=f"{size}px")
 
+    def set_wpm(self, wpm: int) -> None:
+        """Show a speed that was changed somewhere other than the slider itself
+        (the Up and Down keys). Not reported back through on_wpm_changed, since
+        whatever changed it has saved it already."""
+        self.wpm_slider.set(wpm)
+        self.wpm_label.configure(text=f"{wpm} WPM")
+
     def set_font_size_step(self, step: int) -> None:
         self._font_size_step = step
 

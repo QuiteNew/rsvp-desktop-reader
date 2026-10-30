@@ -22,7 +22,7 @@ class Canvas(ctk.CTkFrame):
         on_position_changed=None, on_pause_changed=None, on_draft_changed=None,
         on_stopped_changed=None, on_session_stats=None, on_normalization_changed=None,
         on_add_bookmark=None, on_remove_bookmark=None, on_rename_bookmark=None,
-        on_bold_starts_toggled=None,
+        on_bold_starts_toggled=None, on_detached_wpm_changed=None,
         skip_word_count: int = 10, pause_on_skip: bool = False,
         highlight_offset_px: int = 0,
         guide_mark_horizontal_enabled: bool = False,
@@ -52,6 +52,9 @@ class Canvas(ctk.CTkFrame):
         self.on_remove_bookmark = on_remove_bookmark
         self.on_rename_bookmark = on_rename_bookmark
         self.on_bold_starts_toggled = on_bold_starts_toggled
+        # Passed straight on to the detached window, which calls it with its
+        # transcript and the new speed when Up or Down is pressed there.
+        self.on_detached_wpm_changed = on_detached_wpm_changed
         self._skip_word_count = skip_word_count
         self._pause_on_skip = pause_on_skip
         self._highlight_offset_px = highlight_offset_px
@@ -851,6 +854,7 @@ class Canvas(ctk.CTkFrame):
             letter_spacing_level=self._letter_spacing_level,
             bold_starts_enabled=self._bold_starts_enabled,
             on_bold_starts_toggled=self._handle_bold_starts_toggled,
+            on_wpm_changed=self.on_detached_wpm_changed,
         )
         self._show_detached_placeholder()
 

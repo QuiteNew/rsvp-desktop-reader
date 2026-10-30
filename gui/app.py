@@ -40,6 +40,7 @@ from core.profiles import PROFILE_KEYS, ProfileError, build_values
 from core.profile_apply import plan_profile
 from core.reopen import transcript_to_reopen
 from core.window_placement import clamp, geometry_string, parse_geometry, position_is_usable
+from core.wpm_step import step_wpm
 from core import data_bundle
 from core import importers
 from core.tokenizer import tokenize
@@ -141,6 +142,7 @@ class RSVPApp(ctk.CTk):
             on_remove_bookmark=self._handle_remove_bookmark,
             on_rename_bookmark=self._handle_rename_bookmark,
             on_bold_starts_toggled=self._handle_bold_starts_toggled,
+            on_detached_wpm_changed=self._handle_detached_wpm_changed,
             skip_word_count=self.settings_store.skip_word_count,
             pause_on_skip=self.settings_store.pause_on_skip,
             highlight_offset_px=self.settings_store.highlight_offset_px,
@@ -241,7 +243,7 @@ class RSVPApp(ctk.CTk):
     def _bind_shortcuts(self) -> None:
         """Reading-control keyboard shortcuts for the main window only.
         The detached transcript window has its own identical Space/Left/
-        Right/R/B/C/Esc bindings (added separately in DetachedTranscriptWindow
+        Right/Up/Down/R/B/C/Esc bindings (added separately in DetachedTranscriptWindow
         itself), since Tk's "falls through to its own toplevel" behavior
         only reaches as far as the window that owns the binding. F (Focus
         mode) is deliberately not mirrored there: the detached window has
@@ -278,10 +280,15 @@ class RSVPApp(ctk.CTk):
         small centre button beside the reader's scrollbar. It routes through
         Canvas too, so it reaches the detached reader while one is open, and
         does nothing when the flash is not panned.
+
+        Up and Down make the open transcript 10 WPM faster or slower, the same
+        as moving the footer's slider by one step (see _step_wpm()).
         """
         self.bind("<space>", self._handle_shortcut_pause_toggle)
         self.bind("<Left>", self._handle_shortcut_skip_backward)
         self.bind("<Right>", self._handle_shortcut_skip_forward)
+        self.bind("<Up>", self._handle_shortcut_wpm_up)
+        self.bind("<Down>", self._handle_shortcut_wpm_down)
         self.bind("<r>", self._handle_shortcut_restart)
         self.bind("<R>", self._handle_shortcut_restart)
         self.bind("<f>", self._handle_shortcut_focus_mode)
@@ -342,6 +349,36 @@ class RSVPApp(ctk.CTk):
     def _handle_shortcut_stop(self, event=None) -> None:
         if self._shortcut_should_fire():
             self.canvas.stop()
+
+    def _handle_shortcut_wpm_up(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._step_wpm(1)
+
+    def _handle_shortcut_wpm_down(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._step_wpm(-1)
+
+    def _step_wpm(self, direction: int) -> None:
+        """Make the open transcript one step faster (1) or slower (-1), see
+        core/wpm_step.py. The footer shows the new speed, and from there it is
+        exactly what moving the slider does: saved to the transcript and passed
+        to the reader. Nothing happens with no transcript open, or at either
+        end of the range."""
+        if not self._current_transcript:
+            return
+        wpm = step_wpm(self._current_transcript.wpm, direction)
+        if wpm == self._current_transcript.wpm:
+            return
+        self.footer.set_wpm(wpm)
+        self._handle_wpm_changed(wpm)
+
+    def _handle_detached_wpm_changed(self, transcript, wpm: int) -> None:
+        """Up or Down in the detached window, which has changed its own reader
+        already. Saved to that window's transcript, which isn't always the one
+        the main window has open, and the footer only follows when it is."""
+        self.store.set_transcript_wpm(transcript.id, wpm)
+        if self._current_transcript is not None and self._current_transcript.id == transcript.id:
+            self.footer.set_wpm(wpm)
 
     def _handle_sidebar_drag_start(self) -> None:
         # Seed _pending_value with the current size, not just

@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from core.reader import ReaderSession
+from core.wpm_step import step_wpm
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
@@ -17,7 +18,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
         on_session_stats=None, on_normalization_changed=None,
         on_add_bookmark=None, on_remove_bookmark=None, on_rename_bookmark=None,
-        on_bold_starts_toggled=None,
+        on_bold_starts_toggled=None, on_wpm_changed=None,
         initial_draft_text="",
         skip_word_count: int = 10, pause_on_skip: bool = False,
         length_pacing_enabled: bool = False,
@@ -54,6 +55,9 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.on_add_bookmark = on_add_bookmark
         self.on_remove_bookmark = on_remove_bookmark
         self.on_rename_bookmark = on_rename_bookmark
+        # Called with this window's transcript and the new speed when Up or
+        # Down changes it, so the app can save it. See _step_wpm().
+        self.on_wpm_changed = on_wpm_changed
         self.skip_word_count = skip_word_count
         self.pause_on_skip = pause_on_skip
         self.length_pacing_enabled = length_pacing_enabled
@@ -438,12 +442,17 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         C snaps a panned flash back to centre, calling straight into this
         window's own reader (the same action as its centre button).
 
+        Up and Down make this window's transcript 10 WPM faster or slower, see
+        _step_wpm().
+
         Both case variants of R, B and C are bound, since Caps Lock or an
         accidental Shift would otherwise land on a keysym this doesn't
         catch; Space, the arrow keys, and Escape have no such variant."""
         self.bind("<space>", self._handle_shortcut_pause_toggle)
         self.bind("<Left>", self._handle_shortcut_skip_backward)
         self.bind("<Right>", self._handle_shortcut_skip_forward)
+        self.bind("<Up>", self._handle_shortcut_wpm_up)
+        self.bind("<Down>", self._handle_shortcut_wpm_down)
         self.bind("<r>", self._handle_shortcut_restart)
         self.bind("<R>", self._handle_shortcut_restart)
         self.bind("<b>", self._handle_shortcut_bookmark)
@@ -489,6 +498,27 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
     def _handle_shortcut_stop(self, event=None) -> None:
         if self._shortcut_should_fire():
             self._handle_stop()
+
+    def _handle_shortcut_wpm_up(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._step_wpm(1)
+
+    def _handle_shortcut_wpm_down(self, event=None) -> None:
+        if self._shortcut_should_fire():
+            self._step_wpm(-1)
+
+    def _step_wpm(self, direction: int) -> None:
+        """Make this window's transcript one step faster (1) or slower (-1),
+        see core/wpm_step.py. It works from this window's own transcript, not
+        the one the main window has open, since the two can differ. The reader
+        here changes speed straight away, and on_wpm_changed saves it. Nothing
+        happens at either end of the range."""
+        wpm = step_wpm(self.transcript.wpm, direction)
+        if wpm == self.transcript.wpm:
+            return
+        self.reader_display.set_wpm(wpm)
+        if self.on_wpm_changed:
+            self.on_wpm_changed(self.transcript, wpm)
 
     def close(self) -> None:
         """Closing this window while it's mid-read commits nothing new:
