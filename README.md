@@ -22,29 +22,21 @@ losing comprehension.
 
 ## About
 
-RSVP Desktop Reader takes raw video transcripts, strips out timestamps, and
-flashes them word by word in a fixed spot on screen, with each word's
-**Optimal Recognition Point** highlighted - the exact letter your eye
-naturally lands on to recognize a word in the fastest time. Instead of your eyes
-scanning back and forth across a page, the words come to you.
-
+RSVP Desktop Reader takes raw video transcripts, strips out timestamps, and  flashes them word by word in a fixed spot 
+on screen, with each word's **Optimal Recognition Point** highlighted, the exact letter your eye  naturally lands on to recognize a word in the 
+fastest time. Instead of your eyes  scanning back and forth across a page, the words come to you.
 I built this because I found [this](https://www.instagram.com/reel/DTf6Bh9jSNn/?stkn=ZWdpeHJlb2o1bGp6) reel on instagram 
-and I immediately wanted to recreate it, not using an extension or a web tool, 
-I wanted something local, lightweight, and fully
-mine, created in a way that I wanted it to look and function
+and I immediately wanted to recreate it, not using an extension or a web tool, I wanted something local, lightweight, and fully  mine, created in a way that I wanted it to look and function.
 
 I built this slowly, in small sessions where I could also apply my knowledge of Python that I got from uni, also learn 
 and use libraries such as [CustomTkinter](https://customtkinter.tomschimansky.com/)
 
-Every piece - the reading engine, the GUI, persistence, the
-whole layout system - was built one small, testable step at a time, with a
-real architecture underneath it: a clean split between the pure reading
-logic in `core/` and everything GUI-related in `gui/`, so the two never
-depend on each other.
+Every piece (the reading engine, the GUI, persistence, the  whole layout system) was built one small, testable step at a time, 
+with a real architecture underneath it: a clean split between the pure reading  logic in `core/` and 
+everything GUI-related in `gui/`, so the two never depend on each other.
 <br>
 
-For the background, the eye-movement physiology, the Optimal Viewing Position
-research behind the highlighted letter, and what the studies actually say about
+For the background, the eye-movement physiology, the Optimal Viewing Position  research behind the highlighted letter, and what the studies actually say about
 reading this way (including where it helps and where it does not), see [The science behind RSVP](docs/technique.md)
 
 
@@ -65,30 +57,30 @@ reading this way (including where it helps and where it does not), see [The scie
 
 - Word-by-word RSVP display with real Optimal Recognition Point highlighting
 - Adjustable reading speed (words per minute)
-- Optional multi-word chunking - flash a few words at once instead of one at a
+- Optional multi-word chunking: flash a few words at once instead of one at a
   time, sized by a fixed words-per-group count or an adaptive character width,
   set per transcript
-- Auto-fit for wide flashes - the words shrink to fit the window (never below
+- Auto-fit for wide flashes: the words shrink to fit the window (never below
   60% of your Word size, and the saved size is never changed), with a horizontal
   scrollbar, a centre button, and a `C` shortcut for anything still too wide
 - Skip forward/backward by a configurable word count, with an optional
   auto-pause when you skip
 - Pause, resume, restart, and stop (return to draft) controls
 - Detach any transcript into its own standalone floating window
-- Organize transcripts into **Spaces** - browser-tab-style categories you
+- Organize transcripts into **Spaces**, browser-tab-style categories you
   can create and switch between
 - Full transcript management: create, edit drafts, delete (with a
   confirmation step)
-- Everything persists automatically - reading position, pause state, and
+- Everything persists automatically: reading position, pause state, and
   in-progress drafts are saved without needing to click anything
 - Deep customization: per-transcript font, highlight, and background
   colors; adjustable sidebar width and control-band height, including live
   drag-to-resize; a relocatable folder for where your data is stored
-- Searchable settings - the Defaults tab has a live search that filters by a
+- Searchable settings: the Defaults tab has a live search that filters by a
   setting's name or, when you turn on the toggle beside it, its description
 - An About dialog behind the small round **i** button at the top right of
   Settings, showing the app's version, its license, and a link to the project
-- Reading profiles - save how the reader feels (guide marks, pacing, rewind on
+- Reading profiles: save how the reader feels (guide marks, pacing, rewind on
   resume, surrounding words, skipping, the +/- step, the scrubber and paragraph
   switches, the letter spacing, and the Speed and Word size defaults) under a
   name, and switch between them from Settings in one click. Applying a profile
@@ -96,13 +88,22 @@ reading this way (including where it helps and where it does not), see [The scie
 - Optional letter spacing (Off, Small, Medium or Large) for the flashing word,
   and an OpenDyslexic font switch for the whole app. Both are comfort settings
   you can try by eye, not a treatment, and the app does not claim they help
-- Optional bold word starts in the edit box - one button next to Normalize
+- Optional bold word starts in the edit box: one button next to Normalize
   bolds the beginning of every word, and Ctrl+C (or right-click, **Copy with
   bold**) carries the bold into Word. It is a look you can try by eye, it is
   remembered between launches, and the app does not claim it helps
 - Light / Dark / System theme support with reading colors that
   automatically follow the active theme unless you've customized them
-- Fully offline and self-contained - no browser or internet needed, and the
+- Picks up where you left off: the last transcript reopens at launch, paused
+  at the same word (a Settings switch, on by default), the window comes back at
+  its size and place, maximized if it was, and the sidebar keeps the sort order
+  you picked
+- Keyboard friendly: Up and Down change the speed by 10 WPM, and Esc and Enter
+  work in the popups and in Settings
+- The transcript you are reading is marked in the sidebar
+- A save file that can't be read is copied aside before anything is saved over
+  it, and the app tells you at launch
+- Fully offline and self-contained: no browser or internet needed, and the
   fonts it uses are bundled with the project
 
 ## The RSVP Technique
@@ -111,11 +112,11 @@ reading this way (including where it helps and where it does not), see [The scie
 is shown one word at a time in a single fixed location, instead of being
 laid out across a page. Normal reading requires your eyes to physically
 jump from word to word (these jumps are called saccades) and often
-backtrack - RSVP removes that entirely, since the words come to a
+backtrack. RSVP removes that entirely, since the words come to a
 stationary point instead of your eyes having to find them.
 
 The **Optimal Recognition Point (ORP)** is the specific letter within a
-word where your eye naturally focuses to recognize it fastest - usually
+word where your eye naturally focuses to recognize it fastest, usually
 just left of center, and shifting slightly depending on the word's length.
 This app calculates that letter for every word and bolds it in a distinct
 color, keeping it aligned in the exact same screen position from word to
@@ -175,6 +176,11 @@ rsvp-desktop-reader/
 │   ├── profiles.py          # Reading profiles: which settings a profile holds, name rules, loading saved ones
 │   ├── profile_apply.py     # Works out what applying a profile does (clamping, guide mark colour vs. theme)
 │   ├── app_info.py          # The app's name, version, license and project link, shown in the About dialog
+│   ├── text_fit.py          # Shortens a line of text with an ellipsis to fit a width (the header's title)
+│   ├── reopen.py            # Which transcript to open again at launch
+│   ├── window_placement.py  # Where the main window goes at launch: size, position, maximized
+│   ├── transcript_sort.py   # The sidebar's sort orders and the ids they are saved under
+│   ├── wpm_step.py          # The Up and Down keys' 10 WPM step
 │   ├── transcript_store.py  # In-memory store + persistence for transcripts/spaces
 │   ├── settings_store.py    # In-memory store + persistence for app settings
 │   ├── storage.py           # Low-level JSON read/write
@@ -185,7 +191,7 @@ rsvp-desktop-reader/
 │   ├── icons.py             # Hand-drawn icons (avoids font-glyph rendering issues)
 │   ├── rich_clipboard.py    # Puts text and its bold on the Windows clipboard together, so Word keeps the bold
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
-├── tests/                   # Automated test suite covering core engine modules
+├── tests/                   # Automated test suite: the core engine, and the GUI on a real Tk
 │   ├── conftest.py
 │   ├── test_app_info.py
 │   ├── test_bold_family.py
@@ -195,9 +201,13 @@ rsvp-desktop-reader/
 │   ├── test_bold_starts_wiring.py
 │   ├── test_chunking.py
 │   ├── test_colors.py
+│   ├── test_damaged_files.py
 │   ├── test_data_bundle.py
+│   ├── test_detached_routing.py
+│   ├── test_dialog_keys.py
 │   ├── test_font_choice.py
 │   ├── test_gui_smoke.py
+│   ├── test_header.py
 │   ├── test_icons.py
 │   ├── test_importers.py
 │   ├── test_letter_spacing.py
@@ -210,24 +220,36 @@ rsvp-desktop-reader/
 │   ├── test_punctuation.py
 │   ├── test_reader.py
 │   ├── test_reader_letter_spacing.py
+│   ├── test_reading_colours_follow_theme.py
+│   ├── test_reopen_last_transcript.py
 │   ├── test_rich_clipboard.py
 │   ├── test_rich_copy.py
 │   ├── test_scroll.py
+│   ├── test_separator_line.py
+│   ├── test_settings_apply.py
 │   ├── test_settings_search.py
 │   ├── test_settings_store.py
 │   ├── test_settings_store_bold_starts.py
 │   ├── test_settings_store_dyslexia.py
 │   ├── test_settings_store_profiles.py
 │   ├── test_storage.py
-│   ├── test_theme_fonts.py
+│   ├── test_suite_isolation.py
+│   ├── test_text_fit.py
 │   ├── test_theme_following_colours.py
+│   ├── test_theme_fonts.py
 │   ├── test_timing.py
 │   ├── test_tokenizer.py
 │   ├── test_transcript_input_bold_live.py
 │   ├── test_transcript_input_bold_starts.py
 │   ├── test_transcript_input_edit_forwarder.py
 │   ├── test_transcript_input_rich_copy.py
-│   └── test_transcript_store.py
+│   ├── test_transcript_list_current.py
+│   ├── test_transcript_sort.py
+│   ├── test_transcript_store.py
+│   ├── test_window_esc.py
+│   ├── test_window_placement.py
+│   ├── test_wpm_keys.py
+│   └── test_wrapping_label.py
 ├── main.py                  # Entry point
 ├── RELEASING.md             # How a release is made, step by step
 └── requirements.txt         # Python dependencies
@@ -248,11 +270,13 @@ and the CustomTkinter `gui/`, see [docs/architecture.md](docs/architecture.md) *
 
 Settings are organized into six tabs:
 
-- **Defaults** - speed, colors, and skip behavior applied to newly created
-  transcripts (skip settings apply live to whatever you're currently
-  reading too)
-- **Layout** - window size, sidebar width, bottom control-band height, and
-  a free-form drag-to-resize toggle
+- **Defaults** - the speed, colours and word size new transcripts start with,
+  and the reader settings that apply to every transcript straight away: guide
+  marks, pacing, skipping, the surrounding-words line, reopening the last
+  transcript at launch, and more
+- **Layout** - window size (also remembered, with its place on screen, when you
+  close the app), sidebar width, bottom control-band height, and a free-form
+  drag-to-resize toggle
 - **Storage** - where your transcript data is saved on disk, changeable at
   any time. Also where you can export everything (transcripts, spaces, and
   settings) to a file, or import one from another machine, choosing whether
@@ -298,7 +322,7 @@ project on GitHub.
 - ~~Comment and ctk.label clean up~~
 - ~~Transcript draft normalization~~
 - ~~Selective running~~
-- Quality of life polish 2.0
+- ~~Quality of life polish 2.0~~
 - ~~Settings additions~~
 - ~~Peripheral context line~~
 - ~~Chunking (multi-word flash)~~
