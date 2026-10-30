@@ -18,7 +18,7 @@ for.
 
 Left out on purpose: the colours (the Defaults colours, and the colours a
 transcript is read in), chunking, window and layout sizes, the data directory,
-the Light/Dark/System mode and the Dyslexia-friendly font switch. The font is
+the Light/Dark/System mode and the OpenDyslexic font switch. The font is
 left out because it only changes on the next launch, so a profile could not
 honestly promise to switch it. Because the list is short and named here, a
 profile saved by one version still loads in another. A key that is missing from

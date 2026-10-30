@@ -1187,7 +1187,7 @@ class RSVPApp(ctk.CTk):
     # away. It never touches a transcript. Of the Defaults that new transcripts
     # start from it holds only Speed and Word size, never the colours or the
     # chunking defaults. The letter spacing level is part of a profile; the
-    # Dyslexia-friendly font switch is not, since a font can't change live.
+    # OpenDyslexic font switch is not, since a font can't change live.
 
     def _current_profile_settings(self) -> dict:
         """The app-wide settings a profile holds, as they are saved right now."""

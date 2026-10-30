@@ -1,6 +1,6 @@
 """Tests for core/font_choice.py: which fonts the app uses.
 
-The choice is made once at startup from the saved "Dyslexia-friendly font"
+The choice is made once at startup from the saved "Use the OpenDyslexic font"
 switch and from the font files found in the fonts folder. These tests only deal
 with the names and the decision. How gui/theme.py reads the setting and applies
 the answer is in test_theme_fonts.py."""

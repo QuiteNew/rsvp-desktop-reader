@@ -1,10 +1,10 @@
 """Which fonts the app uses.
 
 There are two sets. The standard one is Fredoka for headings and Quicksand for
-body text. The other is OpenDyslexic, picked with the "Dyslexia-friendly font"
-switch in Settings. This module only holds the names and the file lists, makes
-the choice and words the notes that go with the switch. It never touches a
-widget or the disk, so it can be tested without a window. gui/theme.py reads
+body text. The other is OpenDyslexic, picked with the "Use the OpenDyslexic
+font" switch in Settings. This module only holds the names and the file lists,
+makes the choice and words the notes that go with the switch. It never touches
+a widget or the disk, so it can be tested without a window. gui/theme.py reads
 the setting, looks at which font files are really in the folder, asks
 choose_fonts() and sets the app's fonts from the answer, once, at startup. That
 is why turning the switch on or off takes effect on the next launch."""

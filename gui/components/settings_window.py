@@ -31,6 +31,13 @@ from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW
 # the way (see _update_apply_button()).
 PROFILES_TAB_NAME = "Profiles"
 
+# The note at the top of the Defaults tab. Only the first five settings there
+# are what new transcripts start with; everything else applies straight away.
+DEFAULTS_NOTE = (
+    "Speed, the three colours and the word size are what new transcripts start "
+    "with. Everything else here applies to all transcripts straight away."
+)
+
 
 def _app_loads_its_fonts() -> bool:
     """Whether the app registers its own font files on this system. This
@@ -570,8 +577,11 @@ class SettingsWindow(ctk.CTkToplevel):
             text_color=COCOA_INK, font=self.small_font,
         )
 
+        # The note saying which settings here are only for new transcripts.
         holder = self._defaults_item(scroll, searchable=False)
-        ctk.CTkLabel(holder, text="Applied to newly created transcripts only", text_color=COCOA_INK, font=self.small_font).pack(anchor="w", pady=(5, 15))
+        WrappingLabel(
+            holder, text=DEFAULTS_NOTE, text_color=COCOA_INK, font=self.small_font,
+        ).pack(fill="x", pady=(5, 15))
 
         holder = self._defaults_item(scroll, "Speed", "wpm words per minute rate pace tempo fast slow")
         wpm_row = ctk.CTkFrame(holder, fg_color="transparent")

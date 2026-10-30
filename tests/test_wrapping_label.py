@@ -357,3 +357,19 @@ def test_every_description_is_packed_to_fill_its_row(settings):
     for tab in TABS:
         for label in _wrapping_labels(settings.tabview.tab(tab)):
             assert label.pack_info()["fill"] in ("x", "both"), f"{label.cget('text')[:40]!r} on {tab}"
+
+
+def test_the_note_at_the_top_of_defaults_wraps_and_says_which_settings_are_for_new_transcripts(settings):
+    """Only Speed, the three colours and the word size are what new transcripts
+    start with. The note used to say the whole tab was "Applied to newly created
+    transcripts only", which stopped being true as switches that apply straight
+    away were added below it."""
+    from gui.components.settings_window import DEFAULTS_NOTE
+
+    notes = [
+        label for label in _wrapping_labels(settings.tabview.tab("Defaults"))
+        if label.cget("text") == DEFAULTS_NOTE
+    ]
+    assert len(notes) == 1
+    assert all(name in DEFAULTS_NOTE for name in ("Speed", "colours", "word size"))
+    assert "straight away" in DEFAULTS_NOTE

@@ -143,7 +143,7 @@ DARK_READING_GUIDE_MARK_COLOR = DARK_PALETTE["cocoa_ink"]    # "#F2E8DC", soft c
 # The fonts are settled once, here, at import time, the same way the palette
 # is, so every component keeps importing the plain names FONT_HEADING and
 # FONT_BODY. The names and the choice itself live in core/font_choice.py; this
-# part only reads the "Dyslexia-friendly font" setting, looks at which font
+# part only reads the OpenDyslexic font setting, looks at which font
 # files are in the folder and applies the result.
 
 _FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
