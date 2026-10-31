@@ -16,12 +16,10 @@ maximized window and with the list of monitors."""
 
 import json
 import sys
+from contextlib import ExitStack
 
 import pytest
 
-import core.storage as storage
-import core.settings_store as settings_store
-import core.transcript_store as transcript_store
 from core.profiles import PROFILE_KEYS
 from core.settings_store import AppSettings, SettingsStore, WINDOW_WIDTH_RANGE, WINDOW_HEIGHT_RANGE
 from core.window_placement import (
@@ -463,60 +461,41 @@ def test_windows_knows_a_point_on_the_main_screen_from_one_off_every_screen():
 
 # ---- the real app ----
 
-_REDIRECT_TARGETS = (
-    (storage, "DEFAULT_DATA_DIR"),
-    (settings_store, "DEFAULT_DATA_DIR"),
-    (settings_store, "SETTINGS_DIR"),
-    (transcript_store, "DEFAULT_DATA_DIR"),
-)
-
 # Small enough to fit on a screen at 200%, and placed near the top left of the
 # main screen, so it is on screen on any machine.
 SAVED = (700, 500, 120, 90)
 
 
 @pytest.fixture
-def launch(tmp_path, monkeypatch, fresh_widget_image_caches):
+def launch(tmp_path, monkeypatch, open_real_app):
     """Builds the real app after saving a window placement for it, and closes
     it the way the window's close button does. Gives back the app and a
-    function that reads the saved settings.json. Skips if Tk has no display."""
-    import tkinter
+    function that reads the saved settings.json. Skips if Tk has no display.
+    Every app built is taken down at the end of the test, unless the test has
+    closed it already."""
     import gui.app as app_module
 
-    for mod, name in _REDIRECT_TARGETS:
-        monkeypatch.setattr(mod, name, tmp_path)
     # Closing the app normally takes the app's fonts back off the system,
     # which is for when the app quits, not for the middle of a test run.
     monkeypatch.setattr(app_module, "unregister_fonts", lambda: None)
-    built = []
 
-    def build(width, height, x, y, maximized):
-        fresh_widget_image_caches()
-        SettingsStore().set_window_placement(width, height, x, y, maximized)
-        try:
-            application = app_module.RSVPApp()
-        except tkinter.TclError as exc:
-            pytest.skip(f"Tk can't start a display here: {exc}")
-        built.append(application)
-        settle(application, 800)
-        return application
+    with ExitStack() as running:
+        def build(width, height, x, y, maximized):
+            def save_the_placement():
+                SettingsStore().set_window_placement(width, height, x, y, maximized)
 
-    def close(application):
-        settle(application, 400)
-        cancel_pending_afters(application)
-        application._handle_close()
-        built.remove(application)
-        saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
-        return tuple(saved[key] for key in ("window_width", "window_height", "window_x", "window_y", "window_maximized"))
+            return running.enter_context(
+                open_real_app(tmp_path, before_start=save_the_placement, first_settle_ms=800)
+            )
 
-    yield build, close
-    for application in built:
-        try:
+        def close(application):
+            settle(application, 400)
             cancel_pending_afters(application)
-            application.destroy()
-        except tkinter.TclError:
-            pass  # a test destroyed it already
-    fresh_widget_image_caches()
+            application._handle_close()
+            saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+            return tuple(saved[key] for key in ("window_width", "window_height", "window_x", "window_y", "window_maximized"))
+
+        yield build, close
 
 
 def test_the_app_opens_where_it_was_closed_and_saves_it_again(launch):

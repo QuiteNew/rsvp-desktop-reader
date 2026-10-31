@@ -19,12 +19,9 @@ import json
 
 import pytest
 
-import core.storage as storage
-import core.settings_store as settings_store
-import core.transcript_store as transcript_store
 from core.models import Transcript
 
-from tk_helpers import cancel_pending_afters, settle
+from tk_helpers import settle
 
 A, B = 1, 2
 
@@ -186,94 +183,58 @@ def test_settings_for_the_whole_app_still_reach_both_windows():
 
 # ---- the real app ----
 
-_REDIRECT_TARGETS = (
-    (storage, "DEFAULT_DATA_DIR"),
-    (settings_store, "DEFAULT_DATA_DIR"),
-    (settings_store, "SETTINGS_DIR"),
-    (transcript_store, "DEFAULT_DATA_DIR"),
-)
-
-
-def test_with_one_transcript_detached_the_main_window_reads_another_on_its_own(
-    tmp_path, monkeypatch, fresh_widget_image_caches,
-):
+def test_with_one_transcript_detached_the_main_window_reads_another_on_its_own(tmp_path, open_real_app):
     """A is detached and B is open in the main window. The footer's speed,
     Right and Space all act on B, and A is left as it was, on screen and in
     what is saved. Opening A again in the main window hands the controls back
-    to the detached window. The app is left on screen rather than hidden: on
-    Linux, destroying an app that was hidden with withdraw() makes the next
-    window that takes the keyboard focus crash Tk, in whatever test comes
-    next."""
-    import tkinter
+    to the detached window."""
+    with open_real_app(tmp_path) as app:
+        try:
+            store = app.store
+            a = store.add_transcript("A", store.current_space)
+            b = store.add_transcript("B", store.current_space)
+            for transcript in (a, b):
+                store.set_transcript_text(transcript.id, f"{transcript.title.lower()}word " * 60)
+                store.set_transcript_paused(transcript.id, True)
+            app._refresh_transcript_list()
+            settle(app, 300)
+            app._handle_open_transcript(a)
+            settle(app, 300)
+            app.canvas._handle_detach()
+            settle(app, 600)
+            detached = app.canvas._detached_window.reader_display
+            app._handle_open_transcript(b)
+            settle(app, 300)
+            main = app.canvas.reader_display
 
-    for mod, name in _REDIRECT_TARGETS:
-        monkeypatch.setattr(mod, name, tmp_path)
-    fresh_widget_image_caches()
+            app.footer.wpm_slider.set(700)
+            app.footer._handle_wpm_slide(700)
+            app._handle_shortcut_skip_forward()
+            app._handle_shortcut_pause_toggle()
+            settle(app, 150)
+            assert (main.session.wpm, main._is_paused) == (700, False)
+            assert main.session.index > 0
+            assert (detached.session.wpm, detached._is_paused, detached.session.index) == (300, True, 0)
+            assert (b.wpm, b.is_paused) == (700, False)
+            assert (a.wpm, a.is_paused) == (300, True)
 
-    from gui.app import RSVPApp
+            app._handle_shortcut_pause_toggle()  # B paused again, so it stops moving
+            app._handle_open_transcript(a)
+            settle(app, 300)
+            assert app.canvas._detached_shows_current()
+            app._handle_shortcut_pause_toggle()
+            app._handle_shortcut_wpm_up()
+            settle(app, 150)
+            assert (detached.session.wpm, detached._is_paused) == (310, False)
+            assert (a.wpm, a.is_paused) == (310, False)
+            assert (b.wpm, b.is_paused) == (700, True)
 
-    try:
-        app = RSVPApp()
-    except tkinter.TclError as exc:
-        pytest.skip(f"Tk can't start a display here: {exc}")
-    try:
-        # Let the app draw once while the sidebar list is still empty, the way
-        # the other tests that build the real app do. Adding transcripts and
-        # rebuilding the list before the window had ever been drawn made the
-        # list's CustomTkinter scrollbar redraw itself without end on Windows,
-        # and the list's own area never got a size, so the test hung. Most
-        # likely because Windows reports a widget's new size in the middle of
-        # laying out its neighbours, and the scrollbar's redraw then forces Tk
-        # to finish that layout from inside it.
-        settle(app, 300)
-        store = app.store
-        a = store.add_transcript("A", store.current_space)
-        b = store.add_transcript("B", store.current_space)
-        for transcript in (a, b):
-            store.set_transcript_text(transcript.id, f"{transcript.title.lower()}word " * 60)
-            store.set_transcript_paused(transcript.id, True)
-        app._refresh_transcript_list()
-        settle(app, 300)
-        app._handle_open_transcript(a)
-        settle(app, 300)
-        app.canvas._handle_detach()
-        settle(app, 600)
-        detached = app.canvas._detached_window.reader_display
-        app._handle_open_transcript(b)
-        settle(app, 300)
-        main = app.canvas.reader_display
-
-        app.footer.wpm_slider.set(700)
-        app.footer._handle_wpm_slide(700)
-        app._handle_shortcut_skip_forward()
-        app._handle_shortcut_pause_toggle()
-        settle(app, 150)
-        assert (main.session.wpm, main._is_paused) == (700, False)
-        assert main.session.index > 0
-        assert (detached.session.wpm, detached._is_paused, detached.session.index) == (300, True, 0)
-        assert (b.wpm, b.is_paused) == (700, False)
-        assert (a.wpm, a.is_paused) == (300, True)
-
-        app._handle_shortcut_pause_toggle()  # B paused again, so it stops moving
-        app._handle_open_transcript(a)
-        settle(app, 300)
-        assert app.canvas._detached_shows_current()
-        app._handle_shortcut_pause_toggle()
-        app._handle_shortcut_wpm_up()
-        settle(app, 150)
-        assert (detached.session.wpm, detached._is_paused) == (310, False)
-        assert (a.wpm, a.is_paused) == (310, False)
-        assert (b.wpm, b.is_paused) == (700, True)
-
-        store.flush()
-        saved = json.loads((tmp_path / "data.json").read_text(encoding="utf-8"))
-        assert {t["title"]: (t["wpm"], t["is_paused"]) for t in saved["transcripts"]} == {
-            "A": (310, False), "B": (700, True),
-        }
-    finally:
-        if app.canvas._detached_window is not None:
-            app.canvas._detached_window.close()
-        settle(app, 200)
-        cancel_pending_afters(app)
-        app.destroy()
-        fresh_widget_image_caches()
+            store.flush()
+            saved = json.loads((tmp_path / "data.json").read_text(encoding="utf-8"))
+            assert {t["title"]: (t["wpm"], t["is_paused"]) for t in saved["transcripts"]} == {
+                "A": (310, False), "B": (700, True),
+            }
+        finally:
+            if app.canvas._detached_window is not None:
+                app.canvas._detached_window.close()
+            settle(app, 200)

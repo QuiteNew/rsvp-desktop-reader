@@ -21,12 +21,14 @@ sees the real value.
 
 It also holds fresh_widget_image_caches, which a test module that builds the
 toolbar (so, a Canvas or the whole app) asks for when it makes a Tk root of its
-own, and wait_until_shown, for a test that needs a window to actually be on
-screen. See each fixture for why.
+own, wait_until_shown, for a test that needs a window to actually be on
+screen, and open_real_app, for a test that builds the whole app. See each
+fixture for why.
 """
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -133,3 +135,104 @@ def wait_until_shown():
                 )
 
     return wait
+
+
+@pytest.fixture(scope="module")
+def open_real_app(fresh_widget_image_caches):
+    """For a test, or a module's fixture, that builds the whole app. Hands back
+    a context manager:
+
+        with open_real_app(tmp_path) as app:
+            ...
+
+    Inside the with block the app's data lives in data_dir, and the app has
+    been built and drawn once. At the end the app is taken down and the real
+    locations are put back. Skips if Tk has no display.
+
+    Every test that builds the real app used to do all of this itself, and two
+    rules kept getting missed. Both live here now.
+
+    Windows: the app is drawn once right after it's built, while the sidebar
+    list is still empty. Adding transcripts and rebuilding the list before the
+    window had ever been drawn made the list's CustomTkinter scrollbar redraw
+    itself without end. The list never got a size, the test hung and the memory
+    filled up. Most likely because Windows reports a widget's new size in the
+    middle of laying out its neighbours, and the scrollbar's redraw then forces
+    Tk to finish that layout from inside it.
+
+    Linux: an app that is hidden is shown again before it's destroyed.
+    Destroying an app hidden with withdraw() makes the next window that takes
+    the keyboard focus crash Tk, in whatever test comes next.
+
+    The options:
+
+    before_start runs after the data has been moved to data_dir and before the
+    app is built, for saving something the app should find when it starts. A
+    store made with no arguments in there writes to data_dir. Doing the same
+    thing before the with block would save the suite's shared stand-in folder
+    (see pytest_configure) into the settings as the data folder, and the app
+    would read and write its transcripts there instead of in data_dir.
+
+    first_settle_ms is how long the app gets for that first draw. A test that
+    has to change the app before the event loop ever runs passes 0, and then
+    it isn't drawn first.
+
+    A test may close the app itself, the way the window's close button does.
+    The end of the with block then leaves it alone."""
+    return lambda data_dir, **options: _real_app(fresh_widget_image_caches, data_dir, **options)
+
+
+@contextmanager
+def _real_app(forget_cached_images, data_dir, before_start=None, first_settle_ms=300):
+    """The work behind open_real_app. See that fixture for what each step is for."""
+    import tkinter
+
+    from tk_helpers import settle
+
+    originals = [(mod, name, getattr(mod, name)) for mod, name in _FALLBACK_LOCATION_NAMES]
+    for mod, name in _FALLBACK_LOCATION_NAMES:
+        setattr(mod, name, data_dir)
+    forget_cached_images()
+    try:
+        if before_start is not None:
+            before_start()
+
+        from gui.app import RSVPApp
+
+        try:
+            app = RSVPApp()
+        except tkinter.TclError as exc:
+            pytest.skip(f"Tk can't start a display here: {exc}")
+        try:
+            if first_settle_ms:
+                settle(app, first_settle_ms)
+            yield app
+        finally:
+            _take_down(app)
+    finally:
+        for mod, name, value in originals:
+            setattr(mod, name, value)
+        forget_cached_images()
+
+
+def _take_down(app):
+    """Destroy a real app safely, unless a test has closed it already."""
+    import tkinter
+
+    from tk_helpers import cancel_pending_afters, settle
+
+    try:
+        if not app.winfo_exists():
+            return
+    except tkinter.TclError:
+        return  # already destroyed, by the app's own close button for example
+    if app.state() == "withdrawn":
+        # deiconify() on its own isn't enough, the window has to really be
+        # shown again, and that takes a turn of the event loop.
+        app.deiconify()
+        settle(app)
+    # CustomTkinter keeps a few timers going on its windows, and a destroyed
+    # app leaves the next round of them pending. They would run during the next
+    # test and report errors about a destroyed app.
+    cancel_pending_afters(app)
+    app.destroy()

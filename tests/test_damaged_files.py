@@ -18,14 +18,11 @@ from pathlib import Path
 
 import pytest
 
-import core.storage as storage
-import core.settings_store as settings_store
-import core.transcript_store as transcript_store
 from core.settings_store import SettingsStore
 from core.storage import DamagedFile, keep_damaged_copy, load_state, read_state, save_state
 from core.transcript_store import TranscriptStore
 
-from tk_helpers import cancel_pending_afters, settle
+from tk_helpers import settle
 
 NOON = datetime(2026, 10, 29, 12, 0, 5)
 
@@ -289,70 +286,29 @@ def test_closing_one_message_opens_the_next(monkeypatch):
 
 # ---- the real app ----
 
-_REDIRECT_TARGETS = (
-    (storage, "DEFAULT_DATA_DIR"),
-    (settings_store, "DEFAULT_DATA_DIR"),
-    (settings_store, "SETTINGS_DIR"),
-    (transcript_store, "DEFAULT_DATA_DIR"),
-)
-
-
-def test_the_app_starts_with_a_damaged_data_file_and_says_so(tmp_path, monkeypatch, fresh_widget_image_caches):
-    import tkinter
+def test_the_app_starts_with_a_damaged_data_file_and_says_so(tmp_path, open_real_app):
     from gui.components.message_dialog import MessageDialog
 
-    for mod, name in _REDIRECT_TARGETS:
-        monkeypatch.setattr(mod, name, tmp_path)
     (tmp_path / "data.json").write_bytes(DAMAGED["not text"])
-    fresh_widget_image_caches()
-
-    from gui.app import RSVPApp
-
-    try:
-        application = RSVPApp()
-    except tkinter.TclError as exc:
-        pytest.skip(f"Tk can't start a display here: {exc}")
-    try:
-        settle(application, 800)
+    with open_real_app(tmp_path, first_settle_ms=800) as application:
         dialogs = [w for w in application.winfo_children() if isinstance(w, MessageDialog)]
         assert [dialog.title() for dialog in dialogs] == ["Couldn't read your transcripts"]
         assert application.store.transcripts == []
         dialogs[0]._handle_dismiss()
         settle(application, 300)
-    finally:
-        cancel_pending_afters(application)
-        application.destroy()
-        fresh_widget_image_caches()
     assert len(list(tmp_path.glob("data.damaged-*.json"))) == 1
 
 
-def test_destroying_the_app_drops_a_message_still_waiting(tmp_path, monkeypatch, fresh_widget_image_caches):
+def test_destroying_the_app_drops_a_message_still_waiting(tmp_path, open_real_app):
     """A window that never comes on screen never gets the message, and the
     check that keeps waiting for it ends with the window.
 
-    The window says it isn't on screen rather than really being hidden: on
-    Linux, destroying an app that was hidden with withdraw() makes the next
-    window that takes the keyboard focus crash Tk, in whatever test comes
-    next."""
-    import tkinter
-
-    for mod, name in _REDIRECT_TARGETS:
-        monkeypatch.setattr(mod, name, tmp_path)
+    The window only says it isn't on screen, which is how this test was
+    written while destroying a hidden app still crashed Tk on Linux. It has to
+    say so before the event loop first runs, so the app isn't drawn first."""
     (tmp_path / "data.json").write_bytes(DAMAGED["cut off"])
-    fresh_widget_image_caches()
-
-    from gui.app import RSVPApp
-
-    try:
-        application = RSVPApp()
-    except tkinter.TclError as exc:
-        pytest.skip(f"Tk can't start a display here: {exc}")
-    application.winfo_viewable = lambda: False
-    try:
+    with open_real_app(tmp_path, first_settle_ms=0) as application:
+        application.winfo_viewable = lambda: False
         settle(application, 300)
         assert application._damaged_notice_after_id is not None
-    finally:
-        cancel_pending_afters(application)
-        application.destroy()
-        fresh_widget_image_caches()
     assert application._damaged_notice_after_id is None

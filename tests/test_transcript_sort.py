@@ -19,15 +19,10 @@ import tkinter
 import customtkinter as ctk
 import pytest
 
-import core.storage as storage
-import core.settings_store as settings_store
-import core.transcript_store as transcript_store
 from core.models import Transcript
 from core.profiles import PROFILE_KEYS
 from core.settings_store import AppSettings, SettingsStore
 from core.transcript_sort import DEFAULT_SORT, SORT_ORDERS, known_sort, sort_transcripts
-
-from tk_helpers import cancel_pending_afters, settle
 
 
 def _transcript(id, title, times_read=0, seconds=0):
@@ -146,42 +141,18 @@ def test_the_order_is_not_part_of_a_reading_profile():
 
 # ---- the app (gui/app.py) ----
 
-_REDIRECT_TARGETS = (
-    (storage, "DEFAULT_DATA_DIR"),
-    (settings_store, "DEFAULT_DATA_DIR"),
-    (settings_store, "SETTINGS_DIR"),
-    (transcript_store, "DEFAULT_DATA_DIR"),
-)
-
-
-def test_the_app_opens_in_the_saved_order_and_saves_a_new_one(tmp_path, monkeypatch, fresh_widget_image_caches):
+def test_the_app_opens_in_the_saved_order_and_saves_a_new_one(tmp_path, open_real_app):
     """This comes before the list tests on purpose. They share one Tk root for
     the rest of the module, and the app has to be the only root while it is
     up, because CustomTkinter ties fonts and pictures to the first one."""
-    for mod, name in _REDIRECT_TARGETS:
-        monkeypatch.setattr(mod, name, tmp_path)
-    SettingsStore().set_transcript_sort("title_za")
-    fresh_widget_image_caches()
+    def save_an_order():
+        SettingsStore().set_transcript_sort("title_za")
 
-    from gui.app import RSVPApp
-
-    try:
-        application = RSVPApp()
-    except tkinter.TclError as exc:
-        pytest.skip(f"Tk can't start a display here: {exc}")
-    # Left on screen: on Linux, destroying an app that was hidden with
-    # withdraw() makes the next window that takes the keyboard focus crash Tk,
-    # in whatever test comes next.
-    try:
-        settle(application, 300)
+    with open_real_app(tmp_path, before_start=save_an_order) as application:
         assert application.list_body._sort == "title_za"
         application.list_body._handle_sort_selected("most_read")
         saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
         assert saved["transcript_sort"] == "most_read"
-    finally:
-        cancel_pending_afters(application)
-        application.destroy()
-        fresh_widget_image_caches()
 
 
 # ---- the sidebar list (gui/components/transcript_list_body.py) ----

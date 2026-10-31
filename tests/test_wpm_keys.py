@@ -18,14 +18,11 @@ import json
 
 import pytest
 
-import core.storage as storage
-import core.settings_store as settings_store
-import core.transcript_store as transcript_store
 from core.models import Transcript
 from core.settings_store import WPM_RANGE
 from core.wpm_step import WPM_KEY_STEP, step_wpm
 
-from tk_helpers import cancel_pending_afters, settle
+from tk_helpers import settle
 
 UP, DOWN = 1, -1
 
@@ -209,64 +206,28 @@ def test_a_detached_window_nobody_listens_to_still_changes_its_reader():
 
 # ---- the real app ----
 
-_REDIRECT_TARGETS = (
-    (storage, "DEFAULT_DATA_DIR"),
-    (settings_store, "DEFAULT_DATA_DIR"),
-    (settings_store, "SETTINGS_DIR"),
-    (transcript_store, "DEFAULT_DATA_DIR"),
-)
-
-
 @pytest.fixture(scope="module")
-def app(tmp_path_factory, fresh_widget_image_caches):
+def app(tmp_path_factory, open_real_app):
     """One real app for the tests below, with two transcripts, A and B, at
-    different speeds. Left on screen rather than hidden: on Linux, destroying
-    an app that was hidden with withdraw() makes the next window that takes
-    the keyboard focus crash Tk, in whatever test comes next."""
-    import tkinter
-
+    different speeds."""
     data_dir = tmp_path_factory.mktemp("rsvp_wpm_keys")
-    originals = [(mod, name, getattr(mod, name)) for mod, name in _REDIRECT_TARGETS]
-    for mod, name in _REDIRECT_TARGETS:
-        setattr(mod, name, data_dir)
-    fresh_widget_image_caches()
-
-    from gui.app import RSVPApp
-
-    try:
-        application = RSVPApp()
-    except tkinter.TclError as exc:
-        for mod, name, value in originals:
-            setattr(mod, name, value)
-        pytest.skip(f"Tk can't start a display here: {exc}")
-    # Let the app draw once while the sidebar list is still empty. Adding
-    # transcripts and rebuilding the list before the window had ever been drawn
-    # made the list's CustomTkinter scrollbar redraw itself without end on
-    # Windows, and the list's own area never got a size. It only got away with
-    # it in the full run, where other windows had come and gone first. See the
-    # matching note in test_detached_routing.py.
-    settle(application, 300)
-    store = application.store
-    for title, wpm in (("A", 300), ("B", 450)):
-        transcript = store.add_transcript(title, store.current_space)
-        store.set_transcript_text(transcript.id, f"{title.lower()}word " * 50)
-        store.set_transcript_paused(transcript.id, True)
-        store.set_transcript_wpm(transcript.id, wpm)
-    application._refresh_transcript_list()
-    application.data_dir = data_dir
-    settle(application, 300)
-    try:
-        yield application
-    finally:
-        detached = application.canvas._detached_window
-        if detached is not None:
-            detached.close()
-        settle(application, 200)
-        cancel_pending_afters(application)
-        application.destroy()
-        for mod, name, value in originals:
-            setattr(mod, name, value)
-        fresh_widget_image_caches()
+    with open_real_app(data_dir) as application:
+        store = application.store
+        for title, wpm in (("A", 300), ("B", 450)):
+            transcript = store.add_transcript(title, store.current_space)
+            store.set_transcript_text(transcript.id, f"{title.lower()}word " * 50)
+            store.set_transcript_paused(transcript.id, True)
+            store.set_transcript_wpm(transcript.id, wpm)
+        application._refresh_transcript_list()
+        application.data_dir = data_dir
+        settle(application, 300)
+        try:
+            yield application
+        finally:
+            detached = application.canvas._detached_window
+            if detached is not None:
+                detached.close()
+            settle(application, 200)
 
 
 def _named(app, title):
