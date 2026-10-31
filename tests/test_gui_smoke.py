@@ -20,6 +20,8 @@ import core.settings_store as settings_store
 import core.transcript_store as transcript_store
 from core.reader import CHUNK_MODE_ADAPTIVE
 
+from tk_helpers import all_widgets, cancel_pending_afters, settle
+
 # Every default-location constant the stores read, redirected together.
 # SETTINGS_DIR is what SettingsStore uses directly; the DEFAULT_DATA_DIR
 # copies feed AppSettings.data_directory (and thus the TranscriptStore
@@ -769,106 +771,38 @@ def test_settings_search_descriptions_toggle_messages_and_reset_note(app):
 # built with particular colours makes its own.
 #
 # And every window is given time to finish starting up before anything touches
-# it, and time to finish tearing down afterwards. A CTkToplevel on Windows does
-# not come up in one go: its __init__ hides the window, recolours the titlebar
-# and calls update(), then leaves the rest to a string of timers, 5ms to put
-# the window back on screen, 10ms to restore focus, another 10ms from
-# resizable() to run the whole titlebar routine a second time, 200ms to set the
-# icon, 1000ms to settle its min and max size. Our own dialogs add an 80ms
-# reveal on top. In the app that sequence always completes, because the event
-# loop runs continuously between a person's clicks. In a test nothing runs the
-# loop unless we ask, so a window built and destroyed back to back is destroyed
-# halfway through its own startup, with Tk's window bookkeeping still mid-change
-# and the leftovers queued for whatever window is unlucky enough to call
-# update() next. _settle() is what asks, and it is why these tests briefly flash
-# real windows on screen while they run.
-
-
-def _all_widgets(root):
-    """root and every widget below it, depth first."""
-    found = [root]
-    for child in root.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
+# it, and time to finish tearing down afterwards, with settle() from
+# tk_helpers.py. The note at the top of that file says why: a CTkToplevel on
+# Windows comes up through a string of timers, and a window destroyed halfway
+# through them leaves the leftovers for whichever window calls update() next.
+# It's also why these tests briefly flash real windows on screen while they run.
 
 
 def _labels_by_text(root):
     """Every CTkLabel under root, keyed by its text."""
     import customtkinter as ctk
 
-    return {w.cget("text"): w for w in _all_widgets(root) if isinstance(w, ctk.CTkLabel)}
+    return {w.cget("text"): w for w in all_widgets(root) if isinstance(w, ctk.CTkLabel)}
 
 
 def _find_button(root, text):
     """The CTkButton under root with this text."""
     import customtkinter as ctk
 
-    for widget in _all_widgets(root):
+    for widget in all_widgets(root):
         if isinstance(widget, ctk.CTkButton) and widget.cget("text") == text:
             return widget
     raise AssertionError(f"no button labelled {text!r}")
-
-
-def _settle(widget, milliseconds=250):
-    """Run Tk's event loop for a while, so everything already queued, timers
-    included, gets a chance to finish.
-
-    The default is long enough to cover a CTkToplevel's whole startup sequence
-    (see the note at the top of this block), so a window that has been settled
-    is one Tk has finished putting up and is safe to inspect or destroy."""
-    import time
-
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _cancel_pending_afters(window):
-    """Cancel whatever Tk timers `window`, or anything inside it, still has
-    queued. Only ever called on a settled window that is about to be destroyed,
-    so what is left is the long tail, mainly CTkToplevel's 1000ms min and max
-    size callback, that would otherwise fire against a freed widget.
-
-    Each timer is cancelled through the widget that scheduled it, found by
-    matching the timer's Tcl command name against that widget's own
-    _tclCommands list. That detail matters: after_cancel deletes the timer's
-    Tcl command and takes it off the calling widget's list, so cancelling
-    through any other widget deletes the command while leaving it on its
-    owner's list, and the owner then dies with "can't delete Tcl command" when
-    it is destroyed. Timers belonging to anything outside this window, such as
-    the main window's own widgets or CustomTkinter's DPI watcher, are left
-    alone for the same reason."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
 
 
 def _close(application, window):
     """Settle a window, then take it down and let the teardown drain. The
     application is only needed for that last part, since by then the window
     itself is gone and something live has to run the loop."""
-    _settle(window)
-    _cancel_pending_afters(window)
+    settle(window)
+    cancel_pending_afters(window)
     window.destroy()
-    _settle(application, 100)
+    settle(application, 100)
 
 
 def _open_about(settings_window):
@@ -876,7 +810,7 @@ def _open_about(settings_window):
     ready to inspect."""
     settings_window._info_button.invoke()
     dialog = settings_window._about_dialog
-    _settle(dialog)
+    settle(dialog)
     return dialog
 
 
@@ -884,9 +818,9 @@ def _close_about(application, dialog, close=None):
     """Close an About dialog the way a person would, with its own Close button
     unless another way in is given, and let both the close and whatever it set
     off in Settings finish."""
-    _cancel_pending_afters(dialog)
+    cancel_pending_afters(dialog)
     (close or _find_button(dialog, "Close").invoke)()
-    _settle(application, 150)
+    settle(application, 150)
 
 
 def _contrast_ratio(color_a, color_b):
@@ -922,7 +856,7 @@ def settings(app):
     which is what the monkeypatch calls and the geometry restore below are for."""
     app._open_settings_window()
     window = app._settings_window
-    _settle(window)
+    settle(window)
     try:
         yield window
     finally:
@@ -1072,7 +1006,7 @@ def test_about_dialog_colours_follow_the_palette(app, settings, monkeypatch):
             # palette has to be in place before __init__ reads it. With no
             # on_close it never touches the shared window's own dialog slot.
             dialog = about_module.AboutDialog(settings)
-            _settle(dialog)
+            settle(dialog)
             try:
                 paper, ink = palette["hearth_paper"], palette["cocoa_ink"]
                 labels = _labels_by_text(dialog)
@@ -1133,7 +1067,7 @@ def test_info_button_colours_follow_the_palette(app, settings, monkeypatch):
             app._open_settings_window()
             window = app._settings_window
             try:
-                _settle(window)
+                settle(window)
                 button = window._info_button
                 assert button.cget("fg_color") == palette["warm_taupe"]
                 assert button.cget("hover_color") == palette["warm_line"]
@@ -1166,11 +1100,11 @@ def test_info_button_sits_above_the_tabs_at_the_right_edge(app, settings):
     try:
         check_position()
         settings.geometry("420x420")
-        _settle(settings, 150)
+        settle(settings, 150)
         check_position()
     finally:
         settings.geometry(original_geometry)
-        _settle(settings, 150)
+        settle(settings, 150)
 
 
 # ---- Reading profiles ----
@@ -1603,8 +1537,8 @@ def test_applying_a_profile_reaches_a_detached_reader(profiles_sandbox):
 # change the window's controls (never the store directly) before pressing them.
 #
 # These use the same shared Settings window as the About tests, and every
-# popup is given time to finish opening and closing (see _settle), for the
-# reasons in the note above those tests.
+# popup is given time to finish opening and closing (see settle in
+# tk_helpers.py), for the reasons in the note above those tests.
 
 
 def _read_controls(window):
@@ -1626,16 +1560,16 @@ def _popup_of(tab):
     """The popup the tab has just opened, settled and ready to use."""
     popup = tab._popup
     assert popup is not None and popup.winfo_exists()
-    _settle(popup)
+    settle(popup)
     return popup
 
 
 def _finish_popup(application, popup, action):
     """Press a button in a Profiles tab popup, then let the popup close and
     Settings take its grab back."""
-    _cancel_pending_afters(popup)
+    cancel_pending_afters(popup)
     action()
-    _settle(application, 150)
+    settle(application, 150)
 
 
 def _type_name(popup, text):
@@ -1672,7 +1606,7 @@ def profile_tab(app, settings, profiles_sandbox):
     finally:
         popup = tab._popup
         if popup is not None and popup.winfo_exists():
-            _cancel_pending_afters(popup)
+            cancel_pending_afters(popup)
             popup.destroy()
             tab._popup = None
         for profile in app.settings_store.profiles:
@@ -1681,7 +1615,7 @@ def profile_tab(app, settings, profiles_sandbox):
         _write_controls(settings, controls)
         settings._show_message("")
         _click_tab(settings, "Defaults")
-        _settle(app, 100)
+        settle(app, 100)
 
 
 def test_the_profiles_tab_sits_between_appearance_and_stats(settings):
@@ -2026,16 +1960,16 @@ def test_applying_a_profile_applies_pending_changes_first_then_the_profile_and_c
     app._open_settings_window()
     window = app._settings_window
     try:
-        _settle(window)
+        settle(window)
         window.default_wpm_slider.set(333)       # a setting this profile doesn't hold
         window.skip_word_count_slider.set(40)    # one the profile sets too
         chosen_wpm = int(window.default_wpm_slider.get())
         assert chosen_wpm != wpm_before
 
         window.profiles_tab.select("Careful")
-        _cancel_pending_afters(window)
+        cancel_pending_afters(window)
         window.profiles_tab.apply_button.invoke()
-        _settle(app, 150)
+        settle(app, 150)
 
         assert not window.winfo_exists()
         assert store.default_wpm == chosen_wpm   # applied first, as if Apply had been pressed
@@ -2065,19 +1999,19 @@ def test_switching_profiles_moves_the_defaults_tab_sliders_and_switches_when_set
     first = app._settings_window
     second = None
     try:
-        _settle(first)
+        settle(first)
         assert int(first.default_wpm_slider.get()) == wpm_before
         assert int(first.default_font_size_slider.get()) == size_before
 
         first.profiles_tab.select("Everything")
-        _cancel_pending_afters(first)
+        cancel_pending_afters(first)
         first.profiles_tab.apply_button.invoke()
-        _settle(app, 150)
+        settle(app, 150)
         assert not first.winfo_exists()
 
         app._open_settings_window()
         second = app._settings_window
-        _settle(second)
+        settle(second)
         assert int(second.default_wpm_slider.get()) == 450
         assert second.default_wpm_label.cget("text") == "450 WPM"
         assert int(second.default_font_size_slider.get()) == 48
@@ -2216,20 +2150,20 @@ def test_the_profiles_tab_fits_the_smallest_settings_window(app, settings, profi
     try:
         _click_tab(settings, "Defaults")
         settings.geometry("420x420")
-        _settle(settings, 250)
+        settle(settings, 250)
         _click_tab(settings, "Profiles")
-        _settle(settings, 250)
+        settle(settings, 250)
 
         tabview_bottom = settings.tabview.winfo_y() + settings.tabview.winfo_height()
         assert tabview_bottom <= settings.error_label.winfo_y()
         assert profile_tab.winfo_reqheight() <= settings.tabview.tab("Profiles").winfo_height()
 
         import customtkinter as ctk
-        for label in (w for w in _all_widgets(profile_tab) if isinstance(w, ctk.CTkLabel)):
+        for label in (w for w in all_widgets(profile_tab) if isinstance(w, ctk.CTkLabel)):
             assert label.winfo_reqwidth() <= profile_tab.winfo_width()
     finally:
         settings.geometry(original_geometry)
-        _settle(settings, 150)
+        settle(settings, 150)
 
 
 # ---- Letter spacing and the font switch ----
@@ -2391,7 +2325,7 @@ def test_a_selection_preview_keeps_the_level_it_was_opened_with(spacing_sandbox)
     assert len(app.canvas._selection_previews) == 1
     preview = app.canvas._selection_previews[0][0]
     try:
-        _settle(preview)
+        settle(preview)
         assert preview.letter_spacing_level == 2
         assert preview.reader_display.letter_spacing_level == 2
 
@@ -2399,9 +2333,9 @@ def test_a_selection_preview_keeps_the_level_it_was_opened_with(spacing_sandbox)
         app.canvas.set_letter_spacing_level(0)
         assert preview.reader_display.letter_spacing_level == 2
     finally:
-        _cancel_pending_afters(preview)
+        cancel_pending_afters(preview)
         preview.close()
-        _settle(app, 100)
+        settle(app, 100)
     assert app.canvas._selection_previews == []
     app.canvas.stop()
 
@@ -2507,7 +2441,7 @@ def test_settings_opens_showing_the_saved_level_and_font_switch(spacing_sandbox,
     app._open_settings_window()
     window = app._settings_window
     try:
-        _settle(window)
+        settle(window)
         assert window.letter_spacing_selector.get() == LEVEL_NAMES[2]
         assert bool(window.dyslexia_font_switch.get()) is True
 
@@ -2520,7 +2454,7 @@ def test_settings_opens_showing_the_saved_level_and_font_switch(spacing_sandbox,
     app._open_settings_window()
     window = app._settings_window
     try:
-        _settle(window)
+        settle(window)
         assert window.letter_spacing_selector.get() == LEVEL_NAMES[0]
         assert bool(window.dyslexia_font_switch.get()) is False
     finally:
@@ -2539,7 +2473,7 @@ def test_a_saved_level_that_is_not_a_level_shows_as_the_nearest_one(spacing_sand
     app._open_settings_window()
     window = app._settings_window
     try:
-        _settle(window)
+        settle(window)
         assert window.letter_spacing_selector.get() == shown
     finally:
         _close(app, window)
@@ -2568,7 +2502,7 @@ def test_a_new_settings_window_shows_the_notes_for_its_situation(spacing_sandbox
     app._open_settings_window()
     window = app._settings_window
     try:
-        _settle(window)
+        settle(window)
         shown = tuple(label.cget("text") for label in window.dyslexia_font_notes)
         assert shown == font_switch_notes(loads_fonts, fell_back)
     finally:
@@ -2626,9 +2560,9 @@ def test_the_appearance_tab_scrolls_and_fits_the_smallest_settings_window(app, s
     try:
         _click_tab(settings, "Defaults")
         settings.geometry("420x420")
-        _settle(settings, 250)
+        settle(settings, 250)
         _click_tab(settings, "Appearance")
-        _settle(settings, 250)
+        settle(settings, 250)
 
         tabview_bottom = settings.tabview.winfo_y() + settings.tabview.winfo_height()
         assert tabview_bottom <= settings.error_label.winfo_y()
@@ -2641,13 +2575,13 @@ def test_the_appearance_tab_scrolls_and_fits_the_smallest_settings_window(app, s
         # The frame inside the scroll area grows to fit its widest label, so its
         # own width says nothing. What the person sees is the canvas.
         visible_width = canvas.winfo_width()
-        for label in (w for w in _all_widgets(scroll) if isinstance(w, ctk.CTkLabel)):
+        for label in (w for w in all_widgets(scroll) if isinstance(w, ctk.CTkLabel)):
             assert label.winfo_reqwidth() <= visible_width, label.cget("text")
         assert settings.letter_spacing_selector.winfo_reqwidth() <= visible_width
     finally:
         settings.geometry(original_geometry)
         _click_tab(settings, "Defaults")
-        _settle(settings, 150)
+        settle(settings, 150)
 
 
 def test_the_apply_button_is_shown_on_the_appearance_tab(settings):
