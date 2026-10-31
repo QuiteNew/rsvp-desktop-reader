@@ -16,29 +16,12 @@ callbacks in place of the app, like in test_wrapping_label.py, so these run
 without a whole app. The window size checks call the app's own methods on a
 small stand-in for the same reason."""
 
-import tkinter
 from dataclasses import asdict
 
 import customtkinter as ctk
 import pytest
 
 from tk_helpers import settle
-
-
-@pytest.fixture(scope="module")
-def root(fresh_widget_image_caches):
-    """See test_wrapping_label.py: the cached app icon belongs to one Tk root,
-    so the cache is emptied around this module's root."""
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
-    fresh_widget_image_caches()
 
 
 class _Recorder:

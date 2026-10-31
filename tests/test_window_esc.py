@@ -10,27 +10,10 @@ They run against a real Tk with one hidden root for the whole module, and each
 window is opened from a shown window, because Tk keeps a window hidden while its
 owner is hidden."""
 
-import tkinter
 from dataclasses import asdict
 
 import customtkinter as ctk
 import pytest
-
-
-@pytest.fixture(scope="module")
-def root(fresh_widget_image_caches):
-    """The windows set the app icon, and that picture is kept for the Tk root it
-    was made in, so the cache is emptied around this module's root."""
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
-    fresh_widget_image_caches()
 
 
 class Calls:

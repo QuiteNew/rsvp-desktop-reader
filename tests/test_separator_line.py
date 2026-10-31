@@ -13,7 +13,6 @@ test_wrapping_label.py, and for the same reasons every window is given real time
 to settle and sizes are read back from the window's own scaling instead of
 assuming a 100% display."""
 
-import tkinter
 from dataclasses import asdict
 
 import customtkinter as ctk
@@ -26,22 +25,6 @@ from gui.components.separator_line import (
 from gui.components.wrapping_label import WrappingLabel
 
 from tk_helpers import all_widgets, settle
-
-
-@pytest.fixture(scope="module")
-def root(fresh_widget_image_caches):
-    """See test_wrapping_label.py: the cached app icon belongs to one Tk root,
-    so the cache is emptied around this module's root."""
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
-    fresh_widget_image_caches()
 
 
 @pytest.fixture

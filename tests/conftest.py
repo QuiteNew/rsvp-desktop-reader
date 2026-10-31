@@ -21,9 +21,10 @@ sees the real value.
 
 It also holds fresh_widget_image_caches, which a test module that builds the
 toolbar (so, a Canvas or the whole app) asks for when it makes a Tk root of its
-own, wait_until_shown, for a test that needs a window to actually be on
-screen, and open_real_app, for a test that builds the whole app. See each
-fixture for why.
+own, root, the hidden Tk root a test module builds its own widgets and windows
+on, wait_until_shown, for a test that needs a window to actually be on screen,
+and open_real_app, for a test that builds the whole app. See each fixture for
+why.
 """
 import shutil
 import tempfile
@@ -101,6 +102,56 @@ def fresh_widget_image_caches():
     _forget_cached_widget_images()
     yield _forget_cached_widget_images
     _forget_cached_widget_images()
+
+
+@pytest.fixture(scope="module")
+def root(fresh_widget_image_caches):
+    """One hidden CustomTkinter root for a whole test module, for tests that
+    build their own widgets and windows on it rather than the whole app. Skips
+    if Tk has no display.
+
+    The picture caches are emptied around it (see fresh_widget_image_caches):
+    the popups and the Settings window set the app icon, and that picture
+    belongs to the root it was made for.
+
+    When the module is done, every timer still waiting is cancelled before the
+    root is destroyed. CustomTkinter keeps a few going on its windows, and left
+    alone they would run during the next module and report errors about a
+    destroyed app. Each one that a live widget scheduled is cancelled through
+    that widget (see cancel_pending_afters in tk_helpers.py). What's left after
+    that belongs to widgets a test has already destroyed, and is cancelled
+    directly.
+
+    It stays hidden to the end. Destroying the real app while it was hidden
+    made Tk crash on Linux (see open_real_app), but a plain root like this one
+    hasn't done that, with the whole suite run in one process."""
+    window = _new_root()
+    window.withdraw()
+    yield window
+    _take_down_root(window)
+
+
+def _new_root():
+    """A new CustomTkinter root, or a skip if Tk has no display."""
+    import tkinter
+
+    import customtkinter as ctk
+
+    try:
+        return ctk.CTk()
+    except tkinter.TclError as exc:
+        pytest.skip(f"Tk can't start a display here: {exc}")
+
+
+def _take_down_root(window):
+    """Cancel every timer the root still has waiting, then destroy it. See the
+    root fixture for why it's done in two steps."""
+    from tk_helpers import cancel_pending_afters
+
+    cancel_pending_afters(window)
+    for timer in window.tk.splitlist(window.tk.call("after", "info")):
+        window.tk.call("after", "cancel", timer)
+    window.destroy()
 
 
 @pytest.fixture

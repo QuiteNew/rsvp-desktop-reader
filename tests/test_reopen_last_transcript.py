@@ -9,7 +9,6 @@ own, and it comes back at the same word; one left in the edit box comes back in
 the edit box. Nothing is opened when the switch is off or the transcript is
 gone."""
 
-import tkinter
 from dataclasses import asdict
 
 import customtkinter as ctk
@@ -242,19 +241,6 @@ def test_apply_saves_the_switch(tmp_path):
 
 
 # ---- the switch in Settings ----
-
-@pytest.fixture(scope="module")
-def root(fresh_widget_image_caches):
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
-    fresh_widget_image_caches()
 
 
 @pytest.fixture

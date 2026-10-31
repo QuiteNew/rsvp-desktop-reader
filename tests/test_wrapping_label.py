@@ -21,7 +21,6 @@ changes size: on Windows a new CTkToplevel hides itself for a moment to colour
 its title bar and comes back on a timer, so a single update() can measure a
 window that hasn't really been laid out yet."""
 
-import tkinter
 from dataclasses import asdict
 
 import customtkinter as ctk
@@ -35,27 +34,6 @@ LONG_TEXT = (
     "Gives longer words a bit more time on screen, in three steps based on length, "
     "so short words are unaffected and the long ones get a moment more."
 )
-
-
-@pytest.fixture(scope="module")
-def root(fresh_widget_image_caches):
-    """The Settings window sets the app icon, and that picture is kept for the
-    Tk root it was made in. fresh_widget_image_caches (conftest.py) empties that
-    cache, so an icon left over from another test module's root is not reused
-    here, and this module's icon is not left behind for the next one."""
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    # CustomTkinter keeps a few timers going on its windows, and a destroyed app
-    # leaves the next round of them pending. They would run during the next test
-    # module and report errors about a destroyed app, so cancel them first.
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
-    fresh_widget_image_caches()
 
 
 @pytest.fixture
