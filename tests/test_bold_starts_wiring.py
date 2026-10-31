@@ -15,13 +15,14 @@ on one hidden root for the whole module. The toolbar keeps a picture made for th
 root it was first built on, so the module empties those caches around its own root
 (see fresh_widget_image_caches in conftest.py)."""
 
-import time
 import tkinter
 
 import customtkinter as ctk
 import pytest
 
 from core.models import Transcript
+
+from tk_helpers import cancel_pending_afters, settle
 
 
 @pytest.fixture(scope="module")
@@ -38,48 +39,6 @@ def root(fresh_widget_image_caches):
     for timer in window.tk.splitlist(window.tk.call("after", "info")):
         window.after_cancel(timer)
     window.destroy()
-
-
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
-def _settle(widget, milliseconds=250):
-    """Run Tk's event loop for a while, so a new window finishes its whole startup
-    sequence and is safe to inspect or take down."""
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _cancel_pending_afters(window):
-    """Cancel the timers a settled window still has queued, each through the
-    widget that scheduled it (cancelling through another widget leaves the
-    owner with a Tcl command it can no longer delete). Same idea as the helper of
-    the same name in test_gui_smoke.py."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
 
 
 @pytest.fixture
@@ -102,15 +61,15 @@ def make_canvas(root):
     yield build
     for canvas in made:
         for window, _, _ in list(canvas._selection_previews):
-            _settle(window)
-            _cancel_pending_afters(window)
+            settle(window)
+            cancel_pending_afters(window)
             window.close()
         if canvas._detached_window is not None:
             window = canvas._detached_window
-            _settle(window)
-            _cancel_pending_afters(window)
+            settle(window)
+            cancel_pending_afters(window)
             window.close()
-        _settle(root, 100)
+        settle(root, 100)
         canvas.destroy()
 
 
@@ -137,14 +96,14 @@ def open_detached(canvas):
     canvas._handle_detach()
     window = canvas._detached_window
     assert window is not None
-    _settle(window)
+    settle(window)
     return window
 
 
 def open_preview(canvas, text="alpha beta gamma"):
     canvas.open_selection_preview(text)
     window = canvas._selection_previews[-1][0]
-    _settle(window)
+    settle(window)
     return window
 
 
@@ -181,7 +140,7 @@ def test_a_click_is_fine_when_nobody_is_listening(root):
         assert is_on(canvas.input_view)
     finally:
         canvas.destroy()
-        _settle(root, 100)
+        settle(root, 100)
 
 def test_set_bold_starts_enabled_changes_the_main_box_without_telling_the_owner(make_canvas):
     canvas, told = make_canvas()
@@ -240,9 +199,9 @@ def test_the_look_still_changes_after_the_detached_window_is_closed(make_canvas,
     canvas, told = make_canvas()
     window = open_detached(canvas)
     click(window.input_view)
-    _cancel_pending_afters(window)
+    cancel_pending_afters(window)
     window.close()
-    _settle(root, 100)
+    settle(root, 100)
     assert canvas._detached_window is None
     canvas.set_bold_starts_enabled(False)
     assert not is_on(canvas.input_view)

@@ -13,7 +13,6 @@ test_wrapping_label.py, and for the same reasons every window is given real time
 to settle and sizes are read back from the window's own scaling instead of
 assuming a 100% display."""
 
-import time
 import tkinter
 from dataclasses import asdict
 
@@ -25,6 +24,8 @@ from gui.components.separator_line import (
     DARK_LINE_BLEND, GAP, LINE_COLOR, THICKNESS, WIDTH_FRACTION, SeparatorLine, line_color,
 )
 from gui.components.wrapping_label import WrappingLabel
+
+from tk_helpers import all_widgets, settle
 
 
 @pytest.fixture(scope="module")
@@ -55,16 +56,6 @@ def scaling():
     set_to(1.0)
 
 
-def _settle(window, milliseconds=300):
-    """Let a window finish appearing and laying itself out. On Windows a new
-    CTkToplevel hides itself to colour its title bar and comes back on a timer,
-    so the event loop is run for a while rather than once."""
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        window.update()
-        time.sleep(0.005)
-
-
 def shown_line(root, width=400, **kwargs):
     """A line under a label in a mapped window of the given width, the way the
     Settings window uses one. Returns (window, holder, line); the caller
@@ -76,7 +67,7 @@ def shown_line(root, width=400, **kwargs):
     ctk.CTkLabel(holder, text="An explanation").pack(fill="x")
     line = SeparatorLine(holder, **kwargs)
     line.pack_line()
-    _settle(top)
+    settle(top, 300)
     assert holder.winfo_width() > 1, "the window was not laid out"
     return top, holder, line
 
@@ -150,7 +141,7 @@ def test_the_line_follows_its_parent_when_the_window_changes_size(root):
     try:
         wide = line.winfo_width()
         top.geometry("350x300")
-        _settle(top)
+        settle(top, 300)
         assert line.winfo_width() < wide
         assert line.winfo_width() == round(holder.winfo_width() * WIDTH_FRACTION)
     finally:
@@ -187,7 +178,7 @@ def test_a_change_of_scaling_updates_a_line_already_shown(root, scaling):
     try:
         before = scale_of(line)
         scaling(2.0)
-        _settle(top)
+        settle(top, 300)
         scale = scale_of(line)
         assert scale == before * 2.0
         assert line.winfo_height() == max(1, round(THICKNESS * scale))
@@ -202,7 +193,7 @@ def test_a_line_can_be_hidden_and_shown_again_and_goes_back_to_the_bottom(root):
         line.pack_forget()
         ctk.CTkLabel(holder, text="Added while the line was hidden").pack(fill="x")
         line.pack_line()
-        _settle(top)
+        settle(top, 300)
         assert holder.pack_slaves()[-1] is line
     finally:
         top.destroy()
@@ -216,7 +207,7 @@ def test_the_parents_own_resize_handling_still_runs(root):
     try:
         before = holder._current_width
         top.geometry("350x300")
-        _settle(top)
+        settle(top, 300)
         assert holder._current_width < before
         assert holder._current_width == round(holder._reverse_widget_scaling(holder.winfo_width()))
     finally:
@@ -278,15 +269,8 @@ def settings(root, wait_until_shown):
     owner.destroy()
 
 
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
 def _lines(widget):
-    return [w for w in _all_widgets(widget) if isinstance(w, SeparatorLine)]
+    return [w for w in all_widgets(widget) if isinstance(w, SeparatorLine)]
 
 
 def _shown_lines(widget):
@@ -295,7 +279,7 @@ def _shown_lines(widget):
 
 def _search(settings, text):
     settings._defaults_search.set_text(text)
-    _settle(settings, 100)
+    settle(settings, 100)
 
 
 def _shown_items(settings):

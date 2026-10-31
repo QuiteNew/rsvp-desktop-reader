@@ -21,7 +21,6 @@ changes size: on Windows a new CTkToplevel hides itself for a moment to colour
 its title bar and comes back on a timer, so a single update() can measure a
 window that hasn't really been laid out yet."""
 
-import time
 import tkinter
 from dataclasses import asdict
 
@@ -29,6 +28,8 @@ import customtkinter as ctk
 import pytest
 
 from gui.components.wrapping_label import MIN_WRAP_LENGTH, RIGHT_MARGIN, START_WRAP_LENGTH, WrappingLabel
+
+from tk_helpers import all_widgets, settle
 
 LONG_TEXT = (
     "Gives longer words a bit more time on screen, in three steps based on length, "
@@ -78,7 +79,7 @@ def shown_label(root, width=400, text=LONG_TEXT, **kwargs):
     top.geometry(f"{width}x300")
     label = WrappingLabel(top, text=text, **kwargs)
     label.pack(fill="x")
-    _settle(top)
+    settle(top, 300)
     assert label.winfo_width() > 1, "the window was not laid out"
     return top, label
 
@@ -86,24 +87,13 @@ def shown_label(root, width=400, text=LONG_TEXT, **kwargs):
 def resize(top, width):
     """Change a test window's width and give it time to settle."""
     top.geometry(f"{width}x300")
-    _settle(top)
+    settle(top, 300)
 
 
 def expected_wrap(label, margin=RIGHT_MARGIN) -> int:
     """What the label should wrap at: its width in real screen pixels turned
     back into logical pixels by its own scaling, less the margin."""
     return round(label.winfo_width() / label._get_widget_scaling() - margin)
-
-
-def _settle(window, milliseconds=300):
-    """Let a window finish appearing and laying itself out. On Windows a new
-    CTkToplevel hides itself to colour its title bar and shows itself again on
-    a timer, and CustomTkinter lays parts of a window out on timers too, so
-    this runs the event loop for a while rather than once."""
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        window.update()
-        time.sleep(0.005)
 
 
 def text_fits(label) -> bool:
@@ -130,7 +120,7 @@ def test_a_long_text_really_wraps_onto_more_than_one_line(root):
     try:
         one_line = ctk.CTkLabel(top, text=LONG_TEXT, font=label.cget("font"))
         one_line.pack()
-        _settle(top)
+        settle(top, 300)
         assert label._label.winfo_reqheight() > one_line._label.winfo_reqheight()
     finally:
         top.destroy()
@@ -175,7 +165,7 @@ def test_the_wrap_catches_up_after_the_scaling_changes(root, scaling):
     try:
         before = label._get_widget_scaling()
         scaling(2.0)
-        _settle(top)
+        settle(top, 300)
         assert label._get_widget_scaling() == before * 2.0
         assert label.cget("wraplength") == expected_wrap(label)
         assert text_fits(label)
@@ -272,15 +262,8 @@ def _settings_window(root, transcripts):
     )
 
 
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
 def _wrapping_labels(widget):
-    return [w for w in _all_widgets(widget) if isinstance(w, WrappingLabel)]
+    return [w for w in all_widgets(widget) if isinstance(w, WrappingLabel)]
 
 
 @pytest.fixture
@@ -325,7 +308,7 @@ def test_no_description_uses_a_fixed_wrap_any_more(settings):
     """Only the setting names beside the number boxes on Defaults keep a fixed
     wrap (they share their row with the box). Every other wrapped text in the
     window is a WrappingLabel."""
-    for widget in _all_widgets(settings):
+    for widget in all_widgets(settings):
         if isinstance(widget, ctk.CTkLabel) and not isinstance(widget, WrappingLabel):
             wrap = widget.cget("wraplength")
             assert wrap in (0, 300), f"{widget.cget('text')[:40]!r} wraps at a fixed {wrap}"
@@ -334,7 +317,7 @@ def test_no_description_uses_a_fixed_wrap_any_more(settings):
 @pytest.mark.parametrize("tab", TABS)
 def test_nothing_is_cut_off_at_the_smallest_window(settings, tab):
     settings.tabview.set(tab)
-    _settle(settings, 150)
+    settle(settings, 150)
     labels = [label for label in _wrapping_labels(settings.tabview.tab(tab)) if label.winfo_ismapped()]
     assert labels
     for label in labels:

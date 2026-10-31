@@ -16,12 +16,13 @@ callbacks in place of the app, like in test_wrapping_label.py, so these run
 without a whole app. The window size checks call the app's own methods on a
 small stand-in for the same reason."""
 
-import time
 import tkinter
 from dataclasses import asdict
 
 import customtkinter as ctk
 import pytest
+
+from tk_helpers import settle
 
 
 @pytest.fixture(scope="module")
@@ -38,16 +39,6 @@ def root(fresh_widget_image_caches):
         window.tk.call("after", "cancel", timer)
     window.destroy()
     fresh_widget_image_caches()
-
-
-def _settle(window, milliseconds=300):
-    """Let a window finish appearing and laying itself out. On Windows a new
-    CTkToplevel hides itself to colour its title bar and comes back on a timer,
-    so the event loop is run for a while rather than once."""
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        window.update()
-        time.sleep(0.005)
 
 
 class _Recorder:
@@ -178,7 +169,7 @@ def test_a_value_that_is_not_a_number_is_named_and_shown(settings, applied, key)
     settings.tabview.set("Stats")
     settings._set_entry_value(entry, "abc")
     settings.apply_button.invoke()
-    _settle(settings, 100)
+    settle(settings, 100)
 
     assert applied.calls == []
     assert settings.error_label.cget("text") == f"{name} must be a whole number."
@@ -195,7 +186,7 @@ def test_the_box_is_on_screen_before_it_gets_the_cursor(settings, key):
     box is on screen at the moment it gets the cursor."""
     _, entry, *_ = _field(settings, key)
     settings.tabview.set("Stats")
-    _settle(settings, 150)
+    settle(settings, 150)
     seen = []
     real_focus_set = entry.focus_set
     entry.focus_set = lambda: (seen.append(bool(entry._entry.winfo_viewable())), real_focus_set())
@@ -226,12 +217,12 @@ def test_a_box_hidden_by_a_search_is_shown_again(settings):
     can't be fixed, so the search is cleared."""
     entry = settings.guide_mark_thickness_entry
     settings._defaults_search.set_text("surrounding")
-    _settle(settings, 100)
+    settle(settings, 100)
     assert not entry.winfo_ismapped()
 
     settings._set_entry_value(entry, "abc")
     settings.apply_button.invoke()
-    _settle(settings, 150)
+    settle(settings, 150)
 
     assert settings._defaults_search.get() == ""
     assert entry.winfo_ismapped()
@@ -241,12 +232,12 @@ def test_a_box_hidden_by_a_search_is_shown_again(settings):
 def test_a_box_far_down_the_list_is_scrolled_into_view(settings):
     entry = settings.resume_rewind_words_entry
     settings._defaults_scroll._parent_canvas.yview_moveto(0)
-    _settle(settings, 100)
+    settle(settings, 100)
     assert not _is_in_view(settings, entry), "the test needs the box to start out of view"
 
     settings._set_entry_value(entry, "abc")
     settings.apply_button.invoke()
-    _settle(settings, 150)
+    settle(settings, 150)
 
     assert _is_in_view(settings, entry)
 
