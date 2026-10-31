@@ -177,13 +177,18 @@ def open_real_app(fresh_widget_image_caches):
     has to change the app before the event loop ever runs passes 0, and then
     it isn't drawn first.
 
+    hidden keeps the app off screen for the whole with block: it's hidden with
+    withdraw() straight after it's built, instead of being drawn first, and its
+    layout is worked out so that a mistake in it shows up there and then. It
+    comes back on screen only to be destroyed, for the Linux rule above.
+
     A test may close the app itself, the way the window's close button does.
     The end of the with block then leaves it alone."""
     return lambda data_dir, **options: _real_app(fresh_widget_image_caches, data_dir, **options)
 
 
 @contextmanager
-def _real_app(forget_cached_images, data_dir, before_start=None, first_settle_ms=300):
+def _real_app(forget_cached_images, data_dir, before_start=None, first_settle_ms=300, hidden=False):
     """The work behind open_real_app. See that fixture for what each step is for."""
     import tkinter
 
@@ -204,7 +209,10 @@ def _real_app(forget_cached_images, data_dir, before_start=None, first_settle_ms
         except tkinter.TclError as exc:
             pytest.skip(f"Tk can't start a display here: {exc}")
         try:
-            if first_settle_ms:
+            if hidden:
+                app.withdraw()
+                app.update_idletasks()
+            elif first_settle_ms:
                 settle(app, first_settle_ms)
             yield app
         finally:

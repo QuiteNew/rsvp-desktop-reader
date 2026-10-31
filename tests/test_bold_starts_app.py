@@ -11,26 +11,17 @@ Persistence is redirected to a temporary directory. The setting is saved there
 before the app is built, and the whole module runs twice, once with it saved as
 on and once as off, so "opens with what was saved" cannot be mistaken for
 "always opens on" or "always opens off". One app, one Tk root at a time, like
-test_gui_smoke.py, with the picture caches that tie the toolbar to a root emptied
-around each one (see fresh_widget_image_caches in conftest.py)."""
+test_gui_smoke.py, built with open_real_app from conftest.py, which also empties
+the picture caches that tie the toolbar to a root around each one."""
 
 import json
 from dataclasses import asdict
 
 import pytest
 
-import core.storage as storage
 import core.settings_store as settings_store
-import core.transcript_store as transcript_store
 
 from tk_helpers import cancel_pending_afters, settle
-
-_REDIRECT_TARGETS = (
-    (storage, "DEFAULT_DATA_DIR"),
-    (settings_store, "DEFAULT_DATA_DIR"),
-    (settings_store, "SETTINGS_DIR"),
-    (transcript_store, "DEFAULT_DATA_DIR"),
-)
 
 
 @pytest.fixture(scope="module", params=[True, False], ids=["saved_on", "saved_off"])
@@ -45,50 +36,15 @@ def data_dir(tmp_path_factory, saved_look):
 
 
 @pytest.fixture(scope="module")
-def app(data_dir, saved_look, fresh_widget_image_caches):
+def app(data_dir, saved_look, open_real_app):
     """An RSVPApp whose settings, saved beforehand in a temporary directory, have
-    the bold word starts as saved_look says. Skips if Tk has no display."""
-    import tkinter
+    the bold word starts as saved_look says. Kept off screen for the tests.
+    Skips if Tk has no display."""
+    def save_the_look():
+        settings_store.SettingsStore().set_bold_starts_enabled(saved_look)
 
-    originals = [(mod, name, getattr(mod, name)) for mod, name in _REDIRECT_TARGETS]
-    for mod, name in _REDIRECT_TARGETS:
-        setattr(mod, name, data_dir)
-
-    def _restore():
-        for mod, name, value in originals:
-            setattr(mod, name, value)
-
-    fresh_widget_image_caches()
-    settings_store.SettingsStore().set_bold_starts_enabled(saved_look)
-
-    from gui.app import RSVPApp
-
-    try:
-        application = RSVPApp()
-    except tkinter.TclError as exc:
-        _restore()
-        pytest.skip(f"Tk can't start a display here: {exc}")
-
-    application.withdraw()
-    application.update_idletasks()
-    try:
+    with open_real_app(data_dir, before_start=save_the_look, hidden=True) as application:
         yield application
-    finally:
-        # Put the app back on screen before destroying it. On Linux, destroying
-        # an app that is hidden with withdraw() makes the next window that takes
-        # the keyboard focus crash Tk, in whatever test comes next. deiconify()
-        # on its own isn't enough, the window has to really be shown again, and
-        # that takes a turn of the event loop.
-        application.deiconify()
-        settle(application)
-        # CustomTkinter keeps a few timers going on its windows, and a destroyed
-        # app leaves the next round of them pending. They would run during the
-        # next test module and report errors about a destroyed app. Each is
-        # cancelled through the widget that scheduled it (see tk_helpers.py).
-        cancel_pending_afters(application)
-        application.destroy()
-        _restore()
-        fresh_widget_image_caches()
 
 
 def _bold_pieces(input_view):

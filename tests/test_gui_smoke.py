@@ -15,64 +15,19 @@ entirely; each test cleans up whatever window it opens."""
 
 import pytest
 
-import core.storage as storage
-import core.settings_store as settings_store
-import core.transcript_store as transcript_store
 from core.reader import CHUNK_MODE_ADAPTIVE
 
 from tk_helpers import all_widgets, cancel_pending_afters, settle
 
-# Every default-location constant the stores read, redirected together.
-# SETTINGS_DIR is what SettingsStore uses directly; the DEFAULT_DATA_DIR
-# copies feed AppSettings.data_directory (and thus the TranscriptStore
-# location) and the stores' own fallbacks.
-_REDIRECT_TARGETS = (
-    (storage, "DEFAULT_DATA_DIR"),
-    (settings_store, "DEFAULT_DATA_DIR"),
-    (settings_store, "SETTINGS_DIR"),
-    (transcript_store, "DEFAULT_DATA_DIR"),
-)
-
 
 @pytest.fixture(scope="module")
-def app(tmp_path_factory):
+def app(tmp_path_factory, open_real_app):
     """A single RSVPApp shared across this module, with persistence pointed
     at a throwaway temp directory so the tests never touch the real
-    ~/.rsvp_reader. Withdrawn (kept off screen) for the tests, and put back on
-    screen just before it is destroyed at the end. Skips if Tk has no display."""
-    import tkinter
-
-    data_dir = tmp_path_factory.mktemp("rsvp_smoke")
-    originals = [(mod, name, getattr(mod, name)) for mod, name in _REDIRECT_TARGETS]
-    for mod, name in _REDIRECT_TARGETS:
-        setattr(mod, name, data_dir)
-
-    def _restore():
-        for mod, name, value in originals:
-            setattr(mod, name, value)
-
-    from gui.app import RSVPApp
-
-    try:
-        application = RSVPApp()
-    except tkinter.TclError as exc:
-        _restore()
-        pytest.skip(f"Tk can't start a display here: {exc}")
-
-    application.withdraw()          # keep it off screen for the tests
-    application.update_idletasks()  # flush pending layout so any error surfaces now
-    try:
+    ~/.rsvp_reader. Kept off screen for the tests. Skips if Tk has no
+    display."""
+    with open_real_app(tmp_path_factory.mktemp("rsvp_smoke"), hidden=True) as application:
         yield application
-    finally:
-        # On Linux, destroying an app that is hidden with withdraw() makes the
-        # next window that takes the keyboard focus crash Tk, in whatever test
-        # comes next. So the app is shown again first, and given a turn of the
-        # event loop to really get there, since deiconify() on its own isn't
-        # enough.
-        application.deiconify()
-        settle(application)
-        application.destroy()
-        _restore()
 
 
 def _load_reading_transcript(application):
