@@ -17,26 +17,16 @@ plain Text widget doing the same thing."""
 
 import tkinter
 
-import customtkinter as ctk
 import pytest
 
 from core.bold_spans import tk_spans
 
 
 @pytest.fixture(scope="module")
-def root():
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.geometry("400x300+0+0")
-    yield window
-    # CustomTkinter keeps a few timers going on its windows, and a destroyed app
-    # leaves the next round of them pending. They would run during the next test
-    # module and report errors about a destroyed app, so cancel them first.
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.after_cancel(timer)
-    window.destroy()
+def root(shown_root):
+    """These tests run Tk's real main loop and move the keyboard focus into the
+    edit box, so their root is on screen (see shown_root in conftest.py)."""
+    return shown_root
 
 
 @pytest.fixture

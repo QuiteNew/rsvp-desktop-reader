@@ -22,9 +22,9 @@ sees the real value.
 It also holds fresh_widget_image_caches, which a test module that builds the
 toolbar (so, a Canvas or the whole app) asks for when it makes a Tk root of its
 own, root, the hidden Tk root a test module builds its own widgets and windows
-on, wait_until_shown, for a test that needs a window to actually be on screen,
-and open_real_app, for a test that builds the whole app. See each fixture for
-why.
+on, shown_root, the same root on screen, wait_until_shown, for a test that needs
+a window to actually be on screen, and open_real_app, for a test that builds the
+whole app. See each fixture for why.
 """
 import shutil
 import tempfile
@@ -127,6 +127,22 @@ def root(fresh_widget_image_caches):
     hasn't done that, with the whole suite run in one process."""
     window = _new_root()
     window.withdraw()
+    yield window
+    _take_down_root(window)
+
+
+@pytest.fixture(scope="module")
+def shown_root(fresh_widget_image_caches):
+    """The same as root, but on screen, at 400 x 300 in the top left corner.
+
+    The edit box tests that run Tk's real main loop use it. They move the
+    keyboard focus into the box and then send it copy, cut and paste, and they
+    were written and checked on Windows with the root on screen. They pass on a
+    hidden root on Linux too, but that hasn't been tried on Windows, where the
+    keyboard focus works differently, so they keep the root they were checked
+    with. A module that needs it hands it to its tests as its own root."""
+    window = _new_root()
+    window.geometry("400x300+0+0")
     yield window
     _take_down_root(window)
 

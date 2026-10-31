@@ -15,7 +15,6 @@ import random
 import tkinter
 from types import SimpleNamespace
 
-import customtkinter as ctk
 import pytest
 
 from core.bold_starts import bold_ranges
@@ -23,18 +22,10 @@ from core.rich_copy import segments_text
 
 
 @pytest.fixture(scope="module")
-def root():
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.geometry("400x300+0+0")
-    yield window
-    # See the same fixture in test_transcript_input_edit_forwarder.py: timers a
-    # CustomTkinter window leaves behind would run into the next test module.
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.after_cancel(timer)
-    window.destroy()
+def root(shown_root):
+    """These tests run Tk's real main loop and move the keyboard focus into the
+    edit box, so their root is on screen (see shown_root in conftest.py)."""
+    return shown_root
 
 
 @pytest.fixture
