@@ -38,8 +38,8 @@ _REDIRECT_TARGETS = (
 def app(tmp_path_factory):
     """A single RSVPApp shared across this module, with persistence pointed
     at a throwaway temp directory so the tests never touch the real
-    ~/.rsvp_reader. Withdrawn (kept off screen) and destroyed at the end.
-    Skips if Tk has no display."""
+    ~/.rsvp_reader. Withdrawn (kept off screen) for the tests, and put back on
+    screen just before it is destroyed at the end. Skips if Tk has no display."""
     import tkinter
 
     data_dir = tmp_path_factory.mktemp("rsvp_smoke")
@@ -64,6 +64,13 @@ def app(tmp_path_factory):
     try:
         yield application
     finally:
+        # On Linux, destroying an app that is hidden with withdraw() makes the
+        # next window that takes the keyboard focus crash Tk, in whatever test
+        # comes next. So the app is shown again first, and given a turn of the
+        # event loop to really get there, since deiconify() on its own isn't
+        # enough.
+        application.deiconify()
+        settle(application)
         application.destroy()
         _restore()
 

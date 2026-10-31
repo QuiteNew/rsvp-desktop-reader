@@ -74,6 +74,13 @@ def app(data_dir, saved_look, fresh_widget_image_caches):
     try:
         yield application
     finally:
+        # Put the app back on screen before destroying it. On Linux, destroying
+        # an app that is hidden with withdraw() makes the next window that takes
+        # the keyboard focus crash Tk, in whatever test comes next. deiconify()
+        # on its own isn't enough, the window has to really be shown again, and
+        # that takes a turn of the event loop.
+        application.deiconify()
+        settle(application)
         # CustomTkinter keeps a few timers going on its windows, and a destroyed
         # app leaves the next round of them pending. They would run during the
         # next test module and report errors about a destroyed app. Each is

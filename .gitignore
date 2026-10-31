@@ -225,3 +225,7 @@ __marimo__/
 # Sublime Text
 *.sublime-workspace
 *.sublime-project
+
+# Scheduled commit & push script files
+commit_push_timer.ps1
+RunTimer.bat
