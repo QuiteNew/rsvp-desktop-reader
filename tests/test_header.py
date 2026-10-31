@@ -12,8 +12,6 @@ window never gets a real size, so everything that measures is built in a mapped
 CTkToplevel, and sizes are read from the widgets, never assumed from a 100%
 display."""
 
-import tkinter
-
 import customtkinter as ctk
 import pytest
 
@@ -24,19 +22,6 @@ LONG_TITLE = (
     "Lecture week seven, the long recording transcript with an extra long title "
     "that just goes on and on and on, far past the room beside the button"
 )
-
-
-@pytest.fixture(scope="module")
-def root():
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
 
 
 @pytest.fixture

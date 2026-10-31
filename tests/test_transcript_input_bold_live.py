@@ -23,22 +23,6 @@ from core.bold_spans import tk_spans
 from core.bold_starts import bold_ranges
 
 
-@pytest.fixture(scope="module")
-def root():
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    # CustomTkinter keeps a few timers going on its windows, and a destroyed app
-    # leaves the next round of them pending. They would run during the next test
-    # module and report errors about a destroyed app, so cancel them first.
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.after_cancel(timer)
-    window.destroy()
-
-
 @pytest.fixture
 def make_box(root):
     from gui.components.transcript_input import TranscriptInput

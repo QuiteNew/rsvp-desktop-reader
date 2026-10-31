@@ -11,34 +11,15 @@ and test_transcript_input_bold_live.py. This file checks the plumbing around it:
   later changes in the app do not reach it, like the rest of its styling.
 
 A Canvas is built on its own here, with a plain callback standing in for the app,
-on one hidden root for the whole module. The toolbar keeps a picture made for the
-root it was first built on, so the module empties those caches around its own root
-(see fresh_widget_image_caches in conftest.py)."""
+on the hidden root conftest.py gives each module. The toolbar keeps a picture made
+for the root it was first built on, and that fixture empties those caches around
+the root."""
 
-import tkinter
-
-import customtkinter as ctk
 import pytest
 
 from core.models import Transcript
 
 from tk_helpers import cancel_pending_afters, settle
-
-
-@pytest.fixture(scope="module")
-def root(fresh_widget_image_caches):
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    # CustomTkinter keeps a few timers going on its windows, and a destroyed app
-    # leaves the next round of them pending. They would run during the next test
-    # module and report errors about a destroyed app, so cancel them first.
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.after_cancel(timer)
-    window.destroy()
 
 
 @pytest.fixture

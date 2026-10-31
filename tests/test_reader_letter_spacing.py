@@ -14,8 +14,6 @@ Fredoka on Windows) instead of measuring the fonts of whatever machine runs the
 tests. That keeps the plan, and so the expected text, the same everywhere. Two
 tests at the end do measure for real, to check the measuring itself."""
 
-import tkinter
-
 import pytest
 
 from core.letter_spacing import (
@@ -34,19 +32,6 @@ FIXED_WIDTHS = {
 }
 
 TEXT = "reading is fun and alpha bravo charlie delta"
-
-
-@pytest.fixture(scope="module")
-def root():
-    import customtkinter as ctk
-
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError as exc:
-        pytest.skip(f"Tk can't start a display here: {exc}")
-    window.withdraw()
-    yield window
-    window.destroy()
 
 
 @pytest.fixture

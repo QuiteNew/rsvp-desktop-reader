@@ -157,18 +157,6 @@ def test_the_app_opens_in_the_saved_order_and_saves_a_new_one(tmp_path, open_rea
 
 # ---- the sidebar list (gui/components/transcript_list_body.py) ----
 
-@pytest.fixture(scope="module")
-def root():
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
-
 
 @pytest.fixture
 def make_list(root):

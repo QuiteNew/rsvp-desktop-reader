@@ -13,8 +13,6 @@ The list runs against a real Tk with one hidden root for the whole module,
 inside a shown window, because a hidden window never gets a real size. The app
 side is checked by running the app's own two methods on a small stand-in."""
 
-import tkinter
-
 import customtkinter as ctk
 import pytest
 
@@ -23,19 +21,6 @@ from gui.components.transcript_list_body import (
     OPEN_ROW_BORDER, OPEN_ROW_FILL, ROW_BORDER_WIDTH, TranscriptListBody,
 )
 from gui.theme import EMBER_GLOW, HEARTH_PAPER
-
-
-@pytest.fixture(scope="module")
-def root():
-    try:
-        window = ctk.CTk()
-    except tkinter.TclError:
-        pytest.skip("no display available for Tk")
-    window.withdraw()
-    yield window
-    for timer in window.tk.splitlist(window.tk.call("after", "info")):
-        window.tk.call("after", "cancel", timer)
-    window.destroy()
 
 
 TRANSCRIPTS = [
