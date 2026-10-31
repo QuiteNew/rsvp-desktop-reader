@@ -13,7 +13,6 @@ The message is tested on a stand-in, the same way as test_settings_apply.py
 tests the app, plus one test with the real app at the end."""
 
 import json
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +24,8 @@ import core.transcript_store as transcript_store
 from core.settings_store import SettingsStore
 from core.storage import DamagedFile, keep_damaged_copy, load_state, read_state, save_state
 from core.transcript_store import TranscriptStore
+
+from tk_helpers import cancel_pending_afters, settle
 
 NOON = datetime(2026, 10, 29, 12, 0, 5)
 
@@ -296,45 +297,6 @@ _REDIRECT_TARGETS = (
 )
 
 
-def _settle(widget, milliseconds=800):
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
-def _cancel_pending_afters(window):
-    """Cancel the timers a settled window still has queued, each through the
-    widget that scheduled it. Same as the helper of the same name in
-    test_bold_starts_app.py."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
-
-
 def test_the_app_starts_with_a_damaged_data_file_and_says_so(tmp_path, monkeypatch, fresh_widget_image_caches):
     import tkinter
     from gui.components.message_dialog import MessageDialog
@@ -351,14 +313,14 @@ def test_the_app_starts_with_a_damaged_data_file_and_says_so(tmp_path, monkeypat
     except tkinter.TclError as exc:
         pytest.skip(f"Tk can't start a display here: {exc}")
     try:
-        _settle(application)
+        settle(application, 800)
         dialogs = [w for w in application.winfo_children() if isinstance(w, MessageDialog)]
         assert [dialog.title() for dialog in dialogs] == ["Couldn't read your transcripts"]
         assert application.store.transcripts == []
         dialogs[0]._handle_dismiss()
-        _settle(application, 300)
+        settle(application, 300)
     finally:
-        _cancel_pending_afters(application)
+        cancel_pending_afters(application)
         application.destroy()
         fresh_widget_image_caches()
     assert len(list(tmp_path.glob("data.damaged-*.json"))) == 1
@@ -387,10 +349,10 @@ def test_destroying_the_app_drops_a_message_still_waiting(tmp_path, monkeypatch,
         pytest.skip(f"Tk can't start a display here: {exc}")
     application.winfo_viewable = lambda: False
     try:
-        _settle(application, 300)
+        settle(application, 300)
         assert application._damaged_notice_after_id is not None
     finally:
-        _cancel_pending_afters(application)
+        cancel_pending_afters(application)
         application.destroy()
         fresh_widget_image_caches()
     assert application._damaged_notice_after_id is None

@@ -15,7 +15,6 @@ test_settings_apply.py. The tests at the end build the real app once, keep it
 on screen and open a real detached window from it."""
 
 import json
-import time
 
 import pytest
 
@@ -25,6 +24,8 @@ import core.transcript_store as transcript_store
 from core.models import Transcript
 from core.settings_store import WPM_RANGE
 from core.wpm_step import WPM_KEY_STEP, step_wpm
+
+from tk_helpers import cancel_pending_afters, settle
 
 UP, DOWN = 1, -1
 
@@ -216,45 +217,6 @@ _REDIRECT_TARGETS = (
 )
 
 
-def _settle(widget, milliseconds=300):
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
-def _cancel_pending_afters(window):
-    """Cancel the timers a settled window still has queued, each through the
-    widget that scheduled it. Same as the helper of the same name in
-    test_bold_starts_app.py."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
-
-
 @pytest.fixture(scope="module")
 def app(tmp_path_factory, fresh_widget_image_caches):
     """One real app for the tests below, with two transcripts, A and B, at
@@ -283,7 +245,7 @@ def app(tmp_path_factory, fresh_widget_image_caches):
     # Windows, and the list's own area never got a size. It only got away with
     # it in the full run, where other windows had come and gone first. See the
     # matching note in test_detached_routing.py.
-    _settle(application)
+    settle(application, 300)
     store = application.store
     for title, wpm in (("A", 300), ("B", 450)):
         transcript = store.add_transcript(title, store.current_space)
@@ -292,15 +254,15 @@ def app(tmp_path_factory, fresh_widget_image_caches):
         store.set_transcript_wpm(transcript.id, wpm)
     application._refresh_transcript_list()
     application.data_dir = data_dir
-    _settle(application)
+    settle(application, 300)
     try:
         yield application
     finally:
         detached = application.canvas._detached_window
         if detached is not None:
             detached.close()
-        _settle(application, 200)
-        _cancel_pending_afters(application)
+        settle(application, 200)
+        cancel_pending_afters(application)
         application.destroy()
         for mod, name, value in originals:
             setattr(mod, name, value)
@@ -325,7 +287,7 @@ def test_up_and_down_are_bound_in_the_main_window(app):
 def test_the_keys_change_the_open_transcript_its_reader_and_the_footer(app):
     a = _named(app, "A")
     app._handle_open_transcript(a)
-    _settle(app)
+    settle(app, 300)
     app._handle_shortcut_wpm_up()
     app._handle_shortcut_wpm_up()
     app._handle_shortcut_wpm_down()
@@ -339,9 +301,9 @@ def test_the_keys_change_the_open_transcript_its_reader_and_the_footer(app):
 def test_the_detached_window_has_the_keys_and_changes_its_own_transcript(app):
     a, b = _named(app, "A"), _named(app, "B")
     app._handle_open_transcript(a)
-    _settle(app)
+    settle(app, 300)
     app.canvas._handle_detach()
-    _settle(app, 600)
+    settle(app, 600)
     detached = app.canvas._detached_window
     assert "_handle_shortcut_wpm_up" in detached.bind("<Up>")
     assert "_handle_shortcut_wpm_down" in detached.bind("<Down>")
@@ -355,7 +317,7 @@ def test_the_detached_window_has_the_keys_and_changes_its_own_transcript(app):
     # Now the main window opens B, and the keys in the detached window still
     # change A, not B, and leave the footer showing B.
     app._handle_open_transcript(b)
-    _settle(app)
+    settle(app, 300)
     detached._handle_shortcut_wpm_down()
     detached._handle_shortcut_wpm_down()
     assert a.wpm == start - 10

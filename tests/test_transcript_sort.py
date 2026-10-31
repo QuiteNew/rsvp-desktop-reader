@@ -14,7 +14,6 @@ one hidden root for the rest of the module, the same as
 test_transcript_list_current.py."""
 
 import json
-import time
 import tkinter
 
 import customtkinter as ctk
@@ -27,6 +26,8 @@ from core.models import Transcript
 from core.profiles import PROFILE_KEYS
 from core.settings_store import AppSettings, SettingsStore
 from core.transcript_sort import DEFAULT_SORT, SORT_ORDERS, known_sort, sort_transcripts
+
+from tk_helpers import cancel_pending_afters, settle
 
 
 def _transcript(id, title, times_read=0, seconds=0):
@@ -153,45 +154,6 @@ _REDIRECT_TARGETS = (
 )
 
 
-def _settle(widget, milliseconds=300):
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
-def _cancel_pending_afters(window):
-    """Cancel the timers a settled window still has queued, each through the
-    widget that scheduled it. Same as the helper of the same name in
-    test_bold_starts_app.py."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
-
-
 def test_the_app_opens_in_the_saved_order_and_saves_a_new_one(tmp_path, monkeypatch, fresh_widget_image_caches):
     """This comes before the list tests on purpose. They share one Tk root for
     the rest of the module, and the app has to be the only root while it is
@@ -211,13 +173,13 @@ def test_the_app_opens_in_the_saved_order_and_saves_a_new_one(tmp_path, monkeypa
     # withdraw() makes the next window that takes the keyboard focus crash Tk,
     # in whatever test comes next.
     try:
-        _settle(application)
+        settle(application, 300)
         assert application.list_body._sort == "title_za"
         application.list_body._handle_sort_selected("most_read")
         saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
         assert saved["transcript_sort"] == "most_read"
     finally:
-        _cancel_pending_afters(application)
+        cancel_pending_afters(application)
         application.destroy()
         fresh_widget_image_caches()
 

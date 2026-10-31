@@ -16,7 +16,6 @@ maximized window and with the list of monitors."""
 
 import json
 import sys
-import time
 
 import pytest
 
@@ -29,6 +28,8 @@ from core.window_placement import (
     TITLE_BAR_DEPTH, TITLE_BAR_INSET, clamp, geometry_string, parse_geometry,
     position_is_usable, title_bar_points,
 )
+
+from tk_helpers import cancel_pending_afters, settle
 
 ON_WINDOWS = sys.platform.startswith("win")
 
@@ -474,45 +475,6 @@ _REDIRECT_TARGETS = (
 SAVED = (700, 500, 120, 90)
 
 
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
-def _settle(widget, milliseconds=800):
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _cancel_pending_afters(window):
-    """Cancel the timers a settled window still has queued, each through the
-    widget that scheduled it. Same as the helper of the same name in
-    test_bold_starts_app.py."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
-
-
 @pytest.fixture
 def launch(tmp_path, monkeypatch, fresh_widget_image_caches):
     """Builds the real app after saving a window placement for it, and closes
@@ -536,12 +498,12 @@ def launch(tmp_path, monkeypatch, fresh_widget_image_caches):
         except tkinter.TclError as exc:
             pytest.skip(f"Tk can't start a display here: {exc}")
         built.append(application)
-        _settle(application)
+        settle(application, 800)
         return application
 
     def close(application):
-        _settle(application, 400)
-        _cancel_pending_afters(application)
+        settle(application, 400)
+        cancel_pending_afters(application)
         application._handle_close()
         built.remove(application)
         saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
@@ -550,7 +512,7 @@ def launch(tmp_path, monkeypatch, fresh_widget_image_caches):
     yield build, close
     for application in built:
         try:
-            _cancel_pending_afters(application)
+            cancel_pending_afters(application)
             application.destroy()
         except tkinter.TclError:
             pass  # a test destroyed it already
@@ -576,7 +538,7 @@ def test_the_window_is_noted_as_it_moves_and_not_while_it_is_minimized(launch):
     build, close = launch
     application = build(*SAVED, False)
     application.geometry("650x450+160+110")
-    _settle(application)  # longer than PLACEMENT_SETTLE_MS, so the move is noted
+    settle(application, 800)  # longer than PLACEMENT_SETTLE_MS, so the move is noted
     assert application._normal_window_placement == (650, 450, 160, 110)
     # Minimizing for real needs a window manager, which a test machine may not
     # have, so the window says it is minimized instead. Windows really does
@@ -592,6 +554,6 @@ def test_destroying_the_app_drops_a_note_still_waiting(launch):
     application.geometry("650x450+160+110")
     application.update()  # the move arrives and its note starts waiting
     assert application._placement_note_after_id is not None
-    _cancel_pending_afters(application)  # CustomTkinter's own timers, which it leaves behind
+    cancel_pending_afters(application)  # CustomTkinter's own timers, which it leaves behind
     application.destroy()
     assert application._placement_note_after_id is None

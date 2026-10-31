@@ -15,7 +15,6 @@ test_gui_smoke.py, with the picture caches that tie the toolbar to a root emptie
 around each one (see fresh_widget_image_caches in conftest.py)."""
 
 import json
-import time
 from dataclasses import asdict
 
 import pytest
@@ -23,6 +22,8 @@ import pytest
 import core.storage as storage
 import core.settings_store as settings_store
 import core.transcript_store as transcript_store
+
+from tk_helpers import cancel_pending_afters, settle
 
 _REDIRECT_TARGETS = (
     (storage, "DEFAULT_DATA_DIR"),
@@ -76,50 +77,11 @@ def app(data_dir, saved_look, fresh_widget_image_caches):
         # CustomTkinter keeps a few timers going on its windows, and a destroyed
         # app leaves the next round of them pending. They would run during the
         # next test module and report errors about a destroyed app. Each is
-        # cancelled through the widget that scheduled it, see the helper below.
-        _cancel_pending_afters(application)
+        # cancelled through the widget that scheduled it (see tk_helpers.py).
+        cancel_pending_afters(application)
         application.destroy()
         _restore()
         fresh_widget_image_caches()
-
-
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
-def _settle(widget, milliseconds=250):
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _cancel_pending_afters(window):
-    """Cancel the timers a settled window still has queued, each through the
-    widget that scheduled it. Same idea as the helper of the same name in
-    test_gui_smoke.py."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
 
 
 def _bold_pieces(input_view):
@@ -173,15 +135,15 @@ def back_to_what_was_saved(app, saved_look, opened_with):
     app.canvas.set_bold_starts_enabled(saved_look)
     yield
     for window, _, _ in list(app.canvas._selection_previews):
-        _settle(window)
-        _cancel_pending_afters(window)
+        settle(window)
+        cancel_pending_afters(window)
         window.close()
     if app.canvas._detached_window is not None:
         window = app.canvas._detached_window
-        _settle(window)
-        _cancel_pending_afters(window)
+        settle(window)
+        cancel_pending_afters(window)
         app.canvas._handle_reattach()
-    _settle(app, 100)
+    settle(app, 100)
     app.canvas.stop()
 
 
@@ -194,7 +156,7 @@ def test_a_detached_window_opens_with_the_saved_look(app, saved_look):
     open_a_transcript(app)
     app.canvas._handle_detach()
     window = app.canvas._detached_window
-    _settle(window)
+    settle(window)
     assert is_on(window.input_view) is saved_look
 
 
@@ -218,7 +180,7 @@ def test_a_click_in_the_detached_window_is_saved_and_reaches_the_main_box(app, d
     open_a_transcript(app)
     app.canvas._handle_detach()
     window = app.canvas._detached_window
-    _settle(window)
+    settle(window)
     click(window.input_view)
     assert app.settings_store.bold_starts_enabled is (not saved_look)
     assert saved_on_disk(data_dir) is (not saved_look)
@@ -242,7 +204,7 @@ def test_a_preview_opens_with_the_saved_look_and_its_click_is_not_saved(app, dat
     open_a_transcript(app)
     app.canvas.open_selection_preview("alpha beta gamma")
     preview = app.canvas._selection_previews[-1][0]
-    _settle(preview)
+    settle(preview)
     assert is_on(preview.input_view) is saved_look
     click(preview.input_view)
     assert is_on(preview.input_view) is (not saved_look)

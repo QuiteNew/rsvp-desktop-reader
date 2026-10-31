@@ -16,7 +16,6 @@ Canvas is tested on a stand-in, the same way as other tests run the app's
 methods. The test at the end does the whole thing with the real app."""
 
 import json
-import time
 
 import pytest
 
@@ -24,6 +23,8 @@ import core.storage as storage
 import core.settings_store as settings_store
 import core.transcript_store as transcript_store
 from core.models import Transcript
+
+from tk_helpers import cancel_pending_afters, settle
 
 A, B = 1, 2
 
@@ -193,45 +194,6 @@ _REDIRECT_TARGETS = (
 )
 
 
-def _settle(widget, milliseconds=300):
-    end = time.monotonic() + milliseconds / 1000
-    while time.monotonic() < end:
-        widget.update()
-        time.sleep(0.005)
-
-
-def _all_widgets(widget):
-    found = [widget]
-    for child in widget.winfo_children():
-        found.extend(_all_widgets(child))
-    return found
-
-
-def _cancel_pending_afters(window):
-    """Cancel the timers a settled window still has queued, each through the
-    widget that scheduled it. Same as the helper of the same name in
-    test_bold_starts_app.py."""
-    owner_of = {}
-    for widget in _all_widgets(window):
-        for command_name in (getattr(widget, "_tclCommands", None) or ()):
-            owner_of[command_name] = widget
-    try:
-        pending = window.tk.splitlist(window.tk.call("after", "info"))
-    except Exception:
-        return
-    for after_id in pending:
-        try:
-            command_name = window.tk.splitlist(window.tk.call("after", "info", after_id))[0]
-        except Exception:
-            continue
-        owner = owner_of.get(command_name)
-        if owner is not None:
-            try:
-                owner.after_cancel(after_id)
-            except Exception:
-                pass
-
-
 def test_with_one_transcript_detached_the_main_window_reads_another_on_its_own(
     tmp_path, monkeypatch, fresh_widget_image_caches,
 ):
@@ -263,7 +225,7 @@ def test_with_one_transcript_detached_the_main_window_reads_another_on_its_own(
         # likely because Windows reports a widget's new size in the middle of
         # laying out its neighbours, and the scrollbar's redraw then forces Tk
         # to finish that layout from inside it.
-        _settle(app)
+        settle(app, 300)
         store = app.store
         a = store.add_transcript("A", store.current_space)
         b = store.add_transcript("B", store.current_space)
@@ -271,21 +233,21 @@ def test_with_one_transcript_detached_the_main_window_reads_another_on_its_own(
             store.set_transcript_text(transcript.id, f"{transcript.title.lower()}word " * 60)
             store.set_transcript_paused(transcript.id, True)
         app._refresh_transcript_list()
-        _settle(app)
+        settle(app, 300)
         app._handle_open_transcript(a)
-        _settle(app)
+        settle(app, 300)
         app.canvas._handle_detach()
-        _settle(app, 600)
+        settle(app, 600)
         detached = app.canvas._detached_window.reader_display
         app._handle_open_transcript(b)
-        _settle(app)
+        settle(app, 300)
         main = app.canvas.reader_display
 
         app.footer.wpm_slider.set(700)
         app.footer._handle_wpm_slide(700)
         app._handle_shortcut_skip_forward()
         app._handle_shortcut_pause_toggle()
-        _settle(app, 150)
+        settle(app, 150)
         assert (main.session.wpm, main._is_paused) == (700, False)
         assert main.session.index > 0
         assert (detached.session.wpm, detached._is_paused, detached.session.index) == (300, True, 0)
@@ -294,11 +256,11 @@ def test_with_one_transcript_detached_the_main_window_reads_another_on_its_own(
 
         app._handle_shortcut_pause_toggle()  # B paused again, so it stops moving
         app._handle_open_transcript(a)
-        _settle(app)
+        settle(app, 300)
         assert app.canvas._detached_shows_current()
         app._handle_shortcut_pause_toggle()
         app._handle_shortcut_wpm_up()
-        _settle(app, 150)
+        settle(app, 150)
         assert (detached.session.wpm, detached._is_paused) == (310, False)
         assert (a.wpm, a.is_paused) == (310, False)
         assert (b.wpm, b.is_paused) == (700, True)
@@ -311,7 +273,7 @@ def test_with_one_transcript_detached_the_main_window_reads_another_on_its_own(
     finally:
         if app.canvas._detached_window is not None:
             app.canvas._detached_window.close()
-        _settle(app, 200)
-        _cancel_pending_afters(app)
+        settle(app, 200)
+        cancel_pending_afters(app)
         app.destroy()
         fresh_widget_image_caches()
