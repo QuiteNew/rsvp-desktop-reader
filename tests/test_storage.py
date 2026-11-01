@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 from core.storage import (
     save_state, parse_data, load_state,
     LIVE_SAVE_INTERVAL_SECONDS, DEFAULT_DATA_DIR,

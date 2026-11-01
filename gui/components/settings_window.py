@@ -24,7 +24,7 @@ from gui.components.search_box import SearchBox
 from gui.components.separator_line import SeparatorLine
 from gui.components.wrapping_label import WrappingLabel
 from gui.icons import description_icon, info_icon
-from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_HEADING, FONT_BODY, DYSLEXIA_FONT_FELL_BACK, apply_app_icon, center_over_parent
+from gui.theme import HEARTH_PAPER, COCOA_INK, WARM_TAUPE, WARM_LINE, EMBER_GLOW, EMBER_GLOW_HOVER, FONT_BODY, DYSLEXIA_FONT_FELL_BACK, apply_app_icon, center_over_parent
 
 # The tab where this window's own Apply button is hidden: the Profiles tab's
 # buttons apply whatever is pending first, so a second Apply would only be in

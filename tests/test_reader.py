@@ -1,4 +1,3 @@
-import pytest
 from core.reader import ReaderSession
 from core.timing import WARM_UP_START_MULTIPLIER, WARM_UP_WORD_COUNT
 

@@ -1,4 +1,3 @@
-import pytest
 from core.punctuation import (
     split_punctuation,
     classify_pacing,
