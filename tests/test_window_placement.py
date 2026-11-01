@@ -16,6 +16,7 @@ maximized window and with the list of monitors."""
 
 import json
 import sys
+import time
 from contextlib import ExitStack
 
 import pytest
@@ -528,11 +529,23 @@ def test_the_window_is_noted_as_it_moves_and_not_while_it_is_minimized(launch):
 
 
 def test_destroying_the_app_drops_a_note_still_waiting(launch):
+    """The note has to be still waiting when the app is destroyed. It waits
+    PLACEMENT_SETTLE_MS (300 ms) after a move, and this test used to check it
+    after a single update(). Twice on Windows the note was already gone by
+    then, both times in a full run that took far longer than usual, which fits
+    that one update() taking longer than the wait on a busy machine. That was
+    never caught in the act, so the test now doesn't depend on it either way:
+    this window waits far longer than the test runs, and the loop runs until
+    the move has arrived instead of assuming one update() is enough."""
     build, _ = launch
     application = build(*SAVED, False)
+    application.PLACEMENT_SETTLE_MS = 60_000
     application.geometry("650x450+160+110")
-    application.update()  # the move arrives and its note starts waiting
-    assert application._placement_note_after_id is not None
+    deadline = time.monotonic() + 2
+    while application._placement_note_after_id is None and time.monotonic() < deadline:
+        application.update()
+        time.sleep(0.005)
+    assert application._placement_note_after_id is not None, "the window never reported its move"
     cancel_pending_afters(application)  # CustomTkinter's own timers, which it leaves behind
     application.destroy()
     assert application._placement_note_after_id is None
