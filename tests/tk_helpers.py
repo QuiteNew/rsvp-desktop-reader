@@ -13,6 +13,9 @@ in its default import mode (see pyproject.toml), so this module is found by its
 plain name. Its name doesn't start with test_, so pytest never collects it as a
 test file.
 
+settings_window, at the end, builds the Settings window the way most of the
+Settings tests need it, so they don't each keep their own list of its settings.
+
 Why these tests need settle() at all: a CTkToplevel on Windows doesn't come up
 in one go. Its __init__ hides the window, recolours the title bar and calls
 update(), then leaves the rest to a string of timers: 5 ms to put the window
@@ -87,3 +90,37 @@ def cancel_pending_afters(window):
                 owner.after_cancel(after_id)
             except Exception:
                 pass
+
+
+def settings_window(owner, **given):
+    """A Settings window built straight from the default settings, with
+    callbacks that do nothing in place of the app. Pass anything a test needs
+    to be different, for example on_apply to see what Apply sends, transcripts
+    for the Stats tab, or one of the settings themselves.
+
+    Every SettingsWindow parameter that is also a setting gets its default
+    from AppSettings, so a setting added to the window later needs nothing
+    here. A name the window doesn't take fails the test straight away."""
+    import inspect
+    from dataclasses import asdict
+
+    from core.settings_store import AppSettings
+    from gui.components.settings_window import SettingsWindow
+
+    defaults = asdict(AppSettings())
+    nothing = lambda *args: None
+    values = {name: defaults[name] for name in inspect.signature(SettingsWindow).parameters if name in defaults}
+    values.update(
+        transcripts=[],
+        on_apply=nothing,
+        on_export_requested=nothing,
+        on_import_requested=nothing,
+        profile_names=lambda: [],
+        on_profile_save=nothing,
+        on_profile_update=nothing,
+        on_profile_apply=nothing,
+        on_profile_rename=nothing,
+        on_profile_delete=nothing,
+    )
+    values.update(given)
+    return SettingsWindow(owner, **values)

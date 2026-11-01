@@ -10,10 +10,10 @@ They run against a real Tk with one hidden root for the whole module, and each
 window is opened from a shown window, because Tk keeps a window hidden while its
 owner is hidden."""
 
-from dataclasses import asdict
-
 import customtkinter as ctk
 import pytest
+
+from tk_helpers import settings_window
 
 
 class Calls:
@@ -77,38 +77,8 @@ def close_if_open(window) -> None:
 # ---- Settings ----
 
 def make_settings(owner):
-    from core.settings_store import AppSettings
-    from gui.components.settings_window import SettingsWindow
-
-    defaults = asdict(AppSettings())
-    names = (
-        "window_width", "window_height", "sidebar_width", "bottom_band_height",
-        "freeform_resize_enabled", "default_wpm", "default_font_color",
-        "default_highlight_color", "default_background_color", "default_font_size",
-        "font_size_step", "highlight_offset_px", "skip_word_count", "pause_on_skip",
-        "length_pacing_enabled", "split_long_paragraphs_enabled", "resume_rewind_enabled",
-        "resume_rewind_words", "warm_up_enabled", "scrub_pause_enabled",
-        "peripheral_context_enabled", "guide_mark_horizontal_enabled",
-        "guide_mark_thickness_px", "guide_mark_length_percent", "guide_mark_color",
-        "data_directory", "appearance_mode", "dyslexia_font_enabled", "letter_spacing_level",
-    )
     applied = Calls()
-    nothing = lambda *args: None
-    window = SettingsWindow(
-        owner,
-        **{name: defaults[name] for name in names},
-        transcripts=[],
-        on_apply=applied,
-        on_export_requested=nothing,
-        on_import_requested=nothing,
-        profile_names=lambda: [],
-        on_profile_save=nothing,
-        on_profile_update=nothing,
-        on_profile_apply=nothing,
-        on_profile_rename=nothing,
-        on_profile_delete=nothing,
-    )
-    return window, applied
+    return settings_window(owner, on_apply=applied), applied
 
 
 def test_esc_closes_settings_without_applying(owner, shown):

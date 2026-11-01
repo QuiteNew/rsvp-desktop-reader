@@ -19,6 +19,8 @@ from core.reopen import transcript_to_reopen
 from core.settings_store import AppSettings, SettingsStore
 from core.transcript_store import TranscriptStore
 
+from tk_helpers import settings_window
+
 
 # ---- which transcript (core/reopen.py) ----
 
@@ -247,36 +249,14 @@ def test_apply_saves_the_switch(tmp_path):
 def open_settings(root, wait_until_shown):
     """Opens Settings with the switch set as given, and returns the window and
     a list of what Apply sent."""
-    from gui.components.settings_window import SettingsWindow
-
     windows = []
 
     def build(reopen_last_transcript):
         owner = ctk.CTkToplevel(root)
         owner.geometry("600x700+0+0")
         wait_until_shown(owner)
-        defaults = asdict(AppSettings())
-        names = (
-            "window_width", "window_height", "sidebar_width", "bottom_band_height",
-            "freeform_resize_enabled", "default_wpm", "default_font_color",
-            "default_highlight_color", "default_background_color", "default_font_size",
-            "font_size_step", "highlight_offset_px", "skip_word_count", "pause_on_skip",
-            "length_pacing_enabled", "split_long_paragraphs_enabled", "resume_rewind_enabled",
-            "resume_rewind_words", "warm_up_enabled", "scrub_pause_enabled",
-            "peripheral_context_enabled", "guide_mark_horizontal_enabled",
-            "guide_mark_thickness_px", "guide_mark_length_percent", "guide_mark_color",
-            "data_directory", "appearance_mode", "dyslexia_font_enabled", "letter_spacing_level",
-        )
         applied = []
-        nothing = lambda *args: None
-        window = SettingsWindow(
-            owner, **{name: defaults[name] for name in names},
-            transcripts=[], on_apply=applied.append,
-            on_export_requested=nothing, on_import_requested=nothing,
-            profile_names=lambda: [], on_profile_save=nothing, on_profile_update=nothing,
-            on_profile_apply=nothing, on_profile_rename=nothing, on_profile_delete=nothing,
-            reopen_last_transcript=reopen_last_transcript,
-        )
+        window = settings_window(owner, on_apply=applied.append, reopen_last_transcript=reopen_last_transcript)
         wait_until_shown(window)
         windows.append((window, owner))
         return window, applied

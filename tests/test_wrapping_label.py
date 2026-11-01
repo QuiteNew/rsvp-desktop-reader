@@ -21,14 +21,12 @@ changes size: on Windows a new CTkToplevel hides itself for a moment to colour
 its title bar and comes back on a timer, so a single update() can measure a
 window that hasn't really been laid out yet."""
 
-from dataclasses import asdict
-
 import customtkinter as ctk
 import pytest
 
 from gui.components.wrapping_label import MIN_WRAP_LENGTH, RIGHT_MARGIN, START_WRAP_LENGTH, WrappingLabel
 
-from tk_helpers import all_widgets, settle
+from tk_helpers import all_widgets, settings_window, settle
 
 LONG_TEXT = (
     "Gives longer words a bit more time on screen, in three steps based on length, "
@@ -191,40 +189,6 @@ def test_customtkinters_own_resize_handling_still_runs(root):
 
 # ---- the Settings window ----
 
-def _settings_window(root, transcripts):
-    """A Settings window built straight from the default settings, with plain
-    callbacks in place of the app."""
-    from core.settings_store import AppSettings
-    from gui.components.settings_window import SettingsWindow
-
-    defaults = asdict(AppSettings())
-    names = (
-        "window_width", "window_height", "sidebar_width", "bottom_band_height",
-        "freeform_resize_enabled", "default_wpm", "default_font_color",
-        "default_highlight_color", "default_background_color", "default_font_size",
-        "font_size_step", "highlight_offset_px", "skip_word_count", "pause_on_skip",
-        "length_pacing_enabled", "split_long_paragraphs_enabled", "resume_rewind_enabled",
-        "resume_rewind_words", "warm_up_enabled", "scrub_pause_enabled",
-        "peripheral_context_enabled", "guide_mark_horizontal_enabled",
-        "guide_mark_thickness_px", "guide_mark_length_percent", "guide_mark_color",
-        "data_directory", "appearance_mode", "dyslexia_font_enabled", "letter_spacing_level",
-    )
-    nothing = lambda *args: None
-    return SettingsWindow(
-        root,
-        **{name: defaults[name] for name in names},
-        transcripts=transcripts,
-        on_apply=nothing,
-        on_export_requested=nothing,
-        on_import_requested=nothing,
-        profile_names=lambda: [],
-        on_profile_save=nothing,
-        on_profile_update=nothing,
-        on_profile_apply=nothing,
-        on_profile_rename=nothing,
-        on_profile_delete=nothing,
-    )
-
 
 def _wrapping_labels(widget):
     return [w for w in all_widgets(widget) if isinstance(w, WrappingLabel)]
@@ -248,7 +212,7 @@ def settings(root, wait_until_shown):
     owner = ctk.CTkToplevel(root)
     owner.geometry("600x700+0+0")
     wait_until_shown(owner)
-    window = _settings_window(owner, [transcript])
+    window = settings_window(owner, transcripts=[transcript])
     window.geometry("420x650+10+10")
     wait_until_shown(window)
     yield window

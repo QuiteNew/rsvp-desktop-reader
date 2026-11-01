@@ -2188,6 +2188,8 @@ from gui.app import RSVPApp
 try:
     app = RSVPApp()
 except tkinter.TclError as exc:
+    if "display" not in str(exc):
+        raise  # a real Tk error, not a missing display (see conftest.py)
     print("NO DISPLAY", exc)
     sys.exit(0)
 app.withdraw()

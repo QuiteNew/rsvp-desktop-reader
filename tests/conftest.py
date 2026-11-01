@@ -159,6 +159,22 @@ def _new_root():
     try:
         return ctk.CTk()
     except tkinter.TclError as exc:
+        _skip_if_there_is_no_display(exc)
+        raise
+
+
+def _skip_if_there_is_no_display(exc):
+    """Skip the test when Tk failed because there is no display to draw on, the
+    way it is on a machine with no screen and no virtual display. Any other Tk
+    error is left to fail the test with its own message.
+
+    Without a display Tk says "no display name and no $DISPLAY environment
+    variable", or "couldn't connect to display" when the one named isn't there.
+    Windows always has a display, so there a Tk error is always a real one.
+    Every Tk error used to be turned into a skip. On Windows that sometimes
+    skipped a test in test_window_placement.py, which can only have been the
+    real app failing to build, and the error itself was never seen."""
+    if "display" in str(exc):
         pytest.skip(f"Tk can't start a display here: {exc}")
 
 
@@ -296,7 +312,8 @@ def _real_app(forget_cached_images, data_dir, before_start=None, first_settle_ms
         try:
             app = RSVPApp()
         except tkinter.TclError as exc:
-            pytest.skip(f"Tk can't start a display here: {exc}")
+            _skip_if_there_is_no_display(exc)
+            raise
         try:
             if hidden:
                 app.withdraw()

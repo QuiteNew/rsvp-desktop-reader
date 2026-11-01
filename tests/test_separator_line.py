@@ -13,8 +13,6 @@ test_wrapping_label.py, and for the same reasons every window is given real time
 to settle and sizes are read back from the window's own scaling instead of
 assuming a 100% display."""
 
-from dataclasses import asdict
-
 import customtkinter as ctk
 import pytest
 
@@ -24,7 +22,7 @@ from gui.components.separator_line import (
 )
 from gui.components.wrapping_label import WrappingLabel
 
-from tk_helpers import all_widgets, settle
+from tk_helpers import all_widgets, settings_window, settle
 
 
 def shown_line(root, width=400, **kwargs):
@@ -187,40 +185,6 @@ def test_the_parents_own_resize_handling_still_runs(root):
 
 # ---- the Settings window ----
 
-def _settings_window(owner):
-    """A Settings window built straight from the default settings, with plain
-    callbacks in place of the app (the same as in test_wrapping_label.py)."""
-    from core.settings_store import AppSettings
-    from gui.components.settings_window import SettingsWindow
-
-    defaults = asdict(AppSettings())
-    names = (
-        "window_width", "window_height", "sidebar_width", "bottom_band_height",
-        "freeform_resize_enabled", "default_wpm", "default_font_color",
-        "default_highlight_color", "default_background_color", "default_font_size",
-        "font_size_step", "highlight_offset_px", "skip_word_count", "pause_on_skip",
-        "length_pacing_enabled", "split_long_paragraphs_enabled", "resume_rewind_enabled",
-        "resume_rewind_words", "warm_up_enabled", "scrub_pause_enabled",
-        "peripheral_context_enabled", "guide_mark_horizontal_enabled",
-        "guide_mark_thickness_px", "guide_mark_length_percent", "guide_mark_color",
-        "data_directory", "appearance_mode", "dyslexia_font_enabled", "letter_spacing_level",
-    )
-    nothing = lambda *args: None
-    return SettingsWindow(
-        owner,
-        **{name: defaults[name] for name in names},
-        transcripts=[],
-        on_apply=nothing,
-        on_export_requested=nothing,
-        on_import_requested=nothing,
-        profile_names=lambda: [],
-        on_profile_save=nothing,
-        on_profile_update=nothing,
-        on_profile_apply=nothing,
-        on_profile_rename=nothing,
-        on_profile_delete=nothing,
-    )
-
 
 @pytest.fixture
 def settings(root, wait_until_shown):
@@ -230,7 +194,7 @@ def settings(root, wait_until_shown):
     owner = ctk.CTkToplevel(root)
     owner.geometry("600x700+0+0")
     wait_until_shown(owner)
-    window = _settings_window(owner)
+    window = settings_window(owner)
     window.geometry("500x650+10+10")
     wait_until_shown(window)
     yield window
