@@ -21,6 +21,8 @@ import pytest
 
 from core.bold_spans import tk_spans
 
+from edit_box_helpers import clipboard_holds, inner_of, run_mainloop
+
 
 @pytest.fixture(scope="module")
 def root(shown_root):
@@ -71,22 +73,6 @@ def pretend_windows(root):
     root.tk.eval("rename tk {}; rename ::real_tk tk")
 
 
-def inner_of(box):
-    return box.textbox._textbox
-
-
-def run_mainloop(root, milliseconds=60):
-    """Let Tk's real event loop run for a moment, the way the running app does.
-    An error that an earlier call left behind is raised from here."""
-    root.after(milliseconds, root.quit)
-    root.mainloop()
-
-
-def clipboard_holds(root, text):
-    root.clipboard_clear()
-    root.clipboard_append(text)
-
-
 def press(root, widget, event):
     """Send a virtual event (<<Copy>>, <<Cut>>, <<Paste>>), which is what Ctrl+C,
     Ctrl+X and Ctrl+V turn into, to a widget that has the focus."""
@@ -94,6 +80,30 @@ def press(root, widget, event):
     root.update()
     widget.mark_set("insert", "end-1c")
     widget.event_generate(event)
+
+
+# ---- the main loop these tests run ----
+
+def test_run_mainloop_brings_out_an_error_that_update_would_hide(root):
+    """Everything below leans on run_mainloop doing one thing update() doesn't:
+    raising an error that a Python command left behind inside a Tcl catch, the
+    way the old forwarder did when it closed the app. If run_mainloop were ever
+    changed to update(), the tests below would still pass, but they could no
+    longer catch that crash coming back. So this checks it, on a plain Tk root
+    of its own, so nothing it leaves behind reaches the other tests. root is
+    only asked for so the test skips where there is no display."""
+    def fail():
+        raise RuntimeError("left behind inside a catch")
+
+    own = tkinter.Tk()
+    try:
+        own.withdraw()
+        own.tk.createcommand("rsvp_test_fail", fail)
+        own.tk.eval("catch rsvp_test_fail")
+        with pytest.raises(RuntimeError, match="left behind inside a catch"):
+            run_mainloop(own)
+    finally:
+        own.destroy()
 
 
 # ---- Tk's own bindings, with nothing selected ----

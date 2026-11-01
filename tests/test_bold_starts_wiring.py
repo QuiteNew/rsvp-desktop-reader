@@ -19,6 +19,7 @@ import pytest
 
 from core.models import Transcript
 
+from edit_box_helpers import is_on
 from tk_helpers import cancel_pending_afters, settle
 
 
@@ -52,21 +53,6 @@ def make_canvas(root):
             window.close()
         settle(root, 100)
         canvas.destroy()
-
-
-def bold_pieces(input_view):
-    """What the edit box really has in bold, read back through the Tk tag."""
-    from gui.components.transcript_input import BOLD_TAG
-
-    inner = input_view.textbox._textbox
-    ranges = inner.tag_ranges(BOLD_TAG)
-    return [inner.get(str(ranges[i]), str(ranges[i + 1])) for i in range(0, len(ranges), 2)]
-
-
-def is_on(input_view):
-    """Whether the box shows the look, by its text: the same words in bold or not."""
-    input_view.set_text("hello world")
-    return bold_pieces(input_view) == ["hel", "wor"]
 
 
 def click(input_view):

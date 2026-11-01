@@ -21,6 +21,7 @@ import pytest
 
 import core.settings_store as settings_store
 
+from edit_box_helpers import is_on
 from tk_helpers import cancel_pending_afters, settle
 
 
@@ -45,20 +46,6 @@ def app(data_dir, saved_look, open_real_app):
 
     with open_real_app(data_dir, before_start=save_the_look, hidden=True) as application:
         yield application
-
-
-def _bold_pieces(input_view):
-    from gui.components.transcript_input import BOLD_TAG
-
-    inner = input_view.textbox._textbox
-    ranges = inner.tag_ranges(BOLD_TAG)
-    return [inner.get(str(ranges[i]), str(ranges[i + 1])) for i in range(0, len(ranges), 2)]
-
-
-def is_on(input_view):
-    """Whether the box shows the look, by its text: the same words in bold or not."""
-    input_view.set_text("hello world")
-    return _bold_pieces(input_view) == ["hel", "wor"]
 
 
 def click(input_view):

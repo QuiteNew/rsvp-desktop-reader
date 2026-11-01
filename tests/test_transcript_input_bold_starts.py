@@ -14,6 +14,8 @@ import pytest
 
 from core.bold_starts import bold_ranges
 
+from edit_box_helpers import bold_pieces
+
 
 @pytest.fixture
 def make_box(root):
@@ -52,16 +54,6 @@ def shown_box(root, width=500, height=350, **kwargs):
 def span(widget):
     """Left and right edge of a widget on screen."""
     return widget.winfo_rootx(), widget.winfo_rootx() + widget.winfo_width()
-
-
-def bold_pieces(box):
-    """The words' bold stretches as the widget really has them, read back out of
-    the Text widget through the tag."""
-    from gui.components.transcript_input import BOLD_TAG
-
-    inner = box.textbox._textbox
-    ranges = inner.tag_ranges(BOLD_TAG)
-    return [inner.get(str(ranges[i]), str(ranges[i + 1])) for i in range(0, len(ranges), 2)]
 
 
 def expected_pieces(text):

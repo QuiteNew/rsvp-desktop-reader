@@ -20,6 +20,8 @@ import pytest
 from core.bold_starts import bold_ranges
 from core.rich_copy import segments_text
 
+from edit_box_helpers import clipboard_holds, inner_of, run_mainloop
+
 
 @pytest.fixture(scope="module")
 def root(shown_root):
@@ -62,19 +64,10 @@ def rich(monkeypatch):
     return stand_in
 
 
-def inner_of(box):
-    return box.textbox._textbox
-
-
 def select(box, first, last):
     inner = inner_of(box)
     inner.tag_remove("sel", "1.0", "end")
     inner.tag_add("sel", first, last)
-
-
-def run_mainloop(root, milliseconds=60):
-    root.after(milliseconds, root.quit)
-    root.mainloop()
 
 
 def copy_key(root, box):
@@ -92,11 +85,6 @@ def cut_key(root, box):
     root.update()
     inner.event_generate("<<Cut>>")
     run_mainloop(root)
-
-
-def clipboard_holds(root, text):
-    root.clipboard_clear()
-    root.clipboard_append(text)
 
 
 def clipboard_text(root):

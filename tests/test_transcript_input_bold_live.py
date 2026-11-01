@@ -22,6 +22,8 @@ import pytest
 from core.bold_spans import tk_spans
 from core.bold_starts import bold_ranges
 
+from edit_box_helpers import inner_of
+
 
 @pytest.fixture
 def make_box(root):
@@ -39,10 +41,6 @@ def make_box(root):
     yield build
     for box in made:
         box.destroy()
-
-
-def inner_of(box):
-    return box.textbox._textbox
 
 
 def text_of(box):
