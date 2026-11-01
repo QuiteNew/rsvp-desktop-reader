@@ -32,24 +32,6 @@ def root(shown_root):
 
 
 @pytest.fixture
-def make_box(root):
-    from gui.components.transcript_input import TranscriptInput
-
-    made = []
-
-    def build(text="", **kwargs):
-        box = TranscriptInput(root, on_submit=lambda t: None, initial_text=text, **kwargs)
-        box.pack(fill="both", expand=True)
-        root.update()
-        made.append(box)
-        return box
-
-    yield build
-    for box in made:
-        box.destroy()
-
-
-@pytest.fixture
 def plain_text(root):
     """A Text widget with nothing in front of it, for comparing against."""
     widget = tkinter.Text(root)

@@ -25,24 +25,6 @@ from core.bold_starts import bold_ranges
 from edit_box_helpers import inner_of
 
 
-@pytest.fixture
-def make_box(root):
-    from gui.components.transcript_input import TranscriptInput
-
-    made = []
-
-    def build(text="", **kwargs):
-        box = TranscriptInput(root, on_submit=lambda t: None, initial_text=text, **kwargs)
-        box.pack()
-        root.update()
-        made.append(box)
-        return box
-
-    yield build
-    for box in made:
-        box.destroy()
-
-
 def text_of(box):
     return inner_of(box).get("1.0", "end-1c")
 

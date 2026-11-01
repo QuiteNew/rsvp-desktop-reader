@@ -17,25 +17,6 @@ from core.bold_starts import bold_ranges
 from edit_box_helpers import bold_pieces
 
 
-@pytest.fixture
-def make_box(root):
-    """Builds edit boxes and destroys them again after the test."""
-    from gui.components.transcript_input import TranscriptInput
-
-    made = []
-
-    def build(text="", **kwargs):
-        box = TranscriptInput(root, on_submit=lambda t: None, initial_text=text, **kwargs)
-        box.pack()
-        root.update()
-        made.append(box)
-        return box
-
-    yield build
-    for box in made:
-        box.destroy()
-
-
 def shown_box(root, width=500, height=350, **kwargs):
     """An edit box in a real, mapped window of the given size. A hidden window
     never gets a size, so anything that measures where widgets sit needs this.

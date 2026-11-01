@@ -26,6 +26,7 @@ there:
 - root, the hidden Tk root a test module builds its own widgets and windows on
 - shown_root, the same root on screen
 - scaling, for a test that changes CustomTkinter's scaling and needs it put back
+- make_box, for a test that builds edit boxes on its module's root
 - wait_until_shown, for a test that needs a window to actually be on screen
 - open_real_app, for a test that builds the whole app
 """
@@ -206,6 +207,32 @@ def scaling():
 
     yield set_to
     set_to(1.0)
+
+
+@pytest.fixture
+def make_box(root):
+    """For a test that builds edit boxes (the TranscriptInput a transcript's text
+    goes in). Hands back a function that builds one on the module's root, packed
+    to fill it, with the text to start with and any of the box's own options,
+    and every box it built is destroyed when the test ends.
+
+    It uses whatever root the module has. A module that keeps its root on
+    screen (the clipboard tests hand over shown_root as their root) gets its
+    boxes on screen, and the others get them on the hidden one."""
+    from gui.components.transcript_input import TranscriptInput
+
+    made = []
+
+    def build(text="", **options):
+        box = TranscriptInput(root, on_submit=lambda t: None, initial_text=text, **options)
+        box.pack(fill="both", expand=True)
+        root.update()
+        made.append(box)
+        return box
+
+    yield build
+    for box in made:
+        box.destroy()
 
 
 @pytest.fixture
