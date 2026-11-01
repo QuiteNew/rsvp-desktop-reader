@@ -36,20 +36,6 @@ LONG_TEXT = (
 )
 
 
-@pytest.fixture
-def scaling():
-    """Sets CustomTkinter's extra scaling factor for one test and always puts it
-    back to 1.0. The factor is applied on top of whatever the display setting
-    already gives, so a test reads the result back from the label instead of
-    assuming it."""
-    def set_to(factor):
-        ctk.set_widget_scaling(factor)
-        ctk.set_window_scaling(factor)
-
-    yield set_to
-    set_to(1.0)
-
-
 def shown_label(root, width=400, text=LONG_TEXT, **kwargs):
     """A wrapping label packed across a mapped window of the given width.
     Returns (window, label); the caller destroys the window."""

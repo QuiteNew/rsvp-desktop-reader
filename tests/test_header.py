@@ -25,18 +25,6 @@ LONG_TITLE = (
 
 
 @pytest.fixture
-def scaling():
-    """Sets CustomTkinter's extra scaling factor for one test and always puts it
-    back to 1.0. It stacks on top of the display's own scaling."""
-    def set_to(factor):
-        ctk.set_widget_scaling(factor)
-        ctk.set_window_scaling(factor)
-
-    yield set_to
-    set_to(1.0)
-
-
-@pytest.fixture
 def shown_header(root, wait_until_shown):
     """Builds a header with a title in a mapped window of the given width and
     returns (window, header). The window is destroyed after the test."""

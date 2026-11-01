@@ -19,12 +19,15 @@ It deliberately leaves core.storage.DEFAULT_DATA_DIR itself untouched, so
 test_storage.py's check that the default sits under the home directory still
 sees the real value.
 
-It also holds fresh_widget_image_caches, which a test module that builds the
-toolbar (so, a Canvas or the whole app) asks for when it makes a Tk root of its
-own, root, the hidden Tk root a test module builds its own widgets and windows
-on, shown_root, the same root on screen, wait_until_shown, for a test that needs
-a window to actually be on screen, and open_real_app, for a test that builds the
-whole app. See each fixture for why.
+It also holds the fixtures the GUI tests share. See each one for why it's
+there:
+
+- fresh_widget_image_caches, which empties the pictures kept for one Tk root
+- root, the hidden Tk root a test module builds its own widgets and windows on
+- shown_root, the same root on screen
+- scaling, for a test that changes CustomTkinter's scaling and needs it put back
+- wait_until_shown, for a test that needs a window to actually be on screen
+- open_real_app, for a test that builds the whole app
 """
 import shutil
 import tempfile
@@ -168,6 +171,25 @@ def _take_down_root(window):
     for timer in window.tk.splitlist(window.tk.call("after", "info")):
         window.tk.call("after", "cancel", timer)
     window.destroy()
+
+
+@pytest.fixture
+def scaling():
+    """For a test that changes CustomTkinter's scaling. Hands back a function
+    that sets the extra scaling factor, for widgets and windows alike, and puts
+    it back to 1.0 when the test ends, whatever happened in it.
+
+    The factor stacks on top of the display's own scaling (the Windows display
+    setting), so a test that measures something reads the scaling back from the
+    widget instead of assuming the factor is all there is."""
+    import customtkinter as ctk
+
+    def set_to(factor):
+        ctk.set_widget_scaling(factor)
+        ctk.set_window_scaling(factor)
+
+    yield set_to
+    set_to(1.0)
 
 
 @pytest.fixture

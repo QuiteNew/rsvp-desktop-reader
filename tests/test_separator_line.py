@@ -27,18 +27,6 @@ from gui.components.wrapping_label import WrappingLabel
 from tk_helpers import all_widgets, settle
 
 
-@pytest.fixture
-def scaling():
-    """Sets CustomTkinter's extra scaling factor for one test and always puts it
-    back to 1.0. It stacks on top of the display's own scaling."""
-    def set_to(factor):
-        ctk.set_widget_scaling(factor)
-        ctk.set_window_scaling(factor)
-
-    yield set_to
-    set_to(1.0)
-
-
 def shown_line(root, width=400, **kwargs):
     """A line under a label in a mapped window of the given width, the way the
     Settings window uses one. Returns (window, holder, line); the caller
