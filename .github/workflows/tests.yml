@@ -1,8 +1,9 @@
 name: Tests
 
-# Runs the whole pytest suite on every push to main and every pull request.
-# The release workflow also calls this one before it builds anything, so a tag
-# can't produce a release from a commit whose tests are failing.
+# Runs the whole pytest suite on every push to main and every pull request,
+# then checks the code with pyflakes. The release workflow also calls this one
+# before it builds anything, so a tag can't produce a release from a commit
+# whose tests are failing or that pyflakes finds a problem in.
 on:
   push:
     branches:
@@ -45,3 +46,9 @@ jobs:
 
       - name: Run the tests
         run: xvfb-run -a --server-args="-screen 0 1280x1024x24" python -m pytest
+
+      - name: Check the code with pyflakes
+        # pyflakes reads the code without running it and reports things like
+        # an import nothing uses or a name that is never defined. The tests
+        # can pass with either of those in the code, so it gets its own step.
+        run: python -m pyflakes core gui tests main.py
