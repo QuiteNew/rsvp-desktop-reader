@@ -421,7 +421,11 @@ class Canvas(ctk.CTkFrame):
             self._detached_window.reader_display.finalize_session()
 
     def _capture_current_draft(self) -> None:
-        if self._input_currently_shown and self.current_transcript:
+        # The edit box holds the transcript's text while it's on screen, and
+        # also while a selection preview plays: the preview only hides the
+        # box, and what was typed in it is still there. Leaving during a
+        # preview used to skip this, and an edit not saved yet was lost.
+        if (self._input_currently_shown or self._ephemeral) and self.current_transcript:
             text = self.input_view.get_text().strip()
             self._report_draft_changed(self.current_transcript, text)
 
@@ -524,9 +528,10 @@ class Canvas(ctk.CTkFrame):
         """Run just the highlighted text as a preview in the reader,
         without changing the transcript's saved position, started/stopped
         state or reading stats. It uses the transcript's current WPM,
-        colours and font, starts at the first word, and drops back to the
-        edit box (with its full text intact) when stopped or finished. See
-        the _ephemeral flag and _stop_ephemeral()."""
+        colours and font and starts at the first word. At the end it stays
+        on "(finished)", the way the reader does at the end of a transcript,
+        until Stop (or Esc) brings back the edit box with its full text
+        intact. See the _ephemeral flag and _stop_ephemeral()."""
         transcript = self.current_transcript
         if transcript is None or not text.strip():
             return
@@ -832,6 +837,13 @@ class Canvas(ctk.CTkFrame):
     def _handle_detach(self) -> None:
         if not self.current_transcript:
             return
+        # Save the edit box first, the way opening another transcript does,
+        # so an edit that hasn't been saved yet goes along to the detached
+        # window. A stopped transcript's box is saved as its text and a
+        # draft's as its draft, and both are read back from the transcript
+        # below. This runs before the preview flag is cleared, so it covers
+        # detaching in the middle of a selection preview too.
+        self._capture_current_draft()
         self._close_bookmarks_popover()
         self.reader_display.stop()
         self._ephemeral = False
@@ -842,8 +854,7 @@ class Canvas(ctk.CTkFrame):
         if self.current_transcript.is_stopped:
             draft_text = self.current_transcript.raw_text
         elif not self.current_transcript.raw_text.strip():
-            draft_text = self.input_view.get_text().strip()
-            self._report_draft_changed(self.current_transcript, draft_text)
+            draft_text = self.current_transcript.draft_text
 
         self._detached_window = DetachedTranscriptWindow(
             self,
