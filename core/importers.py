@@ -24,6 +24,7 @@ from pathlib import Path
 
 import docx
 import pypdf
+from lxml import etree
 from lxml import html as lxml_html
 
 from core.parser import clean_transcript_keep_lines
@@ -257,6 +258,12 @@ def import_html(path: str) -> str:
         return ""  # import_file() rejects empty output as "no readable text"
     try:
         tree = lxml_html.fromstring(raw_bytes)
+    except etree.ParserError:
+        # How lxml says the file has no elements at all, a file holding only
+        # a comment, say. That's a page with nothing on it rather than a
+        # broken one, so it gets the same "no readable text" message as an
+        # empty <html></html> instead of "Couldn't open it as HTML".
+        return ""
     except Exception as e:
         raise TranscriptImportError(
             f"Couldn't open {Path(path).name} as HTML:\n\n{e}"
@@ -311,7 +318,10 @@ def import_pdf(path: str) -> str:
         # whether we can actually read it comes from decrypt()'s return
         # value instead. An empty password is a common real case, since
         # some PDFs are "encrypted" only to block printing or editing,
-        # with nothing needed to open and read them.
+        # with nothing needed to open and read them. Most of those use AES,
+        # which pypdf can only decrypt with the cryptography package, so
+        # that's in requirements.txt. Without it, an AES-128 file came out
+        # as having no readable text, and an AES-256 one wouldn't open.
         try:
             decrypt_result = reader.decrypt("")
         except Exception:
