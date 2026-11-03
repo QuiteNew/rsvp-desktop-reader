@@ -669,8 +669,18 @@ class RSVPApp(ctk.CTk):
         self.footer.load_transcript(transcript)
 
     def _handle_text_submitted(self, transcript, raw_text: str) -> None:
-        self.store.set_transcript_text(transcript.id, raw_text)
-        self.canvas.load_transcript(transcript)
+        # Trimmed, like every other save of the edit box. Tk hands its text
+        # back with a newline added at the end, and saving that as it came
+        # left one more blank line at the end each time reading was started.
+        self.store.set_transcript_text(transcript.id, raw_text.strip())
+        # Start reading can come from the detached window while a different
+        # transcript is open here, so this window is only reloaded when it's
+        # showing the one that was started. Reloading it anyway used to drop
+        # the transcript open here, while the header and the sidebar still
+        # named it.
+        current = self.canvas.current_transcript
+        if current is not None and current.id == transcript.id:
+            self.canvas.load_transcript(transcript)
 
     def _handle_position_changed(self, transcript, index: int) -> None:
         self.store.set_transcript_position(transcript.id, index)

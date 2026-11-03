@@ -577,11 +577,17 @@ class Canvas(ctk.CTkFrame):
         self._show_input()
 
     def _handle_text_submitted(self, raw_text: str) -> None:
-        if self.current_transcript:
-            self._handle_stopped_changed(False)
-            self._report_draft_changed(self.current_transcript, "")
-        if self.on_text_submitted and self.current_transcript:
-            self.on_text_submitted(self.current_transcript, raw_text)
+        transcript = self.current_transcript
+        if transcript is None:
+            return
+        self._handle_stopped_changed(False)
+        if self.on_text_submitted:
+            self.on_text_submitted(transcript, raw_text)
+        # The draft is cleared last. Loading the reader above saves the edit
+        # box first, the way every switch does, and clearing the draft before
+        # that put the whole text straight back into it, so every transcript
+        # started here was saved twice.
+        self._report_draft_changed(transcript, "")
 
     def _handle_position_changed(self, index: int) -> None:
         # The scrubber tracks the reader in every state, including a
