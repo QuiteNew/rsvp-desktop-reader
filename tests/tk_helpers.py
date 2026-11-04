@@ -111,8 +111,12 @@ def click(widget, times=1):
 
 def click_button(button):
     """Click a CustomTkinter button. It only counts a click when the pointer has
-    come over it first, as a real one always has."""
-    button._canvas.event_generate("<Enter>")
+    come over it first, as a real one always has, and it learns that from its own
+    Enter handler. That handler is called here rather than sending an Enter event,
+    because on Linux Tk dropped the generated Enter for the second button clicked
+    in a window, and that click then did nothing. The press and release are still
+    sent as events."""
+    button._on_enter()
     click(button._canvas)
 
 
