@@ -1406,6 +1406,7 @@ class RSVPApp(ctk.CTk):
         if expand:
             data_bundle.apply_bundle_expand(bundle, self.store)
         else:
+            self._close_open_transcripts()
             data_bundle.apply_bundle_replace(bundle, self.store, self.settings_store)
 
         MessageDialog(
@@ -1413,6 +1414,27 @@ class RSVPApp(ctk.CTk):
             "Your data was imported. RSVP Reader will now close! Reopen it to see the change.",
             on_close=self._handle_close,
         )
+
+    def _close_open_transcripts(self) -> None:
+        """Lets go of the transcript open here, and of the one in a detached
+        window, the way deleting it would. Done just before a Replace import
+        swaps in the imported data, and for a reason: the open transcript is
+        saved by its id, both while reading it and when the app closes, and the
+        imported transcripts are numbered from 1 as well. Left open, the old
+        edit box text or the old reading session landed on whichever imported
+        transcript happened to have the same id. Closing it first sends those
+        last writes to the data that is about to be replaced anyway.
+
+        Every transcript id is passed on. The canvas ignores one that isn't
+        open, and passing them all is the only public way to reach a detached
+        window, which the app doesn't keep track of."""
+        for transcript in self.store.transcripts:
+            self.canvas.handle_transcript_deleted(transcript.id)
+        if self._current_transcript is not None:
+            self._current_transcript = None
+            self.list_body.set_current(None)
+            self.header.set_title("No transcript selected")
+            self.footer.set_enabled(False)
 
     def _handle_delete_requested(self, transcript) -> None:
         DeleteTranscriptDialog(
