@@ -5,13 +5,15 @@ copies had started to drift apart: the same settle function waited 250, 300 or
 800 ms depending on which file it was in. This is the one copy now, and a test
 file imports what it needs from here:
 
-    from tk_helpers import all_widgets, cancel_pending_afters, settle
+    from tk_helpers import all_widgets, cancel_pending_afters, click, settle
 
 This works because pytest adds the tests folder to the import path when it
 loads a test file from it. The tests folder has no __init__.py and pytest runs
 in its default import mode (see pyproject.toml), so this module is found by its
 plain name. Its name doesn't start with test_, so pytest never collects it as a
 test file.
+
+click and click_button send a real mouse click to a widget.
 
 settings_window, at the end, builds the Settings window the way most of the
 Settings tests need it, so they don't each keep their own list of its settings.
@@ -90,6 +92,28 @@ def cancel_pending_afters(window):
                 owner.after_cancel(after_id)
             except Exception:
                 pass
+
+
+def click(widget, times=1):
+    """Press and let go of the left mouse button over a widget. Twice in a row
+    is a double click, which Tk recognises by itself because the two come so
+    close together.
+
+    The click has to go to the Tk widget the binding was made on. For a
+    CustomTkinter widget that's the one inside it: a CTkLabel's text is
+    label._label, and a CTkFrame or CTkButton is drawn on its _canvas. Binding
+    to a CustomTkinter widget binds those, so a click sent to the outer widget
+    reaches nothing."""
+    for _ in range(times):
+        widget.event_generate("<Button-1>", x=5, y=5)
+        widget.event_generate("<ButtonRelease-1>", x=5, y=5)
+
+
+def click_button(button):
+    """Click a CustomTkinter button. It only counts a click when the pointer has
+    come over it first, as a real one always has."""
+    button._canvas.event_generate("<Enter>")
+    click(button._canvas)
 
 
 def settings_window(owner, **given):

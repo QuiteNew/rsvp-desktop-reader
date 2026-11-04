@@ -24,7 +24,7 @@ import pytest
 
 from gui.components.bookmarks_popover import BookmarksPopover
 
-from tk_helpers import settle
+from tk_helpers import click, click_button, settle
 
 WORDS = [f"w{i}" for i in range(1200)]
 TEXT = " ".join(WORDS)
@@ -126,28 +126,12 @@ def texts(popover):
     return [parts(row)[1].cget("text") for row in rows(popover)]
 
 
-def click(widget, times=1):
-    """Press and let go of the left button over a widget. Twice in a row makes
-    Tk see a double click. For a row or a label the click goes to the Tk widget
-    inside it, since that's where CustomTkinter puts the binding."""
-    for _ in range(times):
-        widget.event_generate("<Button-1>", x=5, y=5)
-        widget.event_generate("<ButtonRelease-1>", x=5, y=5)
-
-
 def click_label(row, times=1):
     click(parts(row)[1]._label, times)
 
 
 def click_background(row, times=1):
     click(row._canvas, times)
-
-
-def click_button(button):
-    """Click a CustomTkinter button. It only counts a click when the pointer
-    has come over it first, as a real one always has."""
-    button._canvas.event_generate("<Enter>")
-    click(button._canvas)
 
 
 def rename_with(scene, row, new_name):
