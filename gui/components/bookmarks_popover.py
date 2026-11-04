@@ -63,11 +63,12 @@ class BookmarksPopover(ctk.CTkToplevel):
         self.on_rename = on_rename
         self.on_closed = on_closed
 
-        # Scheduled single-click jump timers, by after() id. Destroying a Tk
-        # widget does not cancel its pending after() callbacks, so these are
-        # tracked here and cancelled on close/re-render (see
-        # _cancel_pending_clicks); otherwise a jump scheduled just before the
-        # window closes would still fire and seek the reader.
+        # The single-click jumps that are waiting to see if a double click
+        # follows, by after() id. They're cancelled when the list is rebuilt,
+        # because the window carries on and a leftover timer would still jump
+        # to a bookmark that may be gone by then. They're cancelled on close
+        # too. A destroyed window's timer never gets to jump, but Tk reports an
+        # error for it when it goes off. See _cancel_pending_clicks.
         self._pending_click_ids = set()
 
         self.title("Bookmarks")
@@ -116,9 +117,9 @@ class BookmarksPopover(ctk.CTkToplevel):
 
     def _cancel_pending_clicks(self) -> None:
         """Cancel every scheduled single-click jump timer. Called when the
-        window closes and at the start of each re-render, since the rows a
-        timer was tied to are about to be destroyed. after_cancel on an id
-        that already fired or was cancelled is harmless."""
+        window closes and at the start of each re-render, since the rows the
+        timers were for are about to be replaced. after_cancel on an id that
+        already fired or was cancelled is harmless."""
         for timer_id in self._pending_click_ids:
             self.after_cancel(timer_id)
         self._pending_click_ids.clear()
