@@ -36,7 +36,12 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
     changes only this window, so it is neither saved nor passed on to the
     other windows."""
 
-    WIDTH = 500
+    # The size it opens at. The width is set by the control row (scrubber on
+    # the left, toolbar on the right), which asks for about 555 px with the
+    # side margins. Any narrower and the restart button has no room and is
+    # not shown at all. It has no bookmark button, so it is a little
+    # narrower than the detached transcript window.
+    WIDTH = 580
     HEIGHT = 350
 
     def __init__(

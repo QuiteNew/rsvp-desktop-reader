@@ -13,6 +13,15 @@ from gui.theme import apply_app_icon, center_over_parent, HEARTH_PAPER
 class DetachedTranscriptWindow(ctk.CTkToplevel):
     """A standalone window showing one transcript, separate from the main app window."""
 
+    # The size it opens at. The width is set by the control row (scrubber on
+    # the left, toolbar on the right), which asks for about 600 px with the
+    # bookmark button and the side margins. Any narrower and the toolbar's
+    # right-hand buttons, restart and bookmarks, have no room and are not
+    # shown at all. These are the same logical pixels as every other size in
+    # the app, so the window scales with the display.
+    WIDTH = 620
+    HEIGHT = 350
+
     def __init__(
         self, master, transcript, on_text_submitted, on_closed,
         on_position_changed=None, on_pause_changed=None, on_stopped_changed=None,
@@ -72,7 +81,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
 
         self.title(transcript.title)
         apply_app_icon(self)
-        center_over_parent(self, 500, 350)
+        center_over_parent(self, self.WIDTH, self.HEIGHT)
         self.protocol("WM_DELETE_WINDOW", self.close)
         # Previously unset: CTkToplevel's own default theme background
         # doesn't match this app's palette, so without this the window

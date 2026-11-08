@@ -44,13 +44,8 @@ def _give_keyboard(window):
 
 def _detach(app, transcript):
     """Open the transcript in the main window and detach it with the button
-    above the reader. Returns the window, widened and with the keyboard on it.
-
-    The window is made wider because it opens 500 pixels wide, and the buttons
-    above the reader need about 610: at 500 the restart and bookmark buttons
-    have no room and aren't shown at all, and the pause button is squeezed to
-    a sliver. A person has to drag the window wider to reach them, and so do
-    the tests."""
+    above the reader. Returns the window, at the size it opens at and with the
+    keyboard on it."""
     app._handle_open_transcript(transcript)
     settle(app, 300)
     click_button(app.canvas.toolbar.detach_button)
@@ -61,8 +56,6 @@ def _detach(app, transcript):
     # without this a handler that fell over would not fail a test.
     app.callback_errors = []
     app.report_callback_exception = lambda *details: app.callback_errors.append(details)
-    window.geometry("700x350")
-    settle(window, 300)
     _give_keyboard(window)
     return window
 

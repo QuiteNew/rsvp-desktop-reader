@@ -15,10 +15,8 @@ given nothing that could save to the transcript. So half of the tests below
 check the other side of that promise, that nothing done in the window ever
 reaches the transcript it came from, in memory or on disk.
 
-The window opens 500 pixels wide, the same as the detached transcript window,
-and its buttons need about 610 (see test_detached_window_controls.py). At 500 the
-restart button has no room and isn't shown. A person drags the window wider to
-reach it, and so do the tests.
+The window is used at the size it opens at. That it is wide enough for all of its
+buttons is checked on its own in test_default_window_widths.py.
 """
 import json
 
@@ -116,18 +114,13 @@ def _saved_entry(app, tmp_path, transcript):
     return next(entry for entry in saved["transcripts"] if entry["id"] == transcript.id)
 
 
-def _detach_selection(app, first=0, count=60, wide=True):
+def _detach_selection(app, first=0, count=60):
     """Select words, right-click and choose Detach. Returns the window that
-    opened and the words it was given. `wide` drags it wider, as a person would
-    to get at all its buttons."""
+    opened and the words it was given."""
     chosen = _select(app, first, count)
     _right_click(app)
     _choose(app, "Detach")
-    window = app.canvas._selection_previews[-1][0]
-    if wide:
-        window.geometry("700x350")
-        settle(window, 300)
-    return window, chosen
+    return app.canvas._selection_previews[-1][0], chosen
 
 
 def _close_with_the_x(app, window):
@@ -351,8 +344,8 @@ def test_the_menu_is_rebuilt_for_each_new_selection(book):
 
 def test_each_detached_selection_gets_its_own_number_and_opens_down_and_right_of_the_last(book):
     app, transcript = book
-    first, _ = _detach_selection(app, 0, 10, wide=False)
-    second, _ = _detach_selection(app, 20, 10, wide=False)
+    first, _ = _detach_selection(app, 0, 10)
+    second, _ = _detach_selection(app, 20, 10)
     settle(app, 300)
 
     assert [window.title() for window, _, _ in app.canvas._selection_previews] == ["Book (1)", "Book (2)"]
@@ -360,7 +353,7 @@ def test_each_detached_selection_gets_its_own_number_and_opens_down_and_right_of
     assert second.winfo_rooty() > first.winfo_rooty()
 
     _close_with_the_x(app, first)
-    third, _ = _detach_selection(app, 40, 10, wide=False)
+    third, _ = _detach_selection(app, 40, 10)
 
     assert third.title() == "Book (1)", "a closed window's number is used again"
     assert [window.title() for window, _, _ in app.canvas._selection_previews] == ["Book (2)", "Book (1)"]
