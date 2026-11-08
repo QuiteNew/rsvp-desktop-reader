@@ -473,7 +473,7 @@ class Canvas(ctk.CTkFrame):
         the transcript's name plus a per-transcript number in its title,
         and a small cascade offset so successive windows don't land exactly
         on top of each other. Its styling is a snapshot of the transcript's
-        current WPM, colours, font and guide-mark settings."""
+        current WPM, colours, font, guide-mark and chunking settings."""
         transcript = self.current_transcript
         if transcript is None or not text.strip():
             return
@@ -505,6 +505,10 @@ class Canvas(ctk.CTkFrame):
             guide_mark_thickness_px=self._guide_mark_thickness_px,
             guide_mark_length_percent=self._guide_mark_length_percent,
             guide_mark_color=self._guide_mark_color,
+            chunk_enabled=transcript.chunking_enabled,
+            chunk_size=transcript.chunk_size,
+            chunk_mode=transcript.chunk_mode,
+            chunk_char_target=transcript.chunk_char_target,
         )
         self._selection_previews.append((window, transcript.id, index))
 

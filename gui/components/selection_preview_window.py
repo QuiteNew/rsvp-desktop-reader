@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-from core.reader import ReaderSession
+from core.reader import CHUNK_MODE_FIXED, ReaderSession
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
@@ -27,13 +27,14 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
     with a per-transcript number, e.g. "My transcript (2)", and each opens
     slightly offset from the last so they don't stack exactly.
 
-    Its styling (WPM, colours, font, guide mark) is a snapshot of the
-    transcript's settings at the moment it opened. Later Settings changes
-    in the main app don't flow into an already-open preview, which keeps
-    these throwaway windows simple and self-contained. The bold word starts
-    in its edit box are the same: it opens with the look the app has at that
-    moment, and its own button changes only this window, so it is neither
-    saved nor passed on to the other windows."""
+    Its styling and reading settings (WPM, colours, font, guide mark and
+    chunking) are a snapshot of the transcript's settings at the moment it
+    opened. Later Settings changes in the main app don't flow into an
+    already-open preview, which keeps these throwaway windows simple and
+    self-contained. The bold word starts in its edit box are the same: it
+    opens with the look the app has at that moment, and its own button
+    changes only this window, so it is neither saved nor passed on to the
+    other windows."""
 
     WIDTH = 500
     HEIGHT = 350
@@ -58,6 +59,10 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         guide_mark_thickness_px: int = 2,
         guide_mark_length_percent: int = 35,
         guide_mark_color: str = "#3B2E27",
+        chunk_enabled: bool = False,
+        chunk_size: int = 2,
+        chunk_mode: str = CHUNK_MODE_FIXED,
+        chunk_char_target: int = 30,
     ):
         super().__init__(master)
 
@@ -80,6 +85,10 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.scrub_pause_enabled = scrub_pause_enabled
         self.peripheral_context_enabled = peripheral_context_enabled
         self.letter_spacing_level = letter_spacing_level
+        self.chunk_enabled = chunk_enabled
+        self.chunk_size = chunk_size
+        self.chunk_mode = chunk_mode
+        self.chunk_char_target = chunk_char_target
 
         self.title(title)
         apply_app_icon(self)
@@ -193,6 +202,10 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
             text, wpm=self.wpm, start_index=0,
             length_pacing_enabled=self.length_pacing_enabled,
             warm_up_enabled=self.warm_up_enabled,
+            chunk_enabled=self.chunk_enabled,
+            chunk_size=self.chunk_size,
+            chunk_mode=self.chunk_mode,
+            chunk_char_target=self.chunk_char_target,
         )
         self.reader_display.load_session(session, start_paused=False)
         self.scrub_bar.set_total(session.total_words)
