@@ -1340,8 +1340,9 @@ class RSVPApp(ctk.CTk):
         and leaves existing ones alone. "current" writes to the open
         transcript and re-groups the live reader in place without losing
         the word position (see Canvas.set_chunking), exactly as the footer's
-        own chunking control does. The window never offers "current" when
-        nothing is open, but the guard here is kept for safety."""
+        own chunking control does, and the footer is told so it shows the new
+        switch and size. The window never offers "current" when nothing is
+        open, but the guard here is kept for safety."""
         if target == "defaults":
             self.settings_store.set_chunking_defaults(enabled, size, mode, char_target)
             return
@@ -1349,6 +1350,7 @@ class RSVPApp(ctk.CTk):
             return
         self.store.set_transcript_chunking(self._current_transcript.id, enabled, size, mode, char_target)
         self.canvas.set_chunking(enabled, size, mode, char_target)
+        self.footer.set_chunking(enabled, size)
 
     def _handle_export_requested(self, path: str) -> None:
         """Builds a bundle from the two stores' current in-memory state

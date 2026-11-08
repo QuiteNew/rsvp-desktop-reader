@@ -195,19 +195,26 @@ class Footer(ctk.CTkFrame):
         self.chunk_decrease_button.configure(state=state)
         self.chunk_increase_button.configure(state=state)
 
-    def set_font_size(self, size: int) -> None:
-        """Update just the displayed size, for when the change comes
-        from an external source (Settings Apply), as opposed to the
-        user directly clicking +/- here."""
-        self._font_size = size
-        self.size_label.configure(text=f"{size}px")
-
     def set_wpm(self, wpm: int) -> None:
         """Show a speed that was changed somewhere other than the slider itself
         (the Up and Down keys). Not reported back through on_wpm_changed, since
         whatever changed it has saved it already."""
         self.wpm_slider.set(wpm)
         self.wpm_label.configure(text=f"{wpm} WPM")
+
+    def set_chunking(self, enabled: bool, size: int) -> None:
+        """Show chunking that was changed somewhere other than this footer
+        (the Configure chunking window, applied to the open transcript). Not
+        reported back through on_chunking_changed, since whatever changed it
+        has saved it already.
+
+        Without this the footer kept showing the old switch and size, and the
+        next press of its + or - sent that old on/off along with the new size,
+        quietly undoing what the chunking window had just applied."""
+        self._chunking_enabled = enabled
+        self._chunk_size = size
+        (self.chunk_switch.select() if enabled else self.chunk_switch.deselect())
+        self.chunk_size_label.configure(text=str(size))
 
     def set_font_size_step(self, step: int) -> None:
         self._font_size_step = step
