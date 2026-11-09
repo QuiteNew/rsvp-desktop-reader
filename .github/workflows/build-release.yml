@@ -31,7 +31,12 @@ jobs:
             platform: windows
           - os: macos-latest
             platform: macos
-          - os: ubuntu-latest
+          # Linux is built on a fixed Ubuntu release, not on ubuntu-latest. A
+          # build only starts on systems with the same glibc as the machine
+          # that made it, or a newer one, and "latest" moves on by itself. A
+          # build from a newer image stopped starting on Ubuntu 24.04, which
+          # is the oldest release this one needs to run on.
+          - os: ubuntu-24.04
             platform: linux
     runs-on: ${{ matrix.os }}
     steps:
