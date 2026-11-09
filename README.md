@@ -4,6 +4,7 @@
 ![CustomTkinter](https://img.shields.io/badge/CustomTkinter-6.0.0-2B2B2B?style=for-the-badge)
 ![Pillow](https://img.shields.io/badge/Pillow-11557C?style=for-the-badge)
 ![pypdf](https://img.shields.io/badge/pypdf-A50E0E?style=for-the-badge)
+![cryptography](https://img.shields.io/badge/cryptography-5C3D8C?style=for-the-badge)
 ![lxml](https://img.shields.io/badge/lxml-2E6DB4?style=for-the-badge)
 ![python-docx](https://img.shields.io/badge/python--docx-2B579A?style=for-the-badge)
 ![darkdetect](https://img.shields.io/badge/darkdetect-222222?style=for-the-badge)
@@ -191,27 +192,45 @@ rsvp-desktop-reader/
 │   ├── icons.py             # Hand-drawn icons (avoids font-glyph rendering issues)
 │   ├── rich_clipboard.py    # Puts text and its bold on the Windows clipboard together, so Word keeps the bold
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
-├── tests/                   # Automated test suite: the core engine, and the GUI on a real Tk
-│   ├── conftest.py
+├── tests/                   # Automated test suite: the core engine, and the GUI through its real windows
+│   ├── conftest.py          # Shared fixtures: a real app with its data in a temp folder, a Tk root, scaling
+│   ├── tk_helpers.py        # Shared helpers for driving Tk: settle, real clicks, finding widgets
+│   ├── edit_box_helpers.py  # Shared helpers for the edit box tests: the clipboard and Tk's real main loop
+│   ├── test_adding_a_transcript.py
 │   ├── test_app_info.py
 │   ├── test_bold_family.py
 │   ├── test_bold_spans.py
 │   ├── test_bold_starts.py
 │   ├── test_bold_starts_app.py
 │   ├── test_bold_starts_wiring.py
+│   ├── test_bookmarks_list.py
 │   ├── test_chunking.py
 │   ├── test_colors.py
+│   ├── test_context_ribbon.py
 │   ├── test_damaged_files.py
 │   ├── test_data_bundle.py
+│   ├── test_default_window_widths.py
+│   ├── test_deleting_an_open_transcript.py
+│   ├── test_detach_selection.py
+│   ├── test_detach_selection_chunking.py
 │   ├── test_detached_routing.py
+│   ├── test_detached_window_controls.py
 │   ├── test_dialog_keys.py
+│   ├── test_edge_cases.py
+│   ├── test_export_import_in_app.py
 │   ├── test_font_choice.py
+│   ├── test_footer_follows_the_chunking_window.py
+│   ├── test_footer_size_and_colours.py
 │   ├── test_gui_smoke.py
 │   ├── test_header.py
 │   ├── test_icons.py
+│   ├── test_importer_errors.py
 │   ├── test_importers.py
+│   ├── test_keeping_unsaved_edits.py
 │   ├── test_letter_spacing.py
+│   ├── test_main_window_controls.py
 │   ├── test_models.py
+│   ├── test_normalize_in_app.py
 │   ├── test_normalizer.py
 │   ├── test_orp.py
 │   ├── test_parser.py
@@ -225,13 +244,22 @@ rsvp-desktop-reader/
 │   ├── test_rich_clipboard.py
 │   ├── test_rich_copy.py
 │   ├── test_scroll.py
+│   ├── test_seeking.py
+│   ├── test_seeking_in_the_windows.py
+│   ├── test_selection_preview.py
 │   ├── test_separator_line.py
 │   ├── test_settings_apply.py
+│   ├── test_settings_pickers_and_resets.py
 │   ├── test_settings_search.py
 │   ├── test_settings_store.py
 │   ├── test_settings_store_bold_starts.py
 │   ├── test_settings_store_dyslexia.py
 │   ├── test_settings_store_profiles.py
+│   ├── test_sidebar_rows.py
+│   ├── test_skip_and_resume.py
+│   ├── test_space_and_move_guards.py
+│   ├── test_spaces_and_deleting.py
+│   ├── test_start_reading.py
 │   ├── test_storage.py
 │   ├── test_suite_isolation.py
 │   ├── test_text_fit.py
@@ -264,6 +292,8 @@ and the CustomTkinter `gui/`, see [docs/architecture.md](docs/architecture.md) *
 - [Python](https://www.python.org/)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) - the GUI framework
 - [Pillow](https://python-pillow.org/) - used to hand-draw a couple of icons
+- [pypdf](https://pypdf.readthedocs.io/), [python-docx](https://python-docx.readthedocs.io/) & [lxml](https://lxml.de/) - read PDF, Word and HTML files for import
+- [cryptography](https://cryptography.io/) (with its helpers `cffi` and `pycparser`) - lets pypdf open PDFs that are encrypted only to block printing or editing
 - [Fredoka](https://fonts.google.com/specimen/Fredoka), [Quicksand](https://fonts.google.com/specimen/Quicksand) & [OpenDyslexic](https://opendyslexic.org/) - bundled fonts
 
 ## Settings and Configuration
@@ -340,7 +370,8 @@ project on GitHub.
 - ~~Setting profiles~~
 - ~~Dyslexia-friendly font and letter spacing~~
 - ~~Bold word starts in the edit box, with copying the bold into Word~~
-- Upgrading the test suite 2.0
+- ~~Upgrading the test suite 2.0~~
+- Speaker cues
 
 
 ## License

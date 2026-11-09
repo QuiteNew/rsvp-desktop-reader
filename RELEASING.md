@@ -25,10 +25,17 @@ a test fails when a release tag is newer than the number written there.
 
 ```
    python -m pytest
+   python -m pyflakes core gui tests main.py
 ```
 
-   Everything should pass. This run includes the GUI tests and covers
-   Windows, which GitHub's run does not (it runs on Linux).
+   Every test should pass and pyflakes should print nothing. This run
+   includes the GUI tests and covers Windows, which GitHub's run does not (it
+   runs on Linux). On Windows 8 tests are skipped, because Windows reports the
+   number pad Enter as the ordinary Return key; that is expected.
+
+   `pyproject.toml` tells pytest to capture output with `--capture=sys`.
+   Leave that in: with pytest's default capture, Tk on Windows now and then
+   failed to start at all, unable to read its own library files.
 
 3. **Make the docs commit.** Update the README (feature list, roadmap) and any
    docs pages the release touches, and bump `APP_VERSION` in
