@@ -35,9 +35,10 @@ You can confirm the environment is healthy with:
 ```bash
 python -c "import tkinter; print('Tk:', tkinter.TkVersion)"
 python -c "import customtkinter; print('CustomTkinter:', customtkinter.__version__)"
+python -c "import cryptography; print('cryptography:', cryptography.__version__)"
 ```
 
-Both should print a version with no error.
+All three should print a version with no error.
 
 ### Which Python version do I need?
 
@@ -65,6 +66,18 @@ in the repo, so there is nothing extra to download.
 Plain text (`.txt`), subtitles (`.srt`, `.vtt`), Markdown (`.md`, `.markdown`),
 HTML (`.html`, `.htm`), Word (`.docx`), and PDF (`.pdf`). Click **+** in the
 sidebar and choose **Add from file**.
+
+### A PDF says it's password-protected, but it opens without one
+
+Many PDFs, especially ones saved from Word or Acrobat, are encrypted only to
+stop printing or editing, and open without a password. The app reads those
+with the help of the `cryptography` package (and its helpers `cffi` and
+`pycparser`), which `requirements.txt` installs. If such a PDF is reported as
+password-protected, `cryptography` is most likely missing from the environment
+you run the app with. Check with
+`python -c "import cryptography"`, and if that fails, run
+`python -m pip install -r requirements.txt` again with the virtual environment
+active. A PDF that really asks for a password to open can't be imported.
 
 ### I imported a big file and got a warning, or it crashed
 
@@ -145,13 +158,14 @@ button row says "Copied with bold" or, when the bold could not go along,
 
 ## Reading and controls
 
-### How do I skip forward or back? I don't see any buttons
+### How do I skip forward or back?
 
-In the main window, skipping is done with the **left and right arrow keys**,
-there are no skip buttons on the main toolbar. The detached window does have
-dedicated skip buttons. How far a skip moves is set by the skip amount in
-Settings (ten words by default), and you can optionally have it pause on the
-word it lands on.
+In the main window, use the **<<** and **>>** buttons either side of the speed
+slider in the bottom control band, or the **left and right arrow keys**. The
+detached window has its own skip buttons in its toolbar, and the arrow keys
+work there too. How far a skip moves is set by the skip amount in Settings (ten
+words by default), and you can optionally have it pause on the word it lands
+on.
 
 ### How do I add and jump to bookmarks?
 

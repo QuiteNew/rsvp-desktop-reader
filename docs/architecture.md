@@ -359,18 +359,36 @@ engine never knows what a button is; it only knows which word is current.
 
 Keeping `core/` free of the GUI is not decoration. It means the parser,
 tokenizer, ORP logic, timing, stores, and the whole `ReaderSession` can be
-tested directly, quickly, and without a display, which is most of what the test
-suite does. The interface then gets a thin smoke-test layer on top to confirm
-the wiring holds. If the one-way dependency ever broke, that separation, and the
+tested directly, quickly, and without a display. The interface is then tested
+on top of that through its real windows, so the GUI tests are about what a
+person can do rather than about the reading logic again. If the one-way dependency ever broke, that separation, and the
 testability that comes with it, would go with it. It is the rule most worth
 protecting in the codebase.
 
 ## Tests and automation
 
 The suite runs in two places. On a development machine, `python -m pytest`
-runs all of it, the GUI smoke tests included. On GitHub, the Tests workflow
-runs the same suite on Linux for every push to `main` and every pull request,
-with a virtual display so the GUI tests have a screen to draw on.
+runs all of it. On GitHub, the Tests workflow runs the same suite on Linux for
+every push to `main` and every pull request, with a virtual display so the GUI
+tests have a screen to draw on, and then checks the code with pyflakes, which
+finds things the tests can miss, such as an import nothing uses or a name that
+is never defined.
+
+Most of the GUI tests start the real app and use it the way a person would:
+real clicks on its buttons, real key presses, real dialogs, with the app's data
+and settings pointed at a temporary folder so a test never touches anyone's
+real ones. The shared pieces live in `tests/conftest.py` (`open_real_app`, a
+plain Tk root, display scaling) and in `tests/tk_helpers.py` and
+`tests/edit_box_helpers.py` (waiting for Tk to settle, clicking, finding
+widgets, the clipboard). System dialogs a test can't click, the colour and
+folder pickers and the file chooser, are swapped for stand-ins that hand back
+a chosen answer.
+
+`pyproject.toml` has pytest capture output with `--capture=sys` rather than its
+default. The default swaps the process's real input and output handles around
+every test, and on Windows that made Tk fail to start now and then, unable to
+read its own library files although they were there. Capturing at the Python
+level keeps the output tidy without touching those handles.
 
 The release workflow runs that same workflow first and builds nothing unless
 it passes, so a tag can't turn a failing commit into a release. The steps for

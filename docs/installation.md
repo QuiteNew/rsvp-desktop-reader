@@ -65,12 +65,19 @@ python -m pip install -r requirements.txt
 ```bash
 python -c "import tkinter; print('Tk:', tkinter.TkVersion)"
 python -c "import customtkinter; print('CustomTkinter:', customtkinter.__version__)"
+python -c "import cryptography; print('cryptography:', cryptography.__version__)"
 ```
 
-Both commands should print a version number with no errors. If the second one
-fails, check that `pip` and `python` point at the same interpreter -
-`python -m pip install ...` (rather than a bare `pip install ...`) keeps them
-in sync.
+All three commands should print a version number with no errors. If the second
+or third one fails, check that `pip` and `python` point at the same
+interpreter - `python -m pip install ...` (rather than a bare `pip install ...`)
+keeps them in sync.
+
+`cryptography`, which `requirements.txt` installs together with its helpers
+`cffi` and `pycparser`, is what lets the app import PDFs that are encrypted only
+to stop printing or editing, a common case for files from Word or Acrobat.
+Without it those PDFs are reported as password-protected, and some of the tests
+fail.
 
 The fonts the app uses (Fredoka and Quicksand, plus OpenDyslexic if you turn on
 the font switch in Settings) are already bundled in `assets/fonts/` and

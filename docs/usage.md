@@ -142,8 +142,9 @@ bold. It is a look for the edit box and does not change the text, see
 
 You do not have to read a whole transcript. Select a portion of text in the
 edit box, right-click it, and choose **Play** to read just that selection, or
-**Detach** to open it in its own window. Selection reading is independent, it
-never changes the transcript's saved text, position, or stats. With the bold
+**Detach** to open it in its own window. Both read the words in groups when the
+transcript has chunking on. Selection reading is independent, it never changes
+the transcript's saved text, position, or stats. With the bold
 look on, the same menu also offers **Copy with bold**, described under
 [Bold word starts and copying with bold](#bold-word-starts-and-copying-with-bold).
 
@@ -212,10 +213,11 @@ begin".
 ### Skipping
 
 Skipping moves backward or forward by a configurable number of words (ten by
-default, adjustable from 1 to 50 in Settings). In the **main window skipping
-is done with the left and right arrow keys**, there are no skip buttons on the
-main toolbar. The detached window does have dedicated skip buttons. You can
-optionally have the reader pause on the word it lands on after a skip.
+default, adjustable from 1 to 50 in Settings). In the main window, use the
+**<<** and **>>** buttons either side of the speed slider in the bottom control
+band, or the **left and right arrow keys**. The detached window has its own
+skip buttons in its toolbar. You can optionally have the reader pause on the
+word it lands on after a skip.
 
 ### The progress bar
 
@@ -478,9 +480,8 @@ position, play state, and stats. While it is out, the main window shows a
 "Transcript window detached" placeholder with a **Bring back** button.
 
 The detached window has its own full set of reading controls: play/pause,
-**skip backward and forward buttons** (unlike the main window, which uses the
-arrow keys), restart, the progress bar with bookmark ticks, its own Bookmarks
-popover, and Stop. It keeps all your settings in sync with the main window.
+**skip backward and forward buttons** in its toolbar, restart, the progress bar
+with bookmark ticks, its own Bookmarks popover, and Stop. It keeps all your settings in sync with the main window.
 
 Two things it deliberately does not do: it has no **Focus mode** (there is no
 sidebar or chrome to hide), and it cannot detach again. Only one detached
