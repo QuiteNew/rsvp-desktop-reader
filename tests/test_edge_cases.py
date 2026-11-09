@@ -2,7 +2,7 @@
 its end, a profile value of a kind nobody taught the profiles to check, the app
 with no transcript open, the reading keys when no widget reports having the
 keyboard, a transcript of a single word, the scrubber with no words at all, and
-the sidebar's search box being typed into for real.
+the sidebar's search box being typed, pasted and cut into for real.
 
 Several of the app's "nothing is open" checks can't be reached by clicking,
 because the footer's controls are all disabled while nothing is open. Those are
@@ -271,3 +271,33 @@ def test_typing_in_the_search_box_narrows_the_list_as_you_type(two_books):
     assert entry.get() == ""
     assert _titles(app) == ["Alpha notes", "Beta notes"]
     assert not app.list_body._search_box._clear_button.winfo_ismapped(), "the X is gone"
+
+
+def _shortcut(entry, key):
+    """Ctrl plus a key, down and up, the way the keyboard sends it. Tk turns
+    Ctrl+V and Ctrl+X into the entry's own paste and cut."""
+    entry.event_generate(f"<Control-KeyPress-{key}>")
+    entry.event_generate(f"<Control-KeyRelease-{key}>")
+    settle(entry, 100)
+
+
+def test_a_paste_or_cut_with_the_keyboard_narrows_the_list_too(two_books):
+    """The box only listens for a key going up. By the time Ctrl+V or Ctrl+X
+    comes up, the entry has already changed, so the list follows it."""
+    app, entry = two_books
+    app.clipboard_clear()
+    app.clipboard_append("beta")
+
+    _shortcut(entry, "v")
+
+    assert entry.get() == "beta"
+    assert _titles(app) == ["Beta notes"]
+    assert app.list_body._search_box._clear_button.winfo_ismapped(), "the X shows"
+
+    entry.selection_range(0, "end")
+    _shortcut(entry, "x")
+
+    assert entry.get() == ""
+    assert _titles(app) == ["Alpha notes", "Beta notes"]
+    assert not app.list_body._search_box._clear_button.winfo_ismapped(), "the X is gone"
+    assert app.clipboard_get() == "beta", "the cut went to the clipboard"

@@ -19,10 +19,10 @@ class SearchBox(ctk.CTkFrame):
     The box does not use a textvariable. CustomTkinter only shows an entry's
     placeholder when it has no textvariable, and the placeholder is worth more
     than the convenience of a traced variable. Instead the caller passes
-    on_change, which is called after every change to the text (typing, pasting,
-    cutting, or the X), and reads the text with get(). get() returns "" while
-    the placeholder is showing, so an empty box always reads as an empty
-    query."""
+    on_change, which is called after every change to the text (typing, a paste
+    or cut from the keyboard, or the X), and reads the text with get(). get()
+    returns "" while the placeholder is showing, so an empty box always reads
+    as an empty query."""
 
     HEIGHT = 28
 
@@ -60,13 +60,16 @@ class SearchBox(ctk.CTkFrame):
         self._clear_button.bind("<Leave>", lambda _event: self._clear_button.configure(image=self._clear_rest_icon))
         self._clear_visible = False
 
-        # Every way the text can change without a textvariable: a key going up
-        # catches typing, backspace, delete and Ctrl+V/Ctrl+X; the virtual
-        # events catch a paste, cut or clear from the right-click menu, which
-        # fire no key event. All land on the same handler, which is idempotent,
-        # so a paste firing both is harmless.
-        for sequence in ("<KeyRelease>", "<<Paste>>", "<<Cut>>", "<<Clear>>"):
-            self._entry.bind(sequence, self._on_entry_event)
+        # A key going up catches every change a person can make here: typing,
+        # Backspace and Delete, and a paste or cut with Ctrl+V, Ctrl+X,
+        # Shift+Insert or Shift+Delete. By then the entry has already changed,
+        # so the handler sees the new text.
+        #
+        # This used to listen for <<Paste>>, <<Cut>> and <<Clear>> as well, for
+        # a right-click menu the box never had. Those were no use anyway: a
+        # binding on the entry runs before the entry's own paste and cut, so it
+        # only ever saw the text from before the change.
+        self._entry.bind("<KeyRelease>", self._on_entry_event)
 
     def get(self) -> str:
         """The text currently typed, or "" while the placeholder is showing."""
@@ -84,9 +87,6 @@ class SearchBox(ctk.CTkFrame):
         self._entry.delete(0, "end")
         self._entry.insert(0, text)
         self._changed()
-
-    def focus_entry(self) -> None:
-        self._entry.focus_set()
 
     def _on_entry_event(self, _event=None) -> None:
         self._changed()
