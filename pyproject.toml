@@ -1,7 +1,13 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "--strict-markers --strict-config"
+# --capture=sys: pytest still catches what each test prints, but leaves the
+# process's real stdin, stdout and stderr handles alone. Its default (fd)
+# swaps those handles for temp files around every test, and on Windows that
+# made Tk fail to start now and then, unable to read its own library files
+# (init.tcl, tk.tcl and others) even though they were there. With capture off
+# or at this level, the same tests started every time.
+addopts = "--strict-markers --strict-config --capture=sys"
 xfail_strict = true
 
 [tool.coverage.report]
