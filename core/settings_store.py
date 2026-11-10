@@ -33,6 +33,9 @@ CHUNK_CHAR_TARGET_RANGE = (15, 60)  # adaptive chunking width, in characters (th
                                      # CHUNK_SIZE_RANGE drives fixed mode.
 LETTER_SPACING_LEVEL_RANGE = (0, MAX_LEVEL)  # 0 is Off. The top level comes from core/letter_spacing.py, which
                                               # holds the gap size for every level, so the two can't drift apart.
+SPEAKER_CUE_SOUNDS = ("off", "change", "per_speaker")  # what Speaker cues plays when the speaker changes:
+                                                         # nothing, one chime for any change, or a chime with
+                                                         # its own pitch for each speaker. The first is the default.
 
 @dataclass
 class AppSettings:
@@ -102,6 +105,12 @@ class AppSettings:
     bold_starts_enabled: bool = False  # global, not per-transcript: draw the start of every word in the edit box in bold.
                                        # Off by default. It is only a look: it never changes the text, and it is not
                                        # part of a reading profile. See core/bold_starts.py.
+    speaker_cues_enabled: bool = False  # global: give a cue in the reader when a labelled transcript changes
+                                        # speaker ("Interviewer:", "Speaker 2:"). Off by default. Not part of a
+                                        # reading profile; it has its own window, like chunking. Which speakers a
+                                        # transcript has lives on the transcript. See core/speakers.py.
+    speaker_cue_sound: str = "off"  # global: the sound Speaker cues plays, one of SPEAKER_CUE_SOUNDS. Off by
+                                    # default. Only Windows plays it for now.
     reopen_last_transcript: bool = True  # global: at launch, open the transcript that was open when the app was
                                          # last closed. On by default. Not part of a reading profile.
     last_transcript_id: int | None = None  # the transcript open in the reader, kept up to date by the app so the
@@ -397,6 +406,20 @@ class SettingsStore:
         return self._settings.bold_starts_enabled is True
 
     @property
+    def speaker_cues_enabled(self) -> bool:
+        # Strictly True, the same care as bold_starts_enabled above, so a
+        # damaged or hand-edited file can't switch cues on by accident.
+        return self._settings.speaker_cues_enabled is True
+
+    @property
+    def speaker_cue_sound(self) -> str:
+        # Anything that isn't one of the known choices (a typo, a choice a
+        # newer version added, a number) reads as no sound, the quiet and
+        # safe answer.
+        sound = self._settings.speaker_cue_sound
+        return sound if sound in SPEAKER_CUE_SOUNDS else SPEAKER_CUE_SOUNDS[0]
+
+    @property
     def reopen_last_transcript(self) -> bool:
         # On unless it is strictly False, since on is the default: a settings
         # file with something odd in this spot keeps the default.
@@ -566,6 +589,14 @@ class SettingsStore:
 
     def set_bold_starts_enabled(self, enabled: bool) -> None:
         self._settings.bold_starts_enabled = enabled
+        self._save()
+
+    def set_speaker_cues_enabled(self, enabled: bool) -> None:
+        self._settings.speaker_cues_enabled = enabled
+        self._save()
+
+    def set_speaker_cue_sound(self, sound: str) -> None:
+        self._settings.speaker_cue_sound = sound
         self._save()
 
     def set_reopen_last_transcript(self, enabled: bool) -> None:
