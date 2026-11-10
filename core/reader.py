@@ -4,10 +4,14 @@ from core.parser import clean_transcript
 from core.tokenizer import tokenize
 from core.orp import split_at_orp, get_orp_index_for_length, ORPWord
 from core.timing import (
-    wpm_to_delay_ms, apply_pacing_multiplier, apply_length_multiplier,
+    wpm_to_delay_ms, apply_length_multiplier,
     effective_pacing_length, apply_warm_up, pacing_multiplier, length_multiplier,
+    SPEAKER_PAUSE_MULTIPLIER,
 )
 from core.punctuation import split_punctuation, classify_pacing, PACE_SENTENCE
+from core.speakers import (
+    SpeakerTurns, auto_speakers, build_turns, clean_custom_speakers, scan_speakers, speaker_candidates,
+)
 
 
 # Soft upper bound on the characters (words plus the single spaces between
@@ -70,7 +74,16 @@ class ReaderSession:
     skipping and seeking all land on a chunk's first word, so a saved position
     or bookmark (a word index) stays valid and flipping chunking off just
     reads the same words one at a time. When chunking is off, every chunk is a
-    single word and the behaviour is identical to single-word reading."""
+    single word and the behaviour is identical to single-word reading.
+
+    When Speaker cues is on (speaker_cues_enabled), the session also knows who
+    is speaking where in a labelled transcript (see core/speakers.py): the
+    transcript's own speaker list when it has one (speaker_custom), otherwise
+    the automatic one. The last word of each speaker's turn gets a longer
+    pause, so the beat falls before the next speaker, and a chunk never runs
+    on into a new speaker's turn. The words themselves never change, so
+    positions and bookmarks mean the same with cues on or off. With cues off
+    none of this happens and reading is exactly as it was before."""
 
     def __init__(
         self, raw_text: str, wpm: int = 300, start_index: int = 0,
@@ -80,6 +93,8 @@ class ReaderSession:
         chunk_size: int = 2,
         chunk_mode: str = CHUNK_MODE_FIXED,
         chunk_char_target: int = 30,
+        speaker_cues_enabled: bool = False,
+        speaker_custom: dict[str, str] | None = None,
     ):
         clean = clean_transcript(raw_text)
         words = tokenize(clean)
@@ -110,27 +125,10 @@ class ReaderSession:
             self._paces.append(classify_pacing(leading + trailing))
             self._length_bands.append(get_orp_index_for_length(effective_pacing_length(orp_subject)))
 
-        # Per-word delay multipliers (relative to the flat base delay),
-        # summed from each position to the end, so remaining_ms() is O(1)
-        # and independent of WPM (which only scales the base delay). Two
-        # tables: punctuation pacing alone, and punctuation combined with
-        # length pacing (the larger of the two per word, matching
-        # current_delay_ms). Toggling length pacing just switches which
-        # table remaining_ms() reads, with no rebuild. Warm-up is
-        # deliberately excluded: it's a brief start-of-session ramp, so
-        # leaving it out keeps the estimate stable and close. Each table has
-        # total_words + 1 entries; the last is 0.0, so a finished session
-        # reads 0. Chunking does not change these: a chunk's dwell is the sum
-        # of its words' delays, so the total time to the end is the same
-        # however the words are grouped.
-        n = len(self.frames)
-        self._suffix_punct_mult = [0.0] * (n + 1)
-        self._suffix_paced_mult = [0.0] * (n + 1)
-        for i in range(n - 1, -1, -1):
-            punct = pacing_multiplier(self._paces[i])
-            paced = max(punct, length_multiplier(self._length_bands[i]))
-            self._suffix_punct_mult[i] = self._suffix_punct_mult[i + 1] + punct
-            self._suffix_paced_mult[i] = self._suffix_paced_mult[i + 1] + paced
+        # Kept for Speaker cues, which reads the labels line by line from the
+        # raw text (the words above have lost their line breaks), both now and
+        # when set_speaker_cues() changes the settings later.
+        self._raw_text = raw_text
 
         self.wpm = wpm
         self.length_pacing_enabled = length_pacing_enabled
@@ -139,19 +137,22 @@ class ReaderSession:
         self.chunk_size = chunk_size
         self.chunk_mode = chunk_mode
         self.chunk_char_target = chunk_char_target
+        self.speaker_cues_enabled = speaker_cues_enabled
+        self.speaker_custom = clean_custom_speakers(speaker_custom)
+
+        # Who speaks where, each word's pause, and the remaining-time tables
+        # built from those pauses. See _rebuild_speakers().
+        self._rebuild_speakers()
 
         # Group the words into chunks, using whatever limits the current mode
         # implies (see _chunk_limits()). With chunking off those collapse to
         # one word per chunk, leaving single-word reading unchanged. _chunks is
         # the ordered list of (start, end) word-index ranges (end exclusive);
         # _chunk_bounds_of_word maps each word index to the (start, end) of its
-        # chunk, for O(1) lookup when advancing and snapping.
-        max_words, char_limit = self._chunk_limits()
-        self._chunks: list[tuple[int, int]] = self._build_chunks(max_words, char_limit)
-        self._chunk_bounds_of_word: list[tuple[int, int]] = [(0, 0)] * n
-        for start, end in self._chunks:
-            for j in range(start, end):
-                self._chunk_bounds_of_word[j] = (start, end)
+        # chunk, for O(1) lookup when advancing and snapping. The speakers come
+        # first because a chunk never crosses into a new speaker's turn.
+        self._rebuild_chunks()
+        n = len(self.frames)
 
         # Clamp the start position, then snap it to the start of the chunk that
         # contains it, so a session always begins on a chunk boundary.
@@ -186,13 +187,70 @@ class ReaderSession:
             return ADAPTIVE_MAX_WORDS, self.chunk_char_target
         return self.chunk_size, CHUNK_CHAR_CAP
 
+    def _find_speaker_turns(self) -> SpeakerTurns:
+        """Who speaks where, as core/speakers.py works it out, or no turns at
+        all while Speaker cues is off. The transcript's own speaker list
+        (Custom) is used when there is one, otherwise the automatic one.
+
+        The speaker scan counts words the same way this session does, so the
+        two always agree. If they ever didn't, the scan's positions couldn't
+        be trusted, and no turns at all is better than cues on the wrong
+        words."""
+        if not self.speaker_cues_enabled:
+            return SpeakerTurns()
+        scan = scan_speakers(self._raw_text)
+        if scan.word_count != len(self.frames):
+            return SpeakerTurns()
+        speaker_of = self.speaker_custom
+        if speaker_of is None:
+            speaker_of = auto_speakers(speaker_candidates(scan))
+        return build_turns(scan, speaker_of)
+
+    def _rebuild_speakers(self) -> None:
+        """Work out the speaker turns, then each word's pause and the
+        remaining-time tables built from those pauses. Shared by __init__ and
+        set_speaker_cues(), so the two can't drift apart.
+
+        A word's pause is its punctuation pause, except for the last word of
+        a speaker's turn, which gets SPEAKER_PAUSE_MULTIPLIER when that's
+        longer. With Speaker cues off there are no turns, so every word keeps
+        its plain punctuation pause, exactly as before Speaker cues existed.
+
+        The tables hold each word's delay multiplier (relative to the flat
+        base delay), summed from each position to the end, so remaining_ms()
+        is O(1) and independent of WPM (which only scales the base delay).
+        Two tables: the pause alone, and the pause combined with length
+        pacing (the larger of the two per word, matching current_delay_ms).
+        Toggling length pacing just switches which table remaining_ms()
+        reads, with no rebuild. Warm-up is deliberately excluded: it's a
+        brief start-of-session ramp, so leaving it out keeps the estimate
+        stable and close. Each table has total_words + 1 entries; the last is
+        0.0, so a finished session reads 0. Chunking does not change these: a
+        chunk's dwell is the sum of its words' delays, so the total time to
+        the end is the same however the words are grouped."""
+        self._speaker_turns = self._find_speaker_turns()
+        self._turn_ends = frozenset(start - 1 for start in self._speaker_turns.starts if start > 0)
+        n = len(self.frames)
+        self._pause_mults = [pacing_multiplier(pace) for pace in self._paces]
+        for i in self._turn_ends:
+            self._pause_mults[i] = max(self._pause_mults[i], SPEAKER_PAUSE_MULTIPLIER)
+        self._suffix_punct_mult = [0.0] * (n + 1)
+        self._suffix_paced_mult = [0.0] * (n + 1)
+        for i in range(n - 1, -1, -1):
+            pause = self._pause_mults[i]
+            paced = max(pause, length_multiplier(self._length_bands[i]))
+            self._suffix_punct_mult[i] = self._suffix_punct_mult[i + 1] + pause
+            self._suffix_paced_mult[i] = self._suffix_paced_mult[i + 1] + paced
+
     def _build_chunks(self, max_words: int, char_limit: int) -> list[tuple[int, int]]:
         """Group the word indices into chunks, scanning left to right and
-        closing the current chunk when any of three things holds: it has
+        closing the current chunk when any of four things holds: it has
         reached `max_words` words; the word just added ends a sentence (so a
-        chunk never crosses a sentence boundary); or adding the next word would
-        push the chunk past `char_limit` characters (words plus the single
-        spaces between them). The first word of a chunk is always included, so
+        chunk never crosses a sentence boundary); the word just added is the
+        last of a speaker's turn (only with Speaker cues on, so a chunk never
+        runs on into the next speaker); or adding the next word would push the
+        chunk past `char_limit` characters (words plus the single spaces
+        between them). The first word of a chunk is always included, so
         a single word longer than the limit still forms a one-word chunk rather
         than an empty one, and the final chunk may be short. With max_words 1
         every chunk is a single word, whatever the char limit."""
@@ -213,6 +271,8 @@ class ReaderSession:
                 if i - start >= max_words:
                     break
                 if self._paces[i - 1] == PACE_SENTENCE:
+                    break
+                if i - 1 in self._turn_ends:
                     break
             chunks.append((start, i))
             start = i
@@ -252,6 +312,21 @@ class ReaderSession:
         on screen, so the display can measure the widest chunk once and fit the
         font to the reading row. With chunking off there is one entry per word."""
         return [assemble_chunk_text(self.frames[start:end]) for start, end in self._chunks]
+
+    @property
+    def speaker_turns(self) -> SpeakerTurns:
+        """Who speaks where (see core/speakers.py). Empty while Speaker cues
+        is off, or when the text has no speakers."""
+        return self._speaker_turns
+
+    @property
+    def current_speaker(self) -> str | None:
+        """Who is speaking at the current word: the name shown for that
+        speaker, core/speakers.py's UNNAMED_SPEAKER for a ">>" change, or None
+        before the first turn, while Speaker cues is off, or once finished."""
+        if self.is_finished:
+            return None
+        return self._speaker_turns.speaker_at(self.index)
 
     def current_frame(self) -> ORPWord | None:
         if self.is_finished:
@@ -324,13 +399,15 @@ class ReaderSession:
 
     def _paced_delay_at(self, i: int) -> int:
         """The per-word delay for word i from WPM and pacing, before the
-        warm-up ramp. With length pacing off it is the base delay with
-        punctuation pacing; with it on, the larger of the punctuation and
-        long-word delays, since the two do not stack. Pulled out so the
-        single-word delay and a chunk's summed delay compute each word the same
-        way."""
+        warm-up ramp. With length pacing off it is the base delay with the
+        word's pause (punctuation, or the speaker pause at the end of a turn);
+        with it on, the larger of that and the long-word delay, since the two
+        do not stack. Pulled out so the single-word delay and a chunk's summed
+        delay compute each word the same way."""
         base = wpm_to_delay_ms(self.wpm)
-        punctuation_delay = apply_pacing_multiplier(base, self._paces[i])
+        # Rounded the same way core/timing.py's apply_pacing_multiplier()
+        # does, so with Speaker cues off every delay is exactly what it was.
+        punctuation_delay = round(base * self._pause_mults[i])
         if not self.length_pacing_enabled:
             return punctuation_delay
         # Comparing the two already-applied delays matches comparing the
@@ -458,6 +535,21 @@ class ReaderSession:
             self.chunk_mode = mode
         if char_target is not None:
             self.chunk_char_target = char_target
+        self._rebuild_chunks()
+        if self.index < self.total_words:
+            self.index = self._chunk_bounds_of_word[self.index][0]
+
+    def set_speaker_cues(self, enabled: bool, custom: dict[str, str] | None = None) -> None:
+        """Turn Speaker cues on or off for this already-built session, or give
+        it a different speaker list (None for the automatic one), in place.
+        Works the turns, the pauses and the remaining-time tables out again,
+        then the chunks, since a chunk never crosses into a new speaker's turn,
+        and snaps the current word to the start of the chunk that now holds it,
+        the same way set_chunking() keeps the reading position. Leaves the
+        warm-up ramp alone. A finished session keeps its position."""
+        self.speaker_cues_enabled = enabled
+        self.speaker_custom = clean_custom_speakers(custom)
+        self._rebuild_speakers()
         self._rebuild_chunks()
         if self.index < self.total_words:
             self.index = self._chunk_bounds_of_word[self.index][0]

@@ -75,7 +75,9 @@ def test_these_are_not_labels(line):
 
 
 def test_a_label_of_exactly_the_longest_length_is_found_and_one_more_is_not():
-    longest = "A" * MAX_LABEL_CHARS
+    # Pinned as a plain number, so a change to the limit shows up here.
+    assert MAX_LABEL_CHARS == 30
+    longest = "A" * 30
     assert _names(f"{longest}: hi") == [longest]
     assert _names(f"{longest}B: hi") == []
 
@@ -233,7 +235,12 @@ def test_auto_switches_on_labels_that_appear_often_enough():
         SpeakerCandidate("bob", "Bob", AUTO_MIN_APPEARANCES),
         SpeakerCandidate("note", "Note", AUTO_MIN_APPEARANCES - 1),
     ]
-    assert auto_speakers(candidates) == {"ann": "ann", "bob": "bob"}
+    assert auto_speakers(candidates) == {"ann": "Ann", "bob": "Bob"}
+
+
+def test_auto_names_each_speaker_the_way_it_was_first_written():
+    scan = scan_speakers("INTERVIEWER: a\nBob: b\nInterviewer: c\nBOB: d")
+    assert auto_speakers(speaker_candidates(scan)) == {"interviewer": "INTERVIEWER", "bob": "Bob"}
 
 
 def test_label_keys_ignore_case_and_extra_spaces():
@@ -303,7 +310,7 @@ def test_from_text_to_turns_with_auto():
     text = "Welcome.\nAnn: hi\nBob: hey\nNote: once only\nAnn: bye\nBob: see you"
     scan = scan_speakers(text)
     turns = build_turns(scan, auto_speakers(speaker_candidates(scan)))
-    assert turns == SpeakerTurns((1, 3, 8, 10), ("ann", "bob", "ann", "bob"))
+    assert turns == SpeakerTurns((1, 3, 8, 10), ("Ann", "Bob", "Ann", "Bob"))
 
 
 # --- Looking up a speaker --------------------------------------------------

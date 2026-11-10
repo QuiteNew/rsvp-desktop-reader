@@ -233,9 +233,11 @@ def speaker_candidates(scan: SpeakerScan) -> list[SpeakerCandidate]:
 
 def auto_speakers(candidates: list[SpeakerCandidate]) -> dict[str, str]:
     """What Auto switches on: every label that appears at least
-    AUTO_MIN_APPEARANCES times, each its own speaker. Shaped for
-    build_turns()."""
-    return {c.key: c.key for c in candidates if c.appearances >= AUTO_MIN_APPEARANCES}
+    AUTO_MIN_APPEARANCES times, each its own speaker, named the way it was
+    first written. That's the same shape a Custom list has (label key to
+    the name shown), so either one goes straight into build_turns(), and a
+    speaker is known by the name shown in both."""
+    return {c.key: c.name for c in candidates if c.appearances >= AUTO_MIN_APPEARANCES}
 
 
 def build_turns(scan: SpeakerScan, speaker_of: Mapping[str, str]) -> SpeakerTurns:
