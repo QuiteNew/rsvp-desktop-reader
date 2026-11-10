@@ -376,6 +376,14 @@ def _open_with_text(app, transcript, settle_ms=200):
     settle(app, settle_ms)
 
 
+# Long enough for a reading to count as one "time read": the store only counts
+# a session that lasted MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ seconds, and this
+# adds half a second of room. The test used to wait 1.5 seconds and rely on the
+# import itself to make up the rest. That held on Windows, but on a faster
+# machine the import finished too soon and the reading never counted.
+READ_LONG_ENOUGH_MS = TranscriptStore.MIN_ACTIVE_SECONDS_TO_COUNT_AS_READ * 1000 + 500
+
+
 def test_replace_while_a_transcript_is_being_edited_leaves_the_imported_one_as_it_was_exported(data_dir, tmp_path, open_real_app, file_dialogs):
     with open_real_app(data_dir) as app:
         mine, _ = _two_transcripts(app)
@@ -458,7 +466,7 @@ def test_expand_while_a_transcript_is_being_read_still_saves_the_reading(data_di
         mine, _ = _two_transcripts(app)
         app.store.set_transcript_text(mine.id, WORDS)
         app.store.set_transcript_paused(mine.id, False)
-        _open_with_text(app, mine, settle_ms=1500)
+        _open_with_text(app, mine, settle_ms=READ_LONG_ENOUGH_MS)
 
         message = _import_with(app, tmp_path, file_dialogs, "Expand")
         _dismiss(app, message)

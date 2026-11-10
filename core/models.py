@@ -106,3 +106,15 @@ class Transcript:
     # key for this, which default_factory handles as an empty list, so no
     # explicit backfill is needed (unlike the color flags above).
     bookmarks: list[Bookmark] = field(default_factory=list)
+
+    # Speaker cues (see core/speakers.py). None means Auto: the speakers are
+    # worked out from the text each time, every label that appears often
+    # enough. A dict means the user picked them by hand (Custom). It maps the
+    # key of each label that's switched on, as core/speakers.label_key()
+    # makes it, to the name shown for it. A label that isn't in the dict is
+    # off, and two labels with the same name are one speaker, which is how
+    # "Dr. Smith" and "Smith" get merged. None is also the right value for
+    # old save files, so no backfill is needed. core/storage.py's
+    # parse_data() cleans whatever is loaded, so a damaged value reads as
+    # Auto instead of breaking the save.
+    speaker_custom: dict[str, str] | None = None

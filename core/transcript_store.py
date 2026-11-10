@@ -3,6 +3,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 from core.models import Transcript, Bookmark
+from core.speakers import clean_custom_speakers
 from core.storage import save_state, read_state, DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS
 
 DEFAULT_SPACE = "General"
@@ -387,6 +388,18 @@ class TranscriptStore:
                 t.chunk_mode = mode
             if char_target is not None:
                 t.chunk_char_target = char_target
+            self._save()
+
+    def set_transcript_speakers(self, transcript_id: int, custom: dict[str, str] | None) -> None:
+        """Set a transcript's Speaker cues list: None for Auto, or a dict of
+        label key to the name shown, for Custom (see Transcript.speaker_custom).
+        It's cleaned on the way in, the same as when it's loaded, and the
+        store keeps its own copy, so changing the caller's dict afterwards
+        changes nothing here. Saved straight away, like the other
+        per-transcript setters."""
+        t = self._find_transcript(transcript_id)
+        if t:
+            t.speaker_custom = clean_custom_speakers(custom)
             self._save()
 
     def set_transcript_draft_text(self, transcript_id: int, draft_text: str) -> None:

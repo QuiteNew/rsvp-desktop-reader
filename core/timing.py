@@ -17,6 +17,16 @@ from core.punctuation import PACE_SENTENCE, PACE_CLAUSE
 SENTENCE_PAUSE_MULTIPLIER = 2.5
 CLAUSE_PAUSE_MULTIPLIER = 1.5
 
+# The pause before a new speaker, used only while Speaker cues is on (see
+# core/speakers.py). It goes on the last word of a speaker's turn, in place
+# of that word's own pause when it's longer, so the beat falls just before
+# the next speaker's label. Larger than SENTENCE_PAUSE_MULTIPLIER on
+# purpose, so a turn that ends with a full stop still gets a clear extra
+# beat: at 300 WPM that's 700 ms, against 500 ms for a sentence end.
+# Chosen with the user, and like the others above, not tuned against real
+# reading yet.
+SPEAKER_PAUSE_MULTIPLIER = 3.5
+
 # Multipliers applied on top of the flat per-word delay for a long
 # word, when length-aware pacing is enabled (see core/reader.py's
 # length_pacing_enabled). The three bands reuse the same length

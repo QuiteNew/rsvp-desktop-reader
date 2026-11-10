@@ -6,6 +6,7 @@ from dataclasses import asdict, fields as dataclass_fields
 from typing import NamedTuple
 
 from core.models import Transcript, Bookmark
+from core.speakers import clean_custom_speakers
 
 DEFAULT_DATA_DIR = Path.home() / ".rsvp_reader"
 
@@ -88,6 +89,12 @@ def parse_data(data: dict) -> dict | None:
                     Bookmark(**{k: v for k, v in b.items() if k in _BOOKMARK_FIELDS})
                     for b in t["bookmarks"]
                 ]
+            # A Custom speaker list is cleaned the same way it is when it's
+            # set, so a damaged one reads as Auto (or loses just its bad
+            # entries) instead of failing the whole save. A file without the
+            # key keeps the default, Auto.
+            if "speaker_custom" in t:
+                t["speaker_custom"] = clean_custom_speakers(t["speaker_custom"])
         # Only the keys Transcript knows go in, the same as for bookmarks
         # above. A field that is really required (id, title, space) is still
         # required, so a transcript missing one still makes this return None.
