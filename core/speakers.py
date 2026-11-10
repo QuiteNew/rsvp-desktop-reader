@@ -49,6 +49,10 @@ How it is used, in three steps:
    which labels are switched on and who each one is. Mapping two labels
    to the same speaker merges them ("Dr. Smith" and "Smith").
 
+A transcript keeps the user's own picks, if any, in
+Transcript.speaker_custom, already shaped for build_turns().
+clean_custom_speakers() makes a saved one safe to use.
+
 No GUI dependency here (see core/ vs gui/ in the project brief)."""
 
 import bisect
@@ -148,6 +152,33 @@ def label_key(name: str) -> str:
     """The form used to match labels, so "INTERVIEWER", "Interviewer"
     and "Interviewer " are one speaker."""
     return " ".join(name.split()).casefold()
+
+
+def clean_custom_speakers(value) -> dict[str, str] | None:
+    """A transcript's Custom speaker list (Transcript.speaker_custom) made
+    safe to use, for when it comes from a save file, an import or the
+    Settings window.
+
+    None means Auto and stays None. So does anything that isn't a dict at
+    all, so a damaged value falls back to Auto rather than to no speakers.
+    Inside a dict, an entry is kept only when its key is a label key the
+    way label_key() makes it, and its name, with spaces squeezed, is 1 to
+    MAX_LABEL_CHARS characters long. Anything else is dropped on its own,
+    so one bad entry doesn't cost the rest. An empty dict stays empty:
+    Custom with every speaker switched off is a real choice. The answer is
+    always a new dict, never the one passed in."""
+    if not isinstance(value, dict):
+        return None
+    cleaned = {}
+    for key, name in value.items():
+        if not isinstance(key, str) or not key or key != label_key(key):
+            continue
+        if not isinstance(name, str):
+            continue
+        name = " ".join(name.split())
+        if 0 < len(name) <= MAX_LABEL_CHARS:
+            cleaned[key] = name
+    return cleaned
 
 
 def _read_label(text: str) -> str | None:
