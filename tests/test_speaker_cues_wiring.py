@@ -21,8 +21,6 @@ switches them on. Cat starts only one, so Auto leaves her off.
 SELECTION's words: there(0) Bob:(1) hello you Ann:(4) and. Each name is in it
 only once, so on its own Auto would find no speakers in it at all."""
 
-import pytest
-
 import core.settings_store as settings_store
 
 from tk_helpers import click_button, settle
