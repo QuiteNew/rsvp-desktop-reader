@@ -52,6 +52,8 @@ How it is used, in three steps:
 A transcript keeps the user's own picks, if any, in
 Transcript.speaker_custom, already shaped for build_turns().
 clean_custom_speakers() makes a saved one safe to use.
+transcript_speakers() gives the list a whole transcript is read with,
+which is also the one a selection played on its own is read with.
 
 No GUI dependency here (see core/ vs gui/ in the project brief)."""
 
@@ -238,6 +240,27 @@ def auto_speakers(candidates: list[SpeakerCandidate]) -> dict[str, str]:
     the name shown), so either one goes straight into build_turns(), and a
     speaker is known by the name shown in both."""
     return {c.key: c.name for c in candidates if c.appearances >= AUTO_MIN_APPEARANCES}
+
+
+def transcript_speakers(raw_text: str, custom: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The speaker list a whole transcript is read with: its own Custom
+    list when it has one (even an empty one), otherwise what Auto finds in
+    raw_text.
+
+    A selection played on its own (right-click Play or Detach) is read
+    with this list, worked out from the whole transcript, and not with
+    one worked out from the selection alone. A short selection often
+    holds each label only once, so Auto would switch none of them on,
+    even though the whole transcript shows they're speakers. Handed to
+    ReaderSession as its speaker_custom, this list makes a label in the
+    selection count exactly the way it does when the whole transcript is
+    read.
+
+    Always a new dict, so changing it never changes the transcript's
+    own."""
+    if custom is not None:
+        return dict(custom)
+    return auto_speakers(speaker_candidates(scan_speakers(raw_text)))
 
 
 def build_turns(scan: SpeakerScan, speaker_of: Mapping[str, str]) -> SpeakerTurns:
