@@ -54,13 +54,16 @@ Transcript.speaker_custom, already shaped for build_turns().
 clean_custom_speakers() makes a saved one safe to use.
 transcript_speakers() gives the list a whole transcript is read with,
 which is also the one a selection played on its own is read with.
+speaker_rows() and speakers_to_save() are the two ends of the speaker
+list in the Configure speaker cues window: what it shows, and what it
+saves.
 
 No GUI dependency here (see core/ vs gui/ in the project brief)."""
 
 import bisect
 import re
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from core.parser import strip_timestamps
 
@@ -240,6 +243,56 @@ def auto_speakers(candidates: list[SpeakerCandidate]) -> dict[str, str]:
     the name shown), so either one goes straight into build_turns(), and a
     speaker is known by the name shown in both."""
     return {c.key: c.name for c in candidates if c.appearances >= AUTO_MIN_APPEARANCES}
+
+
+@dataclass(frozen=True)
+class SpeakerRow:
+    """One line of the speaker list in the Configure speaker cues window: a
+    label found in the transcript, how many lines it starts, whether it's
+    ticked (switched on) and the name it's shown with."""
+    key: str
+    label: str
+    appearances: int
+    ticked: bool
+    name: str
+
+
+def speaker_rows(raw_text: str, custom: Mapping[str, str] | None = None) -> list[SpeakerRow]:
+    """The rows the window shows for a transcript: every label found in
+    raw_text, the ones seen only once included, in order of first
+    appearance. A row is ticked and named the way the transcript's own list
+    has it, or the way Auto would when it has no list of its own (None).
+    A row that isn't in the list shows its label as its name, ready to be
+    ticked."""
+    candidates = speaker_candidates(scan_speakers(raw_text))
+    chosen = dict(custom) if custom is not None else auto_speakers(candidates)
+    return [
+        SpeakerRow(c.key, c.name, c.appearances, c.key in chosen, chosen.get(c.key, c.name))
+        for c in candidates
+    ]
+
+
+def speaker_row_name(row: SpeakerRow) -> str:
+    """The name a row is saved with: what was typed, with its spaces
+    squeezed and cut to MAX_LABEL_CHARS, or the label itself when the box
+    was left empty. Two rows saved with the same name are one speaker."""
+    name = " ".join(row.name.split())[:MAX_LABEL_CHARS].rstrip()
+    return name or row.label
+
+
+def speakers_to_save(rows: Iterable[SpeakerRow]) -> dict[str, str] | None:
+    """What the window saves as the transcript's speaker list
+    (Transcript.speaker_custom): every ticked row, by its key, with
+    speaker_row_name() as the name.
+
+    When that's exactly what Auto picks anyway, the answer is None
+    (Automatic) and not a Custom list that happens to match. So ticking a
+    box and unticking it again leaves the transcript on Automatic, and it
+    keeps following the text if the text changes later."""
+    rows = list(rows)
+    chosen = {row.key: speaker_row_name(row) for row in rows if row.ticked}
+    auto = {row.key: row.label for row in rows if row.appearances >= AUTO_MIN_APPEARANCES}
+    return None if chosen == auto else chosen
 
 
 def transcript_speakers(raw_text: str, custom: Mapping[str, str] | None = None) -> dict[str, str]:
