@@ -112,6 +112,7 @@ class SettingsWindow(ctk.CTkToplevel):
         on_skip_word_count_changed=None,
         on_pause_on_skip_changed=None,
         on_configure_chunking=None,
+        on_configure_speaker_cues=None,
         reopen_last_transcript=True,
     ):
         super().__init__(master)
@@ -153,6 +154,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.on_skip_word_count_changed = on_skip_word_count_changed
         self.on_pause_on_skip_changed = on_pause_on_skip_changed
         self.on_configure_chunking = on_configure_chunking
+        self.on_configure_speaker_cues = on_configure_speaker_cues
         self._data_directory = data_directory
         self._defaults_scroll = None  # set once the Defaults tab's scrollable frame exists
         self._defaults_items = []  # the Defaults tab's entries, in display order; see _defaults_item()
@@ -643,6 +645,20 @@ class SettingsWindow(ctk.CTkToplevel):
         ).pack(fill="x", pady=(0, 20))
         self._separate(holder)
 
+        speaker_cues_description = "In transcripts with names at the start of their lines, like \"Interviewer:\", show who is speaking and give a cue when the speaker changes: a name tag, a brief flash and, on Windows, a soft chime. Opens a window where you can turn this on, pick the cues and the sound, and check the speakers found in the transcript open now."
+        holder = self._defaults_item(
+            scroll, "Configure speaker cues",
+            "speaker speakers cue cues who is talking voice interview dialogue conversation name tag flash chime sound bell",
+            speaker_cues_description,
+        )
+        self._styled_button(holder, "Configure speaker cues…", self._handle_configure_speaker_cues, width=180).pack(anchor="w", pady=(0, 5))
+        WrappingLabel(
+            holder,
+            text=speaker_cues_description,
+            text_color=COCOA_INK, font=self.small_font,
+        ).pack(fill="x", pady=(0, 20))
+        self._separate(holder)
+
         holder = self._defaults_item(
             scroll, "Increase the word size by this many pixels each time +/- is clicked",
             "font size step increment plus minus buttons zoom change amount",
@@ -999,6 +1015,10 @@ class SettingsWindow(ctk.CTkToplevel):
     def _handle_configure_chunking(self) -> None:
         if self.on_configure_chunking:
             self.on_configure_chunking()
+
+    def _handle_configure_speaker_cues(self) -> None:
+        if self.on_configure_speaker_cues:
+            self.on_configure_speaker_cues()
 
     def _handle_reset_defaults(self) -> None:
         original = AppSettings()

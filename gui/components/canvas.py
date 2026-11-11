@@ -441,6 +441,23 @@ class Canvas(ctk.CTkFrame):
         # their other styling (see open_selection_preview), so they aren't
         # updated here.
 
+    def refresh_transcript_speakers(self, transcript_id) -> None:
+        """This transcript's speaker list has just changed in the store, so
+        any reader showing it works its turns out again in place, with the new
+        list. A selection being played from it is read with the whole
+        transcript's list worked out again (see play_selection()), and the
+        detached window, when it holds the transcript, reads the new list from
+        the transcript itself. Selection previews keep the list they opened
+        with, like the rest of their settings. A reader with nothing loaded
+        (the edit box is showing) has nothing to work out; it reads the new
+        list when it next starts."""
+        transcript = self.current_transcript
+        if transcript is not None and transcript.id == transcript_id:
+            custom = self._whole_transcript_speakers() if self._ephemeral else transcript.speaker_custom
+            self.reader_display.set_speaker_cues(self._speaker_cues_enabled, custom)
+        if self._detached_window and self._detached_window.transcript.id == transcript_id:
+            self._detached_window.set_speaker_cues_enabled(self._speaker_cues_enabled)
+
     def set_speaker_cue_options(self, name_tag: bool, flash: bool, sound: str, style: str) -> None:
         """How Speaker cues look and sound: the name tag, the flash, which
         chime and in which style (see ReaderDisplay.set_speaker_cue_options).

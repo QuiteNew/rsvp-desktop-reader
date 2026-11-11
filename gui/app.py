@@ -19,6 +19,7 @@ from gui.components.add_transcript_chooser_dialog import AddTranscriptChooserDia
 from gui.components.add_space_dialog import AddSpaceDialog
 from gui.components.settings_window import SettingsWindow
 from gui.components.chunking_settings_window import ChunkingSettingsWindow
+from gui.components.speaker_cues_window import SpeakerCuesWindow
 from gui.components.delete_transcript_dialog import DeleteTranscriptDialog
 from gui.components.space_selection_dialog import SpaceSelectionDialog
 from gui.components.delete_space_dialog import DeleteSpaceDialog
@@ -862,6 +863,7 @@ class RSVPApp(ctk.CTk):
             on_skip_word_count_changed=self._handle_skip_word_count_live,
             on_pause_on_skip_changed=self._handle_pause_on_skip_live,
             on_configure_chunking=self._open_chunking_settings,
+            on_configure_speaker_cues=self._open_speaker_cues_settings,
             appearance_mode=self.settings_store.appearance_mode,
             transcripts=self.store.transcripts,
             reopen_last_transcript=self.settings_store.reopen_last_transcript,
@@ -1362,6 +1364,45 @@ class RSVPApp(ctk.CTk):
         self.store.set_transcript_chunking(self._current_transcript.id, enabled, size, mode, char_target)
         self.canvas.set_chunking(enabled, size, mode, char_target)
         self.footer.set_chunking(enabled, size)
+
+    def _open_speaker_cues_settings(self) -> None:
+        """Opens the Speaker cues window from the Settings "Configure speaker
+        cues" button, parented to the Settings window for the same reason as
+        the chunking window (see _open_chunking_settings). It's handed the
+        saved settings, the transcript open right now for its speaker list
+        (None when nothing is open, and the window then shows no list), and
+        the app's chime player for its Listen button."""
+        SpeakerCuesWindow(
+            self._settings_window,
+            enabled=self.settings_store.speaker_cues_enabled,
+            name_tag=self.settings_store.speaker_cue_name_tag_enabled,
+            flash=self.settings_store.speaker_cue_flash_enabled,
+            sound=self.settings_store.speaker_cue_sound,
+            style=self.settings_store.speaker_cue_style,
+            transcript=self._current_transcript,
+            on_apply=self._apply_speaker_cue_settings,
+            on_apply_speakers=self._apply_transcript_speakers,
+            chime_player=self.chime_player,
+        )
+
+    def _apply_speaker_cue_settings(self, enabled: bool, name_tag: bool, flash: bool, sound: str, style: str) -> None:
+        """One Apply from the Speaker cues window, for the part that belongs to
+        the whole app. Saved, then handed to the canvas, which passes it on to
+        the reader on screen and the detached window."""
+        self.settings_store.set_speaker_cues_enabled(enabled)
+        self.settings_store.set_speaker_cue_name_tag_enabled(name_tag)
+        self.settings_store.set_speaker_cue_flash_enabled(flash)
+        self.settings_store.set_speaker_cue_sound(sound)
+        self.settings_store.set_speaker_cue_style(style)
+        self.canvas.set_speaker_cue_options(name_tag, flash, sound, style)
+        self.canvas.set_speaker_cues_enabled(enabled)
+
+    def _apply_transcript_speakers(self, transcript_id: int, speakers: dict[str, str] | None) -> None:
+        """The other part of an Apply from the Speaker cues window: the speaker
+        list of the transcript it showed (None for Automatic). Saved, then the
+        readers showing that transcript work their turns out again."""
+        self.store.set_transcript_speakers(transcript_id, speakers)
+        self.canvas.refresh_transcript_speakers(transcript_id)
 
     def _handle_export_requested(self, path: str) -> None:
         """Builds a bundle from the two stores' current in-memory state
