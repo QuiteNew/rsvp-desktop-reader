@@ -27,11 +27,11 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
     with a per-transcript number, e.g. "My transcript (2)", and each opens
     slightly offset from the last so they don't stack exactly.
 
-    Its styling and reading settings (WPM, colours, font, guide mark and
-    chunking) are a snapshot of the transcript's settings at the moment it
-    opened. Later Settings changes in the main app don't flow into an
-    already-open preview, which keeps these throwaway windows simple and
-    self-contained. The bold word starts in its edit box are the same: it
+    Its styling and reading settings (WPM, colours, font, guide mark,
+    chunking and Speaker cues) are a snapshot of the transcript's settings
+    at the moment it opened. Later Settings changes in the main app don't
+    flow into an already-open preview, which keeps these throwaway windows
+    simple and self-contained. The bold word starts in its edit box are the same: it
     opens with the look the app has at that moment, and its own button
     changes only this window, so it is neither saved nor passed on to the
     other windows."""
@@ -68,6 +68,13 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         chunk_size: int = 2,
         chunk_mode: str = CHUNK_MODE_FIXED,
         chunk_char_target: int = 30,
+        speaker_cues_enabled: bool = False,
+        speaker_custom: dict[str, str] | None = None,
+        speaker_cue_name_tag_enabled: bool = True,
+        speaker_cue_flash_enabled: bool = True,
+        speaker_cue_sound: str = "off",
+        speaker_cue_style: str = "bell",
+        chime_player=None,
     ):
         super().__init__(master)
 
@@ -94,6 +101,11 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.chunk_size = chunk_size
         self.chunk_mode = chunk_mode
         self.chunk_char_target = chunk_char_target
+        self.speaker_cues_enabled = speaker_cues_enabled
+        # The speaker list to read with, the whole transcript's rather than
+        # one worked out from this window's own text (see
+        # Canvas._whole_transcript_speakers()).
+        self.speaker_custom = speaker_custom
 
         self.title(title)
         apply_app_icon(self)
@@ -151,6 +163,10 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.reader_display.set_scrub_pause(scrub_pause_enabled)
         self.reader_display.set_peripheral_context(peripheral_context_enabled)
         self.reader_display.set_letter_spacing(letter_spacing_level)
+        self.reader_display.set_speaker_cue_options(
+            speaker_cue_name_tag_enabled, speaker_cue_flash_enabled, speaker_cue_sound, speaker_cue_style,
+        )
+        self.reader_display.set_chime_player(chime_player)
 
         self._show_input()
         self._bind_shortcuts()
@@ -211,6 +227,8 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
             chunk_size=self.chunk_size,
             chunk_mode=self.chunk_mode,
             chunk_char_target=self.chunk_char_target,
+            speaker_cues_enabled=self.speaker_cues_enabled,
+            speaker_custom=self.speaker_custom,
         )
         self.reader_display.load_session(session, start_paused=False)
         self.scrub_bar.set_total(session.total_words)

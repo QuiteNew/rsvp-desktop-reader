@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 from dataclasses import dataclass, asdict, field, fields
 
+from core.chime import CHIME_STYLES
 from core.letter_spacing import MAX_LEVEL
 from core.profiles import Profile, ProfileError, clean_name, clean_profile_list, name_problem, sanitize_values
 from core.storage import DEFAULT_DATA_DIR, LIVE_SAVE_INTERVAL_SECONDS, DamagedFile, keep_damaged_copy
@@ -111,6 +112,12 @@ class AppSettings:
                                         # transcript has lives on the transcript. See core/speakers.py.
     speaker_cue_sound: str = "off"  # global: the sound Speaker cues plays, one of SPEAKER_CUE_SOUNDS. Off by
                                     # default. Only Windows plays it for now.
+    speaker_cue_style: str = CHIME_STYLES[0]  # global: what the chime sounds like, one of core/chime.py's
+                                              # CHIME_STYLES (bell, soft, glass, wood). Bell by default.
+    speaker_cue_name_tag_enabled: bool = True  # global: show the current speaker's name, small and dimmed,
+                                               # above the flashing word. On by default.
+    speaker_cue_flash_enabled: bool = True  # global: at a new speaker, light the name up and warm the
+                                            # reading background for a moment. On by default.
     reopen_last_transcript: bool = True  # global: at launch, open the transcript that was open when the app was
                                          # last closed. On by default. Not part of a reading profile.
     last_transcript_id: int | None = None  # the transcript open in the reader, kept up to date by the app so the
@@ -420,6 +427,24 @@ class SettingsStore:
         return sound if sound in SPEAKER_CUE_SOUNDS else SPEAKER_CUE_SOUNDS[0]
 
     @property
+    def speaker_cue_style(self) -> str:
+        # A style this version doesn't know (a typo, one a newer version
+        # added) reads as the default, so the chime still plays.
+        style = self._settings.speaker_cue_style
+        return style if style in CHIME_STYLES else CHIME_STYLES[0]
+
+    @property
+    def speaker_cue_name_tag_enabled(self) -> bool:
+        # On unless it is strictly False, since on is the default: something
+        # odd in the file keeps the default, the same as reopen_last_transcript.
+        return self._settings.speaker_cue_name_tag_enabled is not False
+
+    @property
+    def speaker_cue_flash_enabled(self) -> bool:
+        # On unless it is strictly False, the same as the name tag above.
+        return self._settings.speaker_cue_flash_enabled is not False
+
+    @property
     def reopen_last_transcript(self) -> bool:
         # On unless it is strictly False, since on is the default: a settings
         # file with something odd in this spot keeps the default.
@@ -597,6 +622,18 @@ class SettingsStore:
 
     def set_speaker_cue_sound(self, sound: str) -> None:
         self._settings.speaker_cue_sound = sound
+        self._save()
+
+    def set_speaker_cue_style(self, style: str) -> None:
+        self._settings.speaker_cue_style = style
+        self._save()
+
+    def set_speaker_cue_name_tag_enabled(self, enabled: bool) -> None:
+        self._settings.speaker_cue_name_tag_enabled = enabled
+        self._save()
+
+    def set_speaker_cue_flash_enabled(self, enabled: bool) -> None:
+        self._settings.speaker_cue_flash_enabled = enabled
         self._save()
 
     def set_reopen_last_transcript(self, enabled: bool) -> None:

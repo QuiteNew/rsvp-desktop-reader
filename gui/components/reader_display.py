@@ -3,9 +3,11 @@ import tkinter.font as tkfont
 
 import customtkinter as ctk
 from core.reader import ReaderSession, assemble_chunk_text
+from core.chime import CHIME_STYLES, ChimeGap, chime_length_ms, chime_notes, speaker_patterns
 from core.colors import blend_colors
 from core.letter_spacing import GAP_UNIT_CHARS, NO_SPACING, PLAIN_SPACE, SpacingPlan, build_plan, clamp_level, space_chunk
 from core.scroll import scrollbar_fractions, pan_from_fraction, clamp_pan
+from core.speakers import UNNAMED_SPEAKER
 from gui.icons import center_icon
 from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, HEARTH_PAPER
 
@@ -51,6 +53,18 @@ class ReaderDisplay(ctk.CTkFrame):
     about spacing. The fit measurement uses the same spaced text, so what is
     measured is exactly what is drawn. See set_letter_spacing() and
     core/letter_spacing.py. The peripheral ribbon stays unspaced.
+
+    Speaker cues (off unless the session has them on, see
+    ReaderSession.speaker_cues_enabled) show who is speaking in a labelled
+    transcript. A name tag, small and dimmed like the ribbon, sits centred
+    above the word, just clear of the highest a guide mark can reach, and
+    stays while paused. When reading steps forward into a new speaker's turn,
+    the tag lights up in the highlight colour and the background warms toward
+    it for a moment, and a chime plays through the chime player the app hands
+    over (see set_chime_player() and gui/chime_player.py). Skipping, scrubbing,
+    jumping and restarting move the tag to the right speaker without any of
+    that: only reading on into a new speaker cues it. See
+    set_speaker_cue_options() and set_speaker_cues().
     """
 
     DEFAULT_FONT_COLOR = COCOA_INK
@@ -110,6 +124,13 @@ class ReaderDisplay(ctk.CTkFrame):
     CENTER_BUTTON_SIZE = 20        # px, the centre button is a small square, smaller than
                                     # the other controls
     CENTER_BUTTON_RADIUS = 4       # px, just enough corner curve to soften the square
+    SPEAKER_TAG_SIZE_RATIO = 0.5       # name tag font size as a fraction of the word font size, the
+                                        # same as the ribbon below the word
+    SPEAKER_TAG_BOTTOM_MARGIN_PX = 8   # px between the tag and the highest point a guide mark reaches
+    SPEAKER_TAG_MIN_TOP_PX = 4         # px the tag always keeps from the top edge of the reading row
+    SPEAKER_FLASH_MS = 330             # how long a new speaker's flash lasts, about a third of a second
+    SPEAKER_FLASH_WARMTH = 0.18        # how far the background moves toward the highlight colour
+                                        # during the flash (0 is no change, 1 the highlight itself)
     CENTER_BUTTON_ICON_PX = 12     # px, the crosshair drawn inside it
     CENTER_BUTTON_MARGIN_PX = 6    # px, gap from the row's left edge and from the scrollbar
                                     # sitting just below it
@@ -156,7 +177,26 @@ class ReaderDisplay(ctk.CTkFrame):
         # ribbon can dim the font toward the background. Updated by
         # set_colors(); the defaults match the label defaults below.
         self._font_color = self.DEFAULT_FONT_COLOR
+        self._highlight_color = self.DEFAULT_HIGHLIGHT_COLOR
         self._background_color = HEARTH_PAPER
+        # Speaker cues: how they show and sound (see set_speaker_cue_options()),
+        # the player that sounds them (set_chime_player()), and the pattern
+        # each speaker of the current session gets.
+        self._speaker_tag_enabled = True
+        self._speaker_flash_enabled = True
+        self._speaker_sound = "off"
+        self._speaker_style = CHIME_STYLES[0]
+        self._chime_player = None
+        self._chime_gap = ChimeGap()
+        self._speaker_patterns: dict = {}
+        self._flash_after_id: str | None = None
+        self._flashing = False
+        self._tag_shown = False
+        self._tag_y = 0.0
+        # The clock the chime gap reads, in milliseconds. Kept as an attribute
+        # rather than calling time.monotonic() in place, so a test can hand in
+        # its own.
+        self._now_ms = lambda: time.monotonic() * 1000
         self.on_position_changed = on_position_changed
         self.on_session_stats = on_session_stats
         self.on_progress = on_progress
@@ -297,6 +337,11 @@ class ReaderDisplay(ctk.CTkFrame):
         self._ctx_after_shown = False
         self._ctx_ribbon_y = 0.0
         self._ctx_side_offset = 0.0
+        self.speaker_tag_font = ctk.CTkFont(
+            family=FONT_HEADING,
+            size=max(8, round(self.DEFAULT_FONT_SIZE * self.SPEAKER_TAG_SIZE_RATIO)),
+        )
+        self.speaker_tag = ctk.CTkLabel(self.word_row, text="", font=self.speaker_tag_font, text_color=self.DEFAULT_FONT_COLOR)
 
     def load_session(self, session: ReaderSession, start_paused: bool = False) -> None:
         self._cancel_pending()
@@ -309,6 +354,9 @@ class ReaderDisplay(ctk.CTkFrame):
         if not start_paused:
             self._start_active_span()
         self._pan_offset_px = 0.0
+        self._end_speaker_flash()
+        self._speaker_patterns = speaker_patterns(session.speaker_turns.speakers)
+        self._prepare_chimes()
         self._recompute_fit_widest()
         self._apply_fit()
         self._update_scrollbar()
@@ -320,12 +368,21 @@ class ReaderDisplay(ctk.CTkFrame):
     def stop(self) -> None:
         self.finalize_session()
         self._cancel_pending()
+        self._end_speaker_flash()
         self.session = None
         self._is_paused = False
         self._scrubbing = False
         self._update_guide_marks()
-        # Session is gone, so the ribbon (if it was showing) must clear too.
+        # Session is gone, so the ribbon and the name tag (if they were
+        # showing) must clear too.
         self._update_peripheral_context()
+        self._update_speaker_tag()
+
+    def destroy(self) -> None:
+        # A flash can still be waiting to end when the window closes. Its timer
+        # would otherwise fire on a widget that no longer exists.
+        self._cancel_speaker_flash_timer()
+        super().destroy()
 
     def finalize_session(self) -> None:
         """Report this session's accumulated words-read/active-time via
@@ -543,6 +600,52 @@ class ReaderDisplay(ctk.CTkFrame):
             self._schedule_next()
         self._update_guide_marks()
 
+    def set_speaker_cues(self, enabled: bool, custom: dict[str, str] | None = None) -> None:
+        """Turn Speaker cues on or off for the current session, or give it a
+        different speaker list, without restarting it: the same as
+        set_chunking() does for chunking. The session works the turns out
+        again and may re-group its chunks (a chunk never crosses into a new
+        speaker), so the fit, the frame and the position are refreshed the same
+        way, and the pending advance is rescheduled while actually playing. A
+        no-op when no session is loaded."""
+        if self.session is None:
+            return
+        self.session.set_speaker_cues(enabled, custom)
+        self._end_speaker_flash()
+        self._speaker_patterns = speaker_patterns(self.session.speaker_turns.speakers)
+        self._prepare_chimes()
+        self._recompute_fit_widest()
+        self._apply_fit()
+        self._update_scrollbar()
+        self._show_current_frame()
+        self._report_position()
+        if self._is_running() and not self._scrubbing:
+            self._cancel_pending()
+            self._schedule_next()
+        self._update_guide_marks()
+
+    def set_speaker_cue_options(self, name_tag: bool, flash: bool, sound: str, style: str) -> None:
+        """How Speaker cues show and sound: whether the name tag is shown,
+        whether a new speaker flashes, which chime plays (one of
+        core/settings_store.py's SPEAKER_CUE_SOUNDS) and in which style (one of
+        core/chime.py's CHIME_STYLES; anything else means the default). Applies
+        at once, including to a flash already under way. Whether there are
+        speaker cues at all is the session's (see set_speaker_cues())."""
+        self._speaker_tag_enabled = name_tag
+        self._speaker_flash_enabled = flash
+        self._speaker_sound = sound
+        self._speaker_style = style if style in CHIME_STYLES else CHIME_STYLES[0]
+        if not flash:
+            self._end_speaker_flash()
+        self._prepare_chimes()
+        self._update_speaker_tag()
+
+    def set_chime_player(self, player) -> None:
+        """The chime player the app shares between its readers (see
+        gui/chime_player.py), or None for no sound at all."""
+        self._chime_player = player
+        self._prepare_chimes()
+
     def set_resume_rewind(self, enabled: bool, words: int) -> None:
         """Whether resuming from a pause first steps back `words` words for
         re-entry context, and by how many. Read at resume time in
@@ -636,7 +739,11 @@ class ReaderDisplay(ctk.CTkFrame):
         return widths
 
     def set_colors(self, font_color: str, highlight_color: str, background_color: str) -> None:
+        # A flash under way ends here, so it never leaves the old background
+        # behind once the new one is painted.
+        self._end_speaker_flash()
         self._font_color = font_color
+        self._highlight_color = highlight_color
         self._background_color = background_color
         self.configure(fg_color=background_color)
         self.word_row.configure(fg_color=background_color)
@@ -651,7 +758,9 @@ class ReaderDisplay(ctk.CTkFrame):
         # independent of the current transcript's font color, same as
         # the horizontal ticks are independent via a fixed constant.
         # The ribbon does follow the reading colours, dimmed, so refresh it.
+        # The name tag is dimmed the same way.
         self._update_peripheral_context()
+        self._update_speaker_tag()
 
     def set_font_size(self, size: int) -> None:
         """Set the chosen Word size. The font is then rendered at the fitted
@@ -947,6 +1056,10 @@ class ReaderDisplay(ctk.CTkFrame):
             if self._ctx_after_shown:
                 self._place_physical(self.context_after, x=anchor_x + self._ctx_side_offset, y=self._ctx_ribbon_y, anchor="w")
 
+        # So does the name tag, at the height it was last placed at.
+        if self._tag_shown:
+            self._place_physical(self.speaker_tag, x=anchor_x, y=self._tag_y, anchor="center")
+
     def _show_current_frame(self) -> None:
         if self.session is None:
             return
@@ -1057,8 +1170,9 @@ class ReaderDisplay(ctk.CTkFrame):
             self._focus_half_height = 0
             self._row_width = row_width
             # Finished: peripheral_context has no current word, so this
-            # clears the ribbon.
+            # clears the ribbon, and there's no speaker, so the name tag too.
             self._update_peripheral_context()
+            self._update_speaker_tag()
             return
 
         # The live flash is anchored at the row centre plus the current pan, so
@@ -1083,8 +1197,10 @@ class ReaderDisplay(ctk.CTkFrame):
         # single call at the end of _position_word() covers every case
         # that moves or re-renders the word (load, advance, skip, scrub,
         # restart, resume-rewind, resize, font size, highlight offset),
-        # since they all route through here.
+        # since they all route through here. The name tag rides along the
+        # same way.
         self._update_peripheral_context()
+        self._update_speaker_tag()
 
     def _update_guide_marks(self) -> None:
         # Hidden whenever there is no live anchor, and also whenever the flash is
@@ -1238,6 +1354,107 @@ class ReaderDisplay(ctk.CTkFrame):
         self.context_before.place_forget()
         self.context_current.place_forget()
         self.context_after.place_forget()
+
+    def _update_speaker_tag(self) -> None:
+        """Show the current speaker's name above the word, or hide it. Hidden
+        when the tag is switched off, before the first speaker, for a ">>"
+        change (no name to show), once the reading is finished, and before the
+        row has been sized. Otherwise shown while reading and while paused.
+
+        It sits centred on the same anchor as the word, below the top of the
+        row and above the highest point a guide mark can reach (worked out the
+        same way _update_guide_marks() does, so the two never overlap whether
+        or not the marks are showing). Dimmed toward the background like the
+        ribbon, or in the highlight colour while a new speaker flashes."""
+        # A finished session has no current speaker, so this covers that too.
+        speaker = self.session.current_speaker if self.session is not None else None
+        if (not self._speaker_tag_enabled or speaker is None or speaker == UNNAMED_SPEAKER
+                or self._anchor_x is None):
+            self.speaker_tag.place_forget()
+            self._tag_shown = False
+            return
+
+        size = max(8, round(self.word_font.cget("size") * self.SPEAKER_TAG_SIZE_RATIO))
+        if self.speaker_tag_font.cget("size") != size:
+            self.speaker_tag_font.configure(size=size)
+        if self._flashing:
+            color = self._highlight_color
+        else:
+            color = blend_colors(self._font_color, self._background_color, self.PERIPHERAL_CONTEXT_DIM)
+        if self.speaker_tag.cget("text") != speaker or self.speaker_tag.cget("text_color") != color:
+            self.speaker_tag.configure(text=speaker, text_color=color)
+
+        self.speaker_tag.update_idletasks()
+        tag_height = self.speaker_tag.winfo_reqheight()
+        scale = self._get_widget_scaling()
+        highest_mark_y = (self._focus_y - self._focus_half_height - self.GUIDE_MARK_MIN_GAP_PX
+                          - self._guide_mark_length() * scale)
+        tag_y = highest_mark_y - self.SPEAKER_TAG_BOTTOM_MARGIN_PX - tag_height / 2
+        tag_y = max(tag_y, self.SPEAKER_TAG_MIN_TOP_PX + tag_height / 2)
+        self._place_physical(self.speaker_tag, x=self._anchor_x, y=tag_y, anchor="center")
+        self._tag_shown = True
+        self._tag_y = tag_y
+
+    def _cue_new_speaker(self) -> None:
+        """Reading has just stepped into a new speaker's turn: flash and
+        chime, each if it's switched on."""
+        self._start_speaker_flash()
+        self._play_chime()
+
+    def _start_speaker_flash(self) -> None:
+        if not self._speaker_flash_enabled:
+            return
+        self._cancel_speaker_flash_timer()
+        self._flashing = True
+        self._paint_background(blend_colors(self._background_color, self._highlight_color, self.SPEAKER_FLASH_WARMTH))
+        self._update_speaker_tag()
+        self._flash_after_id = self.after(self.SPEAKER_FLASH_MS, self._end_speaker_flash)
+
+    def _end_speaker_flash(self) -> None:
+        """Put the background and the tag's colour back after a flash. Safe to
+        call when nothing is flashing."""
+        self._cancel_speaker_flash_timer()
+        if not self._flashing:
+            return
+        self._flashing = False
+        self._paint_background(self._background_color)
+        self._update_speaker_tag()
+
+    def _cancel_speaker_flash_timer(self) -> None:
+        if self._flash_after_id is not None:
+            self.after_cancel(self._flash_after_id)
+            self._flash_after_id = None
+
+    def _paint_background(self, color: str) -> None:
+        """The reading background, in the same three places set_colors()
+        paints it."""
+        self.configure(fg_color=color)
+        self.word_row.configure(fg_color=color)
+        self._center_button.configure(bg_color=color)
+
+    def _play_chime(self) -> None:
+        """Play the chime for the speaker now on screen, if the sound setting
+        has one and the last chime has had its time (see core/chime.py's
+        ChimeGap). A chime that isn't ready yet is simply missed (see
+        gui/chime_player.py), never waited for."""
+        player = self._chime_player
+        if player is None or not player.available or self.session is None:
+            return
+        notes = chime_notes(self._speaker_sound, self.session.current_speaker, self._speaker_patterns)
+        if notes is None:
+            return
+        if not self._chime_gap.allow(self._now_ms(), chime_length_ms(notes, self._speaker_style)):
+            return
+        player.play(notes, self._speaker_style)
+
+    def _prepare_chimes(self) -> None:
+        """Have the player make this style's chimes in the background, so they
+        are ready by the first new speaker. Only when there is a sound to play
+        and the session has speakers at all."""
+        if (self._chime_player is None or self._speaker_sound == "off"
+                or self.session is None or not self.session.speaker_turns.starts):
+            return
+        self._chime_player.prepare(self._speaker_style)
         self._ctx_shown = False
 
     def _is_running(self) -> bool:
@@ -1270,6 +1487,11 @@ class ReaderDisplay(ctk.CTkFrame):
         before_index = self.session.index
         self.session.advance()
         self._session_words_read += self.session.index - before_index
+        # Only reading on into a new speaker cues it. A turn always starts a
+        # chunk (chunks never cross into a new speaker), so the chunk just
+        # stepped onto is where to look. Once finished, the index is past the
+        # last word, where no turn can start.
+        new_speaker = self.session.speaker_turns.is_turn_start(self.session.index)
         if self.session.is_finished:
             # Reading has genuinely stopped here, even though nothing
             # set _is_paused. Close the active span now rather than
@@ -1278,6 +1500,8 @@ class ReaderDisplay(ctk.CTkFrame):
             # closes the app.
             self._end_active_span()
         self._show_current_frame()
+        if new_speaker:
+            self._cue_new_speaker()
         self._report_position()
         self._schedule_next()
         self._update_guide_marks()

@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from core.reader import ReaderSession
+from core.speakers import transcript_speakers
 from gui.components.transcript_input import TranscriptInput
 from gui.components.reader_display import ReaderDisplay
 from gui.components.canvas_toolbar import CanvasToolbar
@@ -38,6 +39,12 @@ class Canvas(ctk.CTkFrame):
         peripheral_context_enabled: bool = False,
         letter_spacing_level: int = 0,
         bold_starts_enabled: bool = False,
+        speaker_cues_enabled: bool = False,
+        speaker_cue_name_tag_enabled: bool = True,
+        speaker_cue_flash_enabled: bool = True,
+        speaker_cue_sound: str = "off",
+        speaker_cue_style: str = "bell",
+        chime_player=None,
     ):
         super().__init__(master, fg_color=HEARTH_PAPER, corner_radius=0)
         self.on_text_submitted = on_text_submitted
@@ -71,6 +78,14 @@ class Canvas(ctk.CTkFrame):
         self._peripheral_context_enabled = peripheral_context_enabled
         self._letter_spacing_level = letter_spacing_level
         self._bold_starts_enabled = bold_starts_enabled
+        self._speaker_cues_enabled = speaker_cues_enabled
+        self._speaker_cue_name_tag_enabled = speaker_cue_name_tag_enabled
+        self._speaker_cue_flash_enabled = speaker_cue_flash_enabled
+        self._speaker_cue_sound = speaker_cue_sound
+        self._speaker_cue_style = speaker_cue_style
+        # The app's one chime player (gui/chime_player.py), shared with the
+        # detached window and the selection previews. None means no sound.
+        self._chime_player = chime_player
         self.current_transcript = None
         self._detached_transcript_id = None
         self._detached_transcript = None
@@ -145,6 +160,11 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_scrub_pause(self._scrub_pause_enabled)
         self.reader_display.set_peripheral_context(self._peripheral_context_enabled)
         self.reader_display.set_letter_spacing(self._letter_spacing_level)
+        self.reader_display.set_speaker_cue_options(
+            self._speaker_cue_name_tag_enabled, self._speaker_cue_flash_enabled,
+            self._speaker_cue_sound, self._speaker_cue_style,
+        )
+        self.reader_display.set_chime_player(self._chime_player)
 
         self.detached_placeholder = ctk.CTkFrame(self.content_area, fg_color="transparent")
         ctk.CTkLabel(
@@ -187,6 +207,8 @@ class Canvas(ctk.CTkFrame):
                 chunk_size=transcript.chunk_size,
                 chunk_mode=transcript.chunk_mode,
                 chunk_char_target=transcript.chunk_char_target,
+                speaker_cues_enabled=self._speaker_cues_enabled,
+                speaker_custom=transcript.speaker_custom,
             )
             self.reader_display.load_session(session, start_paused=transcript.is_paused)
             self.scrub_bar.set_total(session.total_words)
@@ -400,6 +422,57 @@ class Canvas(ctk.CTkFrame):
         # other styling, each snapshots the setting at open time (see
         # open_selection_preview).
 
+    def set_speaker_cues_enabled(self, enabled: bool) -> None:
+        """Turn Speaker cues on or off. It's one setting for the whole app, so
+        it reaches the detached window too, whichever transcript it holds.
+
+        The reader here works its turns out again in place and keeps the
+        speaker list its session was opened with. That's the transcript's
+        own list, or the whole transcript's while a selection is being
+        played (see play_selection()). Asking the transcript instead would
+        give a selection the wrong list."""
+        self._speaker_cues_enabled = enabled
+        session = self.reader_display.session
+        if session is not None:
+            self.reader_display.set_speaker_cues(enabled, session.speaker_custom)
+        if self._detached_window:
+            self._detached_window.set_speaker_cues_enabled(enabled)
+        # Open selection previews snapshot the setting at open time, like
+        # their other styling (see open_selection_preview), so they aren't
+        # updated here.
+
+    def refresh_transcript_speakers(self, transcript_id) -> None:
+        """This transcript's speaker list has just changed in the store, so
+        any reader showing it works its turns out again in place, with the new
+        list. A selection being played from it is read with the whole
+        transcript's list worked out again (see play_selection()), and the
+        detached window, when it holds the transcript, reads the new list from
+        the transcript itself. Selection previews keep the list they opened
+        with, like the rest of their settings. A reader with nothing loaded
+        (the edit box is showing) has nothing to work out; it reads the new
+        list when it next starts."""
+        transcript = self.current_transcript
+        if transcript is not None and transcript.id == transcript_id:
+            custom = self._whole_transcript_speakers() if self._ephemeral else transcript.speaker_custom
+            self.reader_display.set_speaker_cues(self._speaker_cues_enabled, custom)
+        if self._detached_window and self._detached_window.transcript.id == transcript_id:
+            self._detached_window.set_speaker_cues_enabled(self._speaker_cues_enabled)
+
+    def set_speaker_cue_options(self, name_tag: bool, flash: bool, sound: str, style: str) -> None:
+        """How Speaker cues look and sound: the name tag, the flash, which
+        chime and in which style (see ReaderDisplay.set_speaker_cue_options).
+        For the whole app, so the detached window follows."""
+        self._speaker_cue_name_tag_enabled = name_tag
+        self._speaker_cue_flash_enabled = flash
+        self._speaker_cue_sound = sound
+        self._speaker_cue_style = style
+        self.reader_display.set_speaker_cue_options(name_tag, flash, sound, style)
+        if self._detached_window:
+            self._detached_window.set_speaker_cue_options(name_tag, flash, sound, style)
+        # Open selection previews snapshot these at open time, like their
+        # other styling (see open_selection_preview), so they aren't updated
+        # here.
+
     def save_pending_draft(self) -> None:
         self._capture_current_draft()
 
@@ -473,7 +546,9 @@ class Canvas(ctk.CTkFrame):
         the transcript's name plus a per-transcript number in its title,
         and a small cascade offset so successive windows don't land exactly
         on top of each other. Its styling is a snapshot of the transcript's
-        current WPM, colours, font, guide-mark and chunking settings."""
+        current WPM, colours, font, guide-mark, chunking and Speaker cues
+        settings. Its speaker list is the whole transcript's, the same as
+        play_selection() uses."""
         transcript = self.current_transcript
         if transcript is None or not text.strip():
             return
@@ -509,6 +584,13 @@ class Canvas(ctk.CTkFrame):
             chunk_size=transcript.chunk_size,
             chunk_mode=transcript.chunk_mode,
             chunk_char_target=transcript.chunk_char_target,
+            speaker_cues_enabled=self._speaker_cues_enabled,
+            speaker_custom=self._whole_transcript_speakers(),
+            speaker_cue_name_tag_enabled=self._speaker_cue_name_tag_enabled,
+            speaker_cue_flash_enabled=self._speaker_cue_flash_enabled,
+            speaker_cue_sound=self._speaker_cue_sound,
+            speaker_cue_style=self._speaker_cue_style,
+            chime_player=self._chime_player,
         )
         self._selection_previews.append((window, transcript.id, index))
 
@@ -528,6 +610,15 @@ class Canvas(ctk.CTkFrame):
             entry for entry in self._selection_previews if entry[0] is not window
         ]
 
+    def _whole_transcript_speakers(self) -> dict[str, str]:
+        """The speaker list for a selection taken from the edit box: the
+        transcript's own list if it has one, otherwise what Auto finds in
+        the whole of the box (see core/speakers.py's transcript_speakers()).
+        The box rather than the saved text, since the selection came from
+        the box and it may hold edits, or a draft, that aren't saved as the
+        transcript's text yet."""
+        return transcript_speakers(self.input_view.get_text(), self.current_transcript.speaker_custom)
+
     def play_selection(self, text: str) -> None:
         """Run just the highlighted text as a preview in the reader,
         without changing the transcript's saved position, started/stopped
@@ -535,7 +626,12 @@ class Canvas(ctk.CTkFrame):
         colours and font and starts at the first word. At the end it stays
         on "(finished)", the way the reader does at the end of a transcript,
         until Stop (or Esc) brings back the edit box with its full text
-        intact. See the _ephemeral flag and _stop_ephemeral()."""
+        intact. See the _ephemeral flag and _stop_ephemeral().
+
+        With Speaker cues on, the selection is read with the whole
+        transcript's speaker list, so a name that appears only once in the
+        selection still counts when the transcript shows it's a speaker. Words
+        before the selection's first label have no name shown."""
         transcript = self.current_transcript
         if transcript is None or not text.strip():
             return
@@ -553,6 +649,8 @@ class Canvas(ctk.CTkFrame):
             chunk_size=transcript.chunk_size,
             chunk_mode=transcript.chunk_mode,
             chunk_char_target=transcript.chunk_char_target,
+            speaker_cues_enabled=self._speaker_cues_enabled,
+            speaker_custom=self._whole_transcript_speakers(),
         )
         self.reader_display.load_session(session, start_paused=False)
         # set_total() inside the scrubber resets its bookmark ticks, and a
@@ -898,6 +996,12 @@ class Canvas(ctk.CTkFrame):
             bold_starts_enabled=self._bold_starts_enabled,
             on_bold_starts_toggled=self._handle_bold_starts_toggled,
             on_wpm_changed=self.on_detached_wpm_changed,
+            speaker_cues_enabled=self._speaker_cues_enabled,
+            speaker_cue_name_tag_enabled=self._speaker_cue_name_tag_enabled,
+            speaker_cue_flash_enabled=self._speaker_cue_flash_enabled,
+            speaker_cue_sound=self._speaker_cue_sound,
+            speaker_cue_style=self._speaker_cue_style,
+            chime_player=self._chime_player,
         )
         self._show_detached_placeholder()
 

@@ -1,8 +1,8 @@
-"""Tests for the Speaker cues settings in SettingsStore: the on/off switch and
-the sound choice.
+"""Tests for the Speaker cues settings in SettingsStore: the on/off switch,
+the sound choice, the chime style, and the name tag and flash switches.
 
 How speakers are found is tested in test_speakers.py. This file only checks
-that the store keeps the two settings, saves them, reads a damaged file
+that the store keeps the settings, saves them, reads a damaged file
 safely, carries them in export bundles, and keeps them out of reading
 profiles."""
 
@@ -10,6 +10,7 @@ import json
 
 import pytest
 
+from core.chime import CHIME_STYLES
 from core.profiles import PROFILE_KEYS, value_is_valid
 from core.settings_store import SPEAKER_CUE_SOUNDS, AppSettings, SettingsStore
 
@@ -76,6 +77,93 @@ def test_the_sound_persists_and_reloads(tmp_path, sound):
     assert second.speaker_cue_sound == sound
 
 
+# ---- The style ----
+
+def test_a_fresh_store_has_the_bell_style(store):
+    assert store.speaker_cue_style == "bell"
+    assert AppSettings().speaker_cue_style == CHIME_STYLES[0] == "bell"
+
+@pytest.mark.parametrize("style", CHIME_STYLES)
+def test_every_style_can_be_set(store, style):
+    store.set_speaker_cue_style(style)
+    assert store.speaker_cue_style == style
+
+@pytest.mark.parametrize("style", CHIME_STYLES)
+def test_the_style_persists_and_reloads(tmp_path, style):
+    first = SettingsStore(settings_directory=str(tmp_path))
+    first.set_speaker_cue_style(style)
+    second = SettingsStore(settings_directory=str(tmp_path))
+    assert second.speaker_cue_style == style
+
+def test_the_style_is_written_to_settings_json(tmp_path):
+    store = SettingsStore(settings_directory=str(tmp_path))
+    store.set_speaker_cue_style("glass")
+    assert _settings_json(tmp_path)["speaker_cue_style"] == "glass"
+
+@pytest.mark.parametrize("damaged", ["trumpet", "Bell", "", " soft", 1, True, None, ["wood"], {}])
+def test_an_unknown_style_reads_as_bell(tmp_path, damaged):
+    _write_settings(tmp_path, {"default_wpm": 450, "speaker_cue_style": damaged})
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert store.speaker_cue_style == "bell"
+    assert store.default_wpm == 450
+
+def test_the_style_does_not_touch_the_other_two(store):
+    store.set_speaker_cues_enabled(True)
+    store.set_speaker_cue_sound("per_speaker")
+    store.set_speaker_cue_style("wood")
+    assert (store.speaker_cues_enabled, store.speaker_cue_sound) == (True, "per_speaker")
+    store.set_speaker_cue_sound("change")
+    store.set_speaker_cues_enabled(False)
+    assert store.speaker_cue_style == "wood"
+
+
+# ---- The name tag and the flash ----
+
+LOOK_SWITCHES = ["speaker_cue_name_tag_enabled", "speaker_cue_flash_enabled"]
+
+@pytest.mark.parametrize("key", LOOK_SWITCHES)
+def test_the_name_tag_and_the_flash_are_on_by_default(store, key):
+    assert getattr(store, key) is True
+    assert getattr(AppSettings(), key) is True
+
+@pytest.mark.parametrize("key", LOOK_SWITCHES)
+def test_each_can_be_turned_off_and_on_again(store, key):
+    getattr(store, f"set_{key}")(False)
+    assert getattr(store, key) is False
+    getattr(store, f"set_{key}")(True)
+    assert getattr(store, key) is True
+
+@pytest.mark.parametrize("key", LOOK_SWITCHES)
+@pytest.mark.parametrize("enabled", [True, False])
+def test_each_persists_and_reloads(tmp_path, key, enabled):
+    first = SettingsStore(settings_directory=str(tmp_path))
+    getattr(first, f"set_{key}")(not enabled)
+    getattr(first, f"set_{key}")(enabled)
+    assert _settings_json(tmp_path)[key] is enabled
+    second = SettingsStore(settings_directory=str(tmp_path))
+    assert getattr(second, key) is enabled
+
+@pytest.mark.parametrize("key", LOOK_SWITCHES)
+@pytest.mark.parametrize("damaged", ["false", "no", 0, 1, None, [], {}])
+def test_only_a_real_false_turns_them_off(tmp_path, key, damaged):
+    # On is the default, so anything odd in the file keeps it on, and the
+    # rest of the file is still read.
+    _write_settings(tmp_path, {"default_wpm": 450, key: damaged})
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert getattr(store, key) is True
+    assert store.default_wpm == 450
+
+def test_the_two_switches_do_not_touch_each_other_or_the_rest(store):
+    store.set_speaker_cues_enabled(True)
+    store.set_speaker_cue_sound("change")
+    store.set_speaker_cue_style("wood")
+    store.set_speaker_cue_name_tag_enabled(False)
+    assert store.speaker_cue_flash_enabled is True
+    store.set_speaker_cue_flash_enabled(False)
+    assert store.speaker_cue_name_tag_enabled is False
+    assert (store.speaker_cues_enabled, store.speaker_cue_sound, store.speaker_cue_style) == (True, "change", "wood")
+
+
 # ---- Independence ----
 
 def test_the_two_settings_do_not_touch_each_other(store):
@@ -121,6 +209,9 @@ def test_an_older_settings_file_without_them_loads_with_the_defaults(tmp_path):
     assert store.default_wpm == 450  # the rest of the file is still read
     assert store.speaker_cues_enabled is False
     assert store.speaker_cue_sound == "off"
+    assert store.speaker_cue_style == "bell"
+    assert store.speaker_cue_name_tag_enabled is True
+    assert store.speaker_cue_flash_enabled is True
 
 def test_a_settings_file_that_has_them_is_read(tmp_path):
     _write_settings(tmp_path, {"speaker_cues_enabled": True, "speaker_cue_sound": "change"})
@@ -148,36 +239,57 @@ def test_an_unknown_sound_reads_as_no_sound(tmp_path, damaged):
 
 # ---- Export bundles ----
 
-def test_the_export_includes_both_with_their_defaults(store):
+def test_the_export_includes_them_with_their_defaults(store):
     exported = store.export_settings()
     assert exported["speaker_cues_enabled"] is False
     assert exported["speaker_cue_sound"] == "off"
+    assert exported["speaker_cue_style"] == "bell"
+    assert exported["speaker_cue_name_tag_enabled"] is True
+    assert exported["speaker_cue_flash_enabled"] is True
 
-def test_a_replace_import_carries_both_over(tmp_path):
+def test_a_replace_import_carries_them_over(tmp_path):
     source = SettingsStore(settings_directory=str(tmp_path / "source"))
     source.set_speaker_cues_enabled(True)
     source.set_speaker_cue_sound("per_speaker")
+    source.set_speaker_cue_style("soft")
+    source.set_speaker_cue_name_tag_enabled(False)
+    source.set_speaker_cue_flash_enabled(False)
     target = SettingsStore(settings_directory=str(tmp_path / "target"))
     target.replace_from_bundle(source.export_settings())
+    assert target.speaker_cue_name_tag_enabled is False
+    assert target.speaker_cue_flash_enabled is False
     assert target.speaker_cues_enabled is True
     assert target.speaker_cue_sound == "per_speaker"
+    assert target.speaker_cue_style == "soft"
 
 def test_a_bundle_from_before_speaker_cues_still_imports_with_the_defaults(tmp_path):
     older = SettingsStore(settings_directory=str(tmp_path / "older"))
     bundle = older.export_settings()
     del bundle["speaker_cues_enabled"]
     del bundle["speaker_cue_sound"]
+    del bundle["speaker_cue_style"]
+    del bundle["speaker_cue_name_tag_enabled"]
+    del bundle["speaker_cue_flash_enabled"]
     target = SettingsStore(settings_directory=str(tmp_path / "target"))
+    target.set_speaker_cue_name_tag_enabled(False)
+    target.set_speaker_cue_flash_enabled(False)
     target.set_speaker_cues_enabled(True)
     target.set_speaker_cue_sound("change")
+    target.set_speaker_cue_style("wood")
     target.replace_from_bundle(bundle)
     assert target.speaker_cues_enabled is False
     assert target.speaker_cue_sound == "off"
+    assert target.speaker_cue_style == "bell"
+    assert target.speaker_cue_name_tag_enabled is True
+    assert target.speaker_cue_flash_enabled is True
 
 
 # ---- Profiles ----
 
-@pytest.mark.parametrize("key, value", [("speaker_cues_enabled", True), ("speaker_cue_sound", "change")])
+@pytest.mark.parametrize("key, value", [
+    ("speaker_cues_enabled", True), ("speaker_cue_sound", "change"), ("speaker_cue_style", "glass"),
+    ("speaker_cue_name_tag_enabled", False), ("speaker_cue_flash_enabled", False),
+])
 def test_they_are_never_part_of_a_profile(key, value):
     # Speaker cues have their own window, like chunking, so applying a
     # profile leaves them alone.
@@ -185,6 +297,9 @@ def test_they_are_never_part_of_a_profile(key, value):
     assert not value_is_valid(key, value)
 
 def test_a_profile_cannot_hold_them_even_when_asked_to(store):
-    profile = store.add_profile(
-        "Plain", {"speaker_cues_enabled": True, "speaker_cue_sound": "change", "default_wpm": 300})
+    profile = store.add_profile("Plain", {
+        "speaker_cues_enabled": True, "speaker_cue_sound": "change", "speaker_cue_style": "glass",
+        "speaker_cue_name_tag_enabled": False, "speaker_cue_flash_enabled": False,
+        "default_wpm": 300,
+    })
     assert profile.values == {"default_wpm": 300}
