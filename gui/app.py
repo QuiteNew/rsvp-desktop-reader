@@ -26,6 +26,7 @@ from gui.components.move_transcript_dialog import MoveTranscriptDialog
 from gui.components.message_dialog import MessageDialog
 from gui.components.import_confirm_dialog import ImportConfirmDialog
 from gui.components.importing_dialog import ImportingDialog
+from gui.chime_player import ChimePlayer
 from gui.theme import (
     HEARTH_PAPER, unregister_fonts, CTK_APPEARANCE_MODE, apply_app_icon,
     DARK_READING_FONT_COLOR, DARK_READING_HIGHLIGHT_COLOR, DARK_READING_BACKGROUND_COLOR,
@@ -84,6 +85,10 @@ class RSVPApp(ctk.CTk):
         # The window size the Layout tab showed when Settings was last opened,
         # see _apply_window_size().
         self._window_size_in_settings = (self.settings_store.window_width, self.settings_store.window_height)
+        # One chime player for the whole app, shared by every reader, so the
+        # chimes are made once and only one plays at a time. It makes nothing
+        # until a chime is needed, and it's closed in _handle_close().
+        self.chime_player = ChimePlayer()
 
         self._restore_window_placement()
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
@@ -159,6 +164,12 @@ class RSVPApp(ctk.CTk):
             peripheral_context_enabled=self.settings_store.peripheral_context_enabled,
             letter_spacing_level=self.settings_store.letter_spacing_level,
             bold_starts_enabled=self.settings_store.bold_starts_enabled,
+            speaker_cues_enabled=self.settings_store.speaker_cues_enabled,
+            speaker_cue_name_tag_enabled=self.settings_store.speaker_cue_name_tag_enabled,
+            speaker_cue_flash_enabled=self.settings_store.speaker_cue_flash_enabled,
+            speaker_cue_sound=self.settings_store.speaker_cue_sound,
+            speaker_cue_style=self.settings_store.speaker_cue_style,
+            chime_player=self.chime_player,
         )
         self.canvas.grid(row=2, column=2, sticky="nsew")
 
@@ -1526,6 +1537,9 @@ class RSVPApp(ctk.CTk):
         self._save_window_placement()
         self.store.flush()
         self.settings_store.flush()
+        # Stops a chime that's still sounding and removes the chime files
+        # from the temporary folder. Safe even if no chime was ever made.
+        self.chime_player.close()
         unregister_fonts()
         self.destroy()
 

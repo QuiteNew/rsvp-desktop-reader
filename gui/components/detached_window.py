@@ -44,6 +44,12 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         guide_mark_thickness_px: int = 2,
         guide_mark_length_percent: int = 35,
         guide_mark_color: str = "#3B2E27",
+        speaker_cues_enabled: bool = False,
+        speaker_cue_name_tag_enabled: bool = True,
+        speaker_cue_flash_enabled: bool = True,
+        speaker_cue_sound: str = "off",
+        speaker_cue_style: str = "bell",
+        chime_player=None,
     ):
         super().__init__(master)
 
@@ -75,6 +81,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.scrub_pause_enabled = scrub_pause_enabled
         self.peripheral_context_enabled = peripheral_context_enabled
         self.letter_spacing_level = letter_spacing_level
+        self.speaker_cues_enabled = speaker_cues_enabled
         # At most one bookmarks popover for this window at a time. See
         # open_bookmarks() and _close_bookmarks_popover().
         self._bookmarks_popover = None
@@ -132,6 +139,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_scrub_pause(scrub_pause_enabled)
         self.reader_display.set_peripheral_context(peripheral_context_enabled)
         self.reader_display.set_letter_spacing(letter_spacing_level)
+        self.reader_display.set_speaker_cue_options(
+            speaker_cue_name_tag_enabled, speaker_cue_flash_enabled, speaker_cue_sound, speaker_cue_style,
+        )
+        self.reader_display.set_chime_player(chime_player)
 
         self._render_current_state()
         self._bind_shortcuts()
@@ -198,6 +209,15 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.letter_spacing_level = level
         self.reader_display.set_letter_spacing(level)
 
+    def set_speaker_cues_enabled(self, enabled: bool) -> None:
+        """Speaker cues on or off. The reader here works its turns out again
+        in place, with this window's transcript's own speaker list."""
+        self.speaker_cues_enabled = enabled
+        self.reader_display.set_speaker_cues(enabled, self.transcript.speaker_custom)
+
+    def set_speaker_cue_options(self, name_tag: bool, flash: bool, sound: str, style: str) -> None:
+        self.reader_display.set_speaker_cue_options(name_tag, flash, sound, style)
+
     def _render_current_state(self) -> None:
         self.control_row.pack_forget()
         self.input_view.pack_forget()
@@ -221,6 +241,8 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
                 chunk_size=self.transcript.chunk_size,
                 chunk_mode=self.transcript.chunk_mode,
                 chunk_char_target=self.transcript.chunk_char_target,
+                speaker_cues_enabled=self.speaker_cues_enabled,
+                speaker_custom=self.transcript.speaker_custom,
             )
             self.reader_display.load_session(session, start_paused=self.transcript.is_paused)
             self.scrub_bar.set_total(session.total_words)
