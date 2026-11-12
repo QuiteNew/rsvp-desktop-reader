@@ -167,6 +167,7 @@ class RSVPApp(ctk.CTk):
             bold_starts_enabled=self.settings_store.bold_starts_enabled,
             speaker_cues_enabled=self.settings_store.speaker_cues_enabled,
             speaker_cue_name_tag_enabled=self.settings_store.speaker_cue_name_tag_enabled,
+            speaker_cue_tag_position=self.settings_store.speaker_cue_tag_position,
             speaker_cue_flash_enabled=self.settings_store.speaker_cue_flash_enabled,
             speaker_cue_sound=self.settings_store.speaker_cue_sound,
             speaker_cue_style=self.settings_store.speaker_cue_style,
@@ -1376,6 +1377,7 @@ class RSVPApp(ctk.CTk):
             self._settings_window,
             enabled=self.settings_store.speaker_cues_enabled,
             name_tag=self.settings_store.speaker_cue_name_tag_enabled,
+            tag_position=self.settings_store.speaker_cue_tag_position,
             flash=self.settings_store.speaker_cue_flash_enabled,
             sound=self.settings_store.speaker_cue_sound,
             style=self.settings_store.speaker_cue_style,
@@ -1385,16 +1387,19 @@ class RSVPApp(ctk.CTk):
             chime_player=self.chime_player,
         )
 
-    def _apply_speaker_cue_settings(self, enabled: bool, name_tag: bool, flash: bool, sound: str, style: str) -> None:
+    def _apply_speaker_cue_settings(
+        self, enabled: bool, name_tag: bool, flash: bool, sound: str, style: str, tag_position: str,
+    ) -> None:
         """One Apply from the Speaker cues window, for the part that belongs to
         the whole app. Saved, then handed to the canvas, which passes it on to
         the reader on screen and the detached window."""
         self.settings_store.set_speaker_cues_enabled(enabled)
         self.settings_store.set_speaker_cue_name_tag_enabled(name_tag)
+        self.settings_store.set_speaker_cue_tag_position(tag_position)
         self.settings_store.set_speaker_cue_flash_enabled(flash)
         self.settings_store.set_speaker_cue_sound(sound)
         self.settings_store.set_speaker_cue_style(style)
-        self.canvas.set_speaker_cue_options(name_tag, flash, sound, style)
+        self.canvas.set_speaker_cue_options(name_tag, flash, sound, style, tag_position)
         self.canvas.set_speaker_cues_enabled(enabled)
 
     def _apply_transcript_speakers(self, transcript_id: int, speakers: dict[str, str] | None) -> None:

@@ -87,6 +87,7 @@ def test_it_opens_with_the_saved_settings_and_the_open_transcript(app):
     store.set_speaker_cue_flash_enabled(False)
     store.set_speaker_cue_sound("change")
     store.set_speaker_cue_style("soft")
+    store.set_speaker_cue_tag_position("top_right")
     transcript = _add(app)
     _open(app, transcript)
 
@@ -95,6 +96,7 @@ def test_it_opens_with_the_saved_settings_and_the_open_transcript(app):
     assert window.enabled_switch.get() == 1
     assert (window.name_tag_check.get(), window.flash_check.get()) == (1, 0)
     assert (window.chosen_sound(), window.chosen_style()) == ("change", "soft")
+    assert window.chosen_tag_position() == "top_right"
     assert window._transcript is transcript
     assert [row.key for row, _, _ in window._row_widgets] == ["ann", "bob", "cat"]
     assert window._chime_player is app.chime_player
@@ -132,6 +134,7 @@ def test_apply_saves_the_settings(app):
     window.name_tag_check.deselect()
     window.sound_selector.set("Per speaker")
     window.style_selector.set("Glass")
+    window.tag_position_selector.set("Top right")
 
     _apply_and_close(app, settings, window)
 
@@ -141,10 +144,11 @@ def test_apply_saves_the_settings(app):
     assert store.speaker_cue_flash_enabled is True
     assert store.speaker_cue_sound == "per_speaker"
     assert store.speaker_cue_style == "glass"
+    assert store.speaker_cue_tag_position == "top_right", "kept even with the name off"
     # Saved to disk too, not just held in memory.
     saved = settings_store.SettingsStore()
     assert (saved.speaker_cues_enabled, saved.speaker_cue_name_tag_enabled, saved.speaker_cue_sound,
-            saved.speaker_cue_style) == (True, False, "per_speaker", "glass")
+            saved.speaker_cue_style, saved.speaker_cue_tag_position) == (True, False, "per_speaker", "glass", "top_right")
 
 
 def test_apply_reaches_the_reader_on_screen(app):
@@ -156,10 +160,12 @@ def test_apply_reaches_the_reader_on_screen(app):
     window.enabled_switch.select()
     window.flash_check.deselect()
     window.style_selector.set("Wood")
+    window.tag_position_selector.set("Top right")
     _apply_and_close(app, settings, window)
 
     assert reader.session.speaker_turns.starts == AUTO_STARTS
     assert (reader._speaker_tag_enabled, reader._speaker_flash_enabled, reader._speaker_style) == (True, False, "wood")
+    assert reader._speaker_tag_position == "top_right"
 
 
 def test_turning_it_off_reaches_the_reader_on_screen(app):

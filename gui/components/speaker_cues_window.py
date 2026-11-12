@@ -3,6 +3,7 @@ from dataclasses import replace
 import customtkinter as ctk
 
 from core.chime import CHANGE_PATTERN, CHIME_STYLES, MIN_CHIME_GAP_MS, SPEAKER_PATTERNS, chime_length_ms
+from core.settings_store import SPEAKER_CUE_TAG_POSITIONS
 from core.speakers import speaker_rows, speakers_to_save
 from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import (
@@ -14,6 +15,7 @@ from gui.theme import (
 # in the settings.
 SOUND_LABELS = {"off": "Off", "change": "One chime", "per_speaker": "Per speaker"}
 STYLE_LABELS = {style: style.capitalize() for style in CHIME_STYLES}
+POSITION_LABELS = {"above": "Above the word", "top_right": "Top right"}
 
 # The speaker list's Automatic/Custom label.
 LIST_AUTOMATIC = "Automatic"
@@ -34,8 +36,12 @@ SPEAKER_ROW_PX = 34
 # never taller than the Chunking window's 690 by much, so it still fits a
 # small laptop screen.
 WINDOW_WIDTH = 470
-WINDOW_HEIGHT_WITH_LIST = 700
-WINDOW_HEIGHT_WITHOUT_LIST = 540
+WINDOW_HEIGHT_WITH_LIST = 740
+WINDOW_HEIGHT_WITHOUT_LIST = 580
+
+# How far the name position buttons are pushed in, so they sit under the
+# text of the tick box above them rather than under its box.
+POSITION_INDENT_PX = 28
 
 
 def preview_plan(sound: str, style: str) -> list[tuple[int, tuple[float, ...]]]:
@@ -65,7 +71,8 @@ class SpeakerCuesWindow(ctk.CTkToplevel):
     """Every Speaker cues setting in one place.
 
     The top part is for the whole app: the on/off switch, which visual cues
-    show (the name tag and the flash), the sound (off, one chime for any
+    show (the name tag, with a choice of above the word or the top right of
+    the reader that is greyed out while the name is off, and the flash), the sound (off, one chime for any
     change, or a chime per speaker) and its style, with a Listen button that
     plays the choice before it's applied. Where chimes can't be played (only
     Windows has them for now) the sound part is greyed out and says so, and
@@ -79,7 +86,7 @@ class SpeakerCuesWindow(ctk.CTkToplevel):
     With no transcript open the part only says so.
 
     Apply hands the top part to on_apply(enabled, name_tag, flash, sound,
-    style) and, when a transcript is shown, its list to
+    style, tag_position) and, when a transcript is shown, its list to
     on_apply_speakers(transcript_id, speakers), where speakers is None for
     Automatic (see speakers_to_save() in core/speakers.py). The window stays
     open after Apply, the same as the Chunking window, and Close (or Esc)
@@ -92,6 +99,7 @@ class SpeakerCuesWindow(ctk.CTkToplevel):
         on_apply,
         on_apply_speakers,
         chime_player=None,
+        tag_position="above",
     ):
         super().__init__(master)
 
@@ -142,8 +150,12 @@ class SpeakerCuesWindow(ctk.CTkToplevel):
 
         # ---- Visual cues ----
         ctk.CTkLabel(body, text="Show", text_color=COCOA_INK, font=self.label_font).pack(anchor="w")
-        self.name_tag_check = self._styled_check(body, "The speaker's name above the word")
+        self.name_tag_check = self._styled_check(
+            body, "The speaker's name", command=self._update_tag_position_state,
+        )
         self.name_tag_check.pack(anchor="w", pady=(6, 4))
+        self.tag_position_selector = self._styled_segments(body, list(POSITION_LABELS.values()))
+        self.tag_position_selector.pack(anchor="w", padx=(POSITION_INDENT_PX, 0), pady=(0, 8))
         self.flash_check = self._styled_check(body, "A brief flash when the speaker changes")
         self.flash_check.pack(anchor="w", pady=(0, 14))
 
@@ -175,6 +187,11 @@ class SpeakerCuesWindow(ctk.CTkToplevel):
         (self.flash_check.select() if flash else self.flash_check.deselect())
         self.sound_selector.set(SOUND_LABELS[sound])
         self.style_selector.set(STYLE_LABELS[style])
+        # A position this version doesn't know shows as the default.
+        if tag_position not in SPEAKER_CUE_TAG_POSITIONS:
+            tag_position = SPEAKER_CUE_TAG_POSITIONS[0]
+        self.tag_position_selector.set(POSITION_LABELS[tag_position])
+        self._update_tag_position_state()
 
         # ---- Status line + buttons ----
         self.status_label = ctk.CTkLabel(self, text="", text_color=COCOA_INK, font=self.small_font)
@@ -326,6 +343,15 @@ class SpeakerCuesWindow(ctk.CTkToplevel):
     def chosen_style(self) -> str:
         return {label: value for value, label in STYLE_LABELS.items()}[self.style_selector.get()]
 
+    def chosen_tag_position(self) -> str:
+        return {label: value for value, label in POSITION_LABELS.items()}[self.tag_position_selector.get()]
+
+    def _update_tag_position_state(self) -> None:
+        """The position only matters while the name shows, so its buttons are
+        greyed out while the name's tick box is off. The choice itself is kept
+        and applied as it is."""
+        self.tag_position_selector.configure(state="normal" if self.name_tag_check.get() else "disabled")
+
     def current_rows(self):
         """The speaker rows as they are on screen now."""
         return [
@@ -377,6 +403,7 @@ class SpeakerCuesWindow(ctk.CTkToplevel):
             bool(self.flash_check.get()),
             self.chosen_sound(),
             self.chosen_style(),
+            self.chosen_tag_position(),
         )
         if self._transcript is not None and self._row_widgets:
             self.on_apply_speakers(self._transcript.id, speakers_to_save(self.current_rows()))

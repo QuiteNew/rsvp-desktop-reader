@@ -18,9 +18,9 @@ import customtkinter as ctk
 import pytest
 
 from core.chime import CHANGE_PATTERN, CHIME_STYLES, SPEAKER_PATTERNS
-from core.settings_store import SPEAKER_CUE_SOUNDS
+from core.settings_store import SPEAKER_CUE_SOUNDS, SPEAKER_CUE_TAG_POSITIONS
 from gui.components.speaker_cues_window import (
-    LIST_AUTOMATIC, LIST_CUSTOM, PREVIEW_PAUSE_MS, PREVIEW_SPEAKERS, SOUND_LABELS,
+    LIST_AUTOMATIC, LIST_CUSTOM, POSITION_LABELS, PREVIEW_PAUSE_MS, PREVIEW_SPEAKERS, SOUND_LABELS,
     SPEAKER_LIST_MAX_PX, SPEAKER_ROW_PX, STYLE_LABELS, SpeakerCuesWindow,
     appearances_text, preview_plan,
 )
@@ -73,13 +73,14 @@ def make(owner, wait_until_shown):
     opened = []
 
     def build(enabled=False, name_tag=True, flash=True, sound="off", style="bell",
-              transcript="default", player="default"):
+              transcript="default", player="default", tag_position="above"):
         transcript = _transcript() if transcript == "default" else transcript
         player = FakePlayer() if player == "default" else player
         applied, applied_speakers = Calls(), Calls()
         window = SpeakerCuesWindow(
             owner, enabled, name_tag, flash, sound, style, transcript,
             on_apply=applied, on_apply_speakers=applied_speakers, chime_player=player,
+            tag_position=tag_position,
         )
         opened.append(window)
         wait_until_shown(window)
@@ -209,9 +210,21 @@ def test_the_window_is_shorter_with_no_list_to_show(make):
     def on_screen(window, height):
         return round(height * window._get_window_scaling())
 
-    assert with_list.winfo_height() == on_screen(with_list, 700)
-    assert without_transcript.winfo_height() == on_screen(without_transcript, 540)
-    assert without_names.winfo_height() == on_screen(without_names, 540)
+    assert with_list.winfo_height() == on_screen(with_list, 740)
+    assert without_transcript.winfo_height() == on_screen(without_transcript, 580)
+    assert without_names.winfo_height() == on_screen(without_names, 580)
+
+
+def test_the_window_is_tall_enough_for_everything_in_it(make):
+    # What the contents ask for never exceeds what the window gives, so
+    # Close and Apply are never pushed off the bottom. Both sizes are in screen
+    # pixels, so this holds on a scaled display too.
+    for kwargs in ({}, {"transcript": None}, {"transcript": _transcript(text="just some words")}):
+        window, *_ = make(**kwargs)
+        assert window.winfo_reqheight() <= window.winfo_height()
+        bottom = window.winfo_rooty() + window.winfo_height()
+        assert window.apply_button.winfo_rooty() + window.apply_button.winfo_height() <= bottom
+        assert window.close_button.winfo_rooty() + window.close_button.winfo_height() <= bottom
 
 
 def test_with_no_transcript_open_there_is_no_list(make):
@@ -258,6 +271,67 @@ def test_back_to_automatic_puts_every_row_back(make):
     assert _mode(window) == LIST_AUTOMATIC
 
 
+# --- Where the name shows ------------------------------------------------------
+
+def test_the_name_has_a_pair_of_position_buttons_under_its_tick_box(make):
+    window, *_ = make()
+    assert POSITION_LABELS == {"above": "Above the word", "top_right": "Top right"}
+    assert window.name_tag_check.cget("text") == "The speaker's name"
+    assert list(window.tag_position_selector.cget("values")) == ["Above the word", "Top right"]
+    check, pair, flash = window.name_tag_check, window.tag_position_selector, window.flash_check
+    assert check.winfo_rooty() < pair.winfo_rooty() < flash.winfo_rooty()
+    assert pair.winfo_rootx() > check.winfo_rootx(), "pushed in under the tick box's text"
+
+def test_every_position_has_a_label():
+    assert set(POSITION_LABELS) == set(SPEAKER_CUE_TAG_POSITIONS)
+
+@pytest.mark.parametrize("position", SPEAKER_CUE_TAG_POSITIONS)
+def test_the_saved_position_is_shown(make, position):
+    window, *_ = make(tag_position=position)
+    assert window.tag_position_selector.get() == POSITION_LABELS[position]
+    assert window.chosen_tag_position() == position
+
+@pytest.mark.parametrize("damaged", ["middle", "", "Top right", None, 3])
+def test_a_position_this_version_does_not_know_shows_as_above_the_word(make, damaged):
+    window, *_ = make(tag_position=damaged)
+    assert window.tag_position_selector.get() == "Above the word"
+    assert window.chosen_tag_position() == "above"
+
+def test_the_position_buttons_are_greyed_while_the_name_is_off(make):
+    on, *_ = make(name_tag=True)
+    off, *_ = make(name_tag=False)
+    assert on.tag_position_selector.cget("state") == "normal"
+    assert off.tag_position_selector.cget("state") == "disabled"
+
+def test_ticking_the_name_box_turns_the_position_buttons_on_and_off(make):
+    window, *_ = make(name_tag=True)
+    window.name_tag_check.toggle()
+    assert window.tag_position_selector.cget("state") == "disabled"
+    window.name_tag_check.toggle()
+    assert window.tag_position_selector.cget("state") == "normal"
+
+def test_a_greyed_choice_is_kept_and_handed_back(make):
+    window, applied, *_ = make(name_tag=False, tag_position="top_right")
+    assert window.tag_position_selector.get() == "Top right"
+    click_button(window.apply_button)
+    assert applied.calls == [(False, False, True, "off", "bell", "top_right")]
+
+def test_switching_the_name_off_and_on_keeps_the_choice(make):
+    window, applied, *_ = make()
+    window.tag_position_selector.set("Top right")
+    window.name_tag_check.toggle()
+    window.name_tag_check.toggle()
+    assert window.tag_position_selector.get() == "Top right"
+    click_button(window.apply_button)
+    assert applied.calls[0][-1] == "top_right"
+
+def test_the_position_does_not_disturb_the_other_choices(make):
+    window, applied, *_ = make(enabled=True, name_tag=True, flash=False, sound="change", style="glass")
+    window.tag_position_selector.set("Top right")
+    click_button(window.apply_button)
+    assert applied.calls == [(True, True, False, "change", "glass", "top_right")]
+
+
 # --- Apply ---------------------------------------------------------------------
 
 def test_apply_hands_back_what_is_on_screen(make):
@@ -266,10 +340,11 @@ def test_apply_hands_back_what_is_on_screen(make):
     window.name_tag_check.deselect()
     window.sound_selector.set("Per speaker")
     window.style_selector.set("Wood")
+    window.tag_position_selector.set("Top right")
 
     click_button(window.apply_button)
 
-    assert applied.calls == [(True, False, True, "per_speaker", "wood")]
+    assert applied.calls == [(True, False, True, "per_speaker", "wood", "top_right")]
     assert applied_speakers.calls == [("t-1", None)]
     assert window.status_label.cget("text") == "Applied."
     assert window.winfo_exists(), "the window stays open after Apply"
@@ -369,9 +444,11 @@ def test_without_sound_the_sound_part_is_greyed_and_kept_as_saved(make, player):
     for widget in (window.sound_selector, window.style_selector, window.listen_button):
         assert widget.cget("state") == "disabled"
     assert window.sound_note.cget("text") == "Sound is Windows only for now, so it can't be changed here."
+    # Where the name sits has nothing to do with sound.
+    assert window.tag_position_selector.cget("state") == "normal"
 
     click_button(window.apply_button)
-    assert applied.calls == [(False, True, True, "per_speaker", "glass")]
+    assert applied.calls == [(False, True, True, "per_speaker", "glass", "above")]
 
 
 def test_with_sound_the_sound_part_can_be_used(make):

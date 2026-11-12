@@ -71,6 +71,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         speaker_cues_enabled: bool = False,
         speaker_custom: dict[str, str] | None = None,
         speaker_cue_name_tag_enabled: bool = True,
+        speaker_cue_tag_position: str = "above",
         speaker_cue_flash_enabled: bool = True,
         speaker_cue_sound: str = "off",
         speaker_cue_style: str = "bell",
@@ -165,6 +166,7 @@ class SelectionPreviewWindow(ctk.CTkToplevel):
         self.reader_display.set_letter_spacing(letter_spacing_level)
         self.reader_display.set_speaker_cue_options(
             speaker_cue_name_tag_enabled, speaker_cue_flash_enabled, speaker_cue_sound, speaker_cue_style,
+            speaker_cue_tag_position,
         )
         self.reader_display.set_chime_player(chime_player)
 
