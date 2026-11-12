@@ -10,6 +10,7 @@
 ![darkdetect](https://img.shields.io/badge/darkdetect-222222?style=for-the-badge)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-4C4C4C?style=for-the-badge)
 ![Offline](https://img.shields.io/badge/100%25%20offline-2E7D32?style=for-the-badge)
+<br>
   [![Build & Release](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml)
   [![Docs](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml)
   [![Tests](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/tests.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/tests.yml)
@@ -93,6 +94,14 @@ reading this way (including where it helps and where it does not), see [The scie
   bolds the beginning of every word, and Ctrl+C (or right-click, **Copy with
   bold**) carries the bold into Word. It is a look you can try by eye, it is
   remembered between launches, and the app does not claim it helps
+- Optional speaker cues for transcripts that mark who is talking ("Interviewer:",
+  "Speaker 2:"): the reader shows the speaker's name, flashes briefly and can play
+  a soft chime when the speaker changes, and holds a little longer before a new
+  speaker starts. A **Configure speaker cues** window picks which cues you get, the
+  chime's style and where the name sits (above the word or in the top right
+  corner), and lets you review, rename or merge each transcript's speakers. It is
+  off by default, and with it off reading is exactly as it was. The chime is
+  Windows only for now
 - Light / Dark / System theme support with reading colors that
   automatically follow the active theme unless you've customized them
 - Picks up where you left off: the last transcript reopens at launch, paused
@@ -173,6 +182,8 @@ rsvp-desktop-reader/
 │   ├── bold_starts.py       # Which letters at the start of each word are bold in the edit box
 │   ├── bold_spans.py        # Turns those letters into Tk text positions, and keeps very long lines plain
 │   ├── rich_copy.py         # Builds the clipboard HTML and plain text for copying the selection with its bold
+│   ├── speakers.py          # Finds who is speaking in a labelled transcript, and which speakers a transcript is read with
+│   ├── chime.py             # Builds the speaker cue chime (four styles, a pattern of notes per speaker) as WAV bytes
 │   ├── settings_search.py   # Pure matching for the Settings search (name, keywords, description)
 │   ├── profiles.py          # Reading profiles: which settings a profile holds, name rules, loading saved ones
 │   ├── profile_apply.py     # Works out what applying a profile does (clamping, guide mark colour vs. theme)
@@ -191,6 +202,7 @@ rsvp-desktop-reader/
 │   ├── theme.py             # Central design tokens: colors, fonts, theme resolution
 │   ├── icons.py             # Hand-drawn icons (avoids font-glyph rendering issues)
 │   ├── rich_clipboard.py    # Puts text and its bold on the Windows clipboard together, so Word keeps the bold
+│   ├── chime_player.py      # Plays the speaker cue chimes on Windows, from files it makes in the background
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
 ├── tests/                   # Automated test suite: the core engine, and the GUI through its real windows
 │   ├── conftest.py          # Shared fixtures: a real app with its data in a temp folder, a Tk root, scaling
@@ -204,6 +216,9 @@ rsvp-desktop-reader/
 │   ├── test_bold_starts_app.py
 │   ├── test_bold_starts_wiring.py
 │   ├── test_bookmarks_list.py
+│   ├── test_center_over_parent.py
+│   ├── test_chime.py
+│   ├── test_chime_player.py
 │   ├── test_chunking.py
 │   ├── test_colors.py
 │   ├── test_context_ribbon.py
@@ -238,7 +253,9 @@ rsvp-desktop-reader/
 │   ├── test_profiles.py
 │   ├── test_punctuation.py
 │   ├── test_reader.py
+│   ├── test_reader_display_speaker_cues.py
 │   ├── test_reader_letter_spacing.py
+│   ├── test_reader_speaker_cues.py
 │   ├── test_reading_colours_follow_theme.py
 │   ├── test_reopen_last_transcript.py
 │   ├── test_rich_clipboard.py
@@ -255,10 +272,16 @@ rsvp-desktop-reader/
 │   ├── test_settings_store_bold_starts.py
 │   ├── test_settings_store_dyslexia.py
 │   ├── test_settings_store_profiles.py
+│   ├── test_settings_store_speaker_cues.py
 │   ├── test_sidebar_rows.py
 │   ├── test_skip_and_resume.py
 │   ├── test_space_and_move_guards.py
 │   ├── test_spaces_and_deleting.py
+│   ├── test_speaker_cues_settings_in_app.py
+│   ├── test_speaker_cues_window.py
+│   ├── test_speaker_cues_wiring.py
+│   ├── test_speaker_rows.py
+│   ├── test_speakers.py
 │   ├── test_start_reading.py
 │   ├── test_storage.py
 │   ├── test_suite_isolation.py
@@ -273,7 +296,9 @@ rsvp-desktop-reader/
 │   ├── test_transcript_input_rich_copy.py
 │   ├── test_transcript_list_current.py
 │   ├── test_transcript_sort.py
+│   ├── test_transcript_speaker_list.py
 │   ├── test_transcript_store.py
+│   ├── test_whole_transcript_speakers.py
 │   ├── test_window_esc.py
 │   ├── test_window_placement.py
 │   ├── test_wpm_keys.py
@@ -303,7 +328,8 @@ Settings are organized into six tabs:
 - **Defaults** - the speed, colours and word size new transcripts start with,
   and the reader settings that apply to every transcript straight away: guide
   marks, pacing, skipping, the surrounding-words line, reopening the last
-  transcript at launch, and more
+  transcript at launch, and more. Two buttons here open their own windows:
+  **Configure chunking** and **Configure speaker cues**
 - **Layout** - window size (also remembered, with its place on screen, when you
   close the app), sidebar width, bottom control-band height, and a free-form
   drag-to-resize toggle
@@ -319,7 +345,7 @@ Settings are organized into six tabs:
   pacing, rewind on resume, surrounding words, skipping, the +/- step, the
   scrubber and paragraph switches, the letter spacing, and the Speed and Word
   size sliders. Applying one takes effect straight away, and never changes a
-  transcript, your colours, chunking or font (Speed and Word size only set
+  transcript, your colours, chunking, speaker cues or font (Speed and Word size only set
   where new transcripts start). Profiles are saved with your settings, so
   Export and Import carry them along
 - **Stats** - read-only reading totals for each transcript (how many times
@@ -371,7 +397,7 @@ project on GitHub.
 - ~~Dyslexia-friendly font and letter spacing~~
 - ~~Bold word starts in the edit box, with copying the bold into Word~~
 - ~~Upgrading the test suite 2.0~~
-- Speaker cues
+- ~~Speaker cues~~
 
 
 ## License
