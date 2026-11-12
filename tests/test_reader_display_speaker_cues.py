@@ -1,5 +1,6 @@
 """Speaker cues in the reader widget (gui/components/reader_display.py): the
-name tag above the word, the flash at a new speaker, and the chime.
+name tag (above the word or in the top right corner), the flash at a new
+speaker, and the chime.
 
 Like test_reader_letter_spacing.py, these build a reader of their own on a small
 window rather than the whole app, since the reader is all they need; the app's
@@ -228,6 +229,164 @@ def test_the_tag_slides_with_a_pan(reader, root):
     tag_middle = tag.winfo_rootx() + tag.winfo_width() / 2
     focus_middle = focus.winfo_rootx() + focus.winfo_width() / 2
     assert abs(tag_middle - focus_middle) <= 1
+
+
+# ---- The name tag in the top right corner ----
+
+def _corner(reader):
+    """Move the tag to the top right corner of the reader and let it settle."""
+    reader.set_speaker_cue_options(True, True, "off", "bell", "top_right")
+    settle(reader, 30)
+
+def _gaps(reader):
+    """How far the tag's top and right edges are from the reader's, in screen
+    pixels."""
+    tag, row = reader.speaker_tag, reader.word_row
+    top = tag.winfo_rooty() - row.winfo_rooty()
+    right = (row.winfo_rootx() + row.winfo_width()) - (tag.winfo_rootx() + tag.winfo_width())
+    return top, right
+
+def test_the_tag_sits_above_the_word_unless_told_otherwise(reader):
+    assert reader._speaker_tag_position == "above"
+    _load(reader)
+    reader.set_speaker_cue_options(True, True, "off", "bell")
+    assert reader._speaker_tag_position == "above"
+    tag_middle = reader.speaker_tag.winfo_rootx() + reader.speaker_tag.winfo_width() / 2
+    focus_middle = reader.focus_label.winfo_rootx() + reader.focus_label.winfo_width() / 2
+    assert abs(tag_middle - focus_middle) <= 1
+
+def test_in_the_corner_the_tag_keeps_a_set_distance_from_the_top_and_right_edges(reader):
+    assert reader.SPEAKER_TAG_CORNER_MARGIN_PX == 12
+    _load(reader)
+    _corner(reader)
+    assert _tag(reader) == "Ann"
+    top, right = _gaps(reader)
+    margin = reader.SPEAKER_TAG_CORNER_MARGIN_PX * reader._get_widget_scaling()
+    assert abs(top - margin) <= 1
+    assert abs(right - margin) <= 1
+
+def test_in_the_corner_the_tag_is_not_centred_on_the_word(reader):
+    _load(reader)
+    _corner(reader)
+    tag_middle = reader.speaker_tag.winfo_rootx() + reader.speaker_tag.winfo_width() / 2
+    focus_middle = reader.focus_label.winfo_rootx() + reader.focus_label.winfo_width() / 2
+    assert tag_middle - focus_middle > 100
+
+def test_in_the_corner_the_tag_holds_still_while_the_speaker_changes(reader):
+    _load(reader)
+    _corner(reader)
+    corner = _gaps(reader)
+    seen = []
+    for _ in range(12):
+        seen.append((_tag(reader), _gaps(reader)[0]))
+        _step(reader)
+    assert [name for name, _top in seen] == ["Ann"] * 3 + ["Bob"] * 3 + ["Ann"] * 3 + ["Bob"] * 3
+    assert {top for _name, top in seen} == {corner[0]}, "never moves down or up"
+
+def test_a_longer_name_still_ends_at_the_right_edge(reader):
+    _load(reader, custom={"ann": "A", "bob": "Interviewer number two"})
+    _corner(reader)
+    short = _gaps(reader)
+    _step(reader, 3)
+    assert _tag(reader) == "Interviewer number two"
+    assert _gaps(reader) == short, "it grows to the left, so its right end stays put"
+
+def test_in_the_corner_the_tag_does_not_slide_with_a_pan(reader, root):
+    long_word = "Pneumonoultramicroscopicsilicovolcanoconiosis" * 3
+    _load(reader, f"Ann: {long_word}\nBob: b\nAnn: c\nBob: d")
+    _corner(reader)
+    _step(reader)
+    assert reader._scrollbar_visible
+    before = (reader.speaker_tag.winfo_rootx(), reader.speaker_tag.winfo_rooty())
+    reader._handle_scroll("scroll", 5, "units")
+    settle(root, 30)
+    assert reader._pan_offset_px != 0
+    assert (reader.speaker_tag.winfo_rootx(), reader.speaker_tag.winfo_rooty()) == before
+    assert _tag(reader) == "Ann"
+
+def test_in_the_corner_the_tag_follows_the_edge_when_the_reader_is_resized(reader, root):
+    _load(reader)
+    _corner(reader)
+    root.geometry("500x420+0+0")
+    settle(root, 150)
+    top, right = _gaps(reader)
+    margin = reader.SPEAKER_TAG_CORNER_MARGIN_PX * reader._get_widget_scaling()
+    assert abs(top - margin) <= 1
+    assert abs(right - margin) <= 1
+
+def test_the_margin_grows_with_display_scaling(reader, monkeypatch):
+    _load(reader)
+    monkeypatch.setattr(reader, "_get_widget_scaling", lambda: 2.0)
+    _corner(reader)
+    top, right = _gaps(reader)
+    assert abs(top - 24) <= 1
+    assert abs(right - 24) <= 1
+
+def test_the_tag_can_move_between_the_two_places_while_shown(reader):
+    _load(reader)
+    _corner(reader)
+    assert _gaps(reader)[1] < 30
+    reader.set_speaker_cue_options(True, True, "off", "bell", "above")
+    settle(reader, 30)
+    assert _tag(reader) == "Ann"
+    tag_middle = reader.speaker_tag.winfo_rootx() + reader.speaker_tag.winfo_width() / 2
+    focus_middle = reader.focus_label.winfo_rootx() + reader.focus_label.winfo_width() / 2
+    assert abs(tag_middle - focus_middle) <= 1
+    _corner(reader)
+    assert _gaps(reader)[1] < 30
+
+def test_going_back_above_the_word_slides_with_a_pan_again(reader, root):
+    long_word = "Pneumonoultramicroscopicsilicovolcanoconiosis" * 3
+    _load(reader, f"Ann: {long_word}\nBob: b\nAnn: c\nBob: d")
+    _corner(reader)
+    reader.set_speaker_cue_options(True, True, "off", "bell", "above")
+    _step(reader)
+    reader._handle_scroll("scroll", 5, "units")
+    settle(root, 30)
+    tag_middle = reader.speaker_tag.winfo_rootx() + reader.speaker_tag.winfo_width() / 2
+    focus_middle = reader.focus_label.winfo_rootx() + reader.focus_label.winfo_width() / 2
+    assert abs(tag_middle - focus_middle) <= 1
+
+@pytest.mark.parametrize("damaged", ["middle", "", "Top_Right", None, 3])
+def test_a_position_it_does_not_know_means_above_the_word(reader, damaged):
+    _load(reader)
+    reader.set_speaker_cue_options(True, True, "off", "bell", damaged)
+    assert reader._speaker_tag_position == "above"
+
+def test_the_corner_tag_is_hidden_when_the_name_is_off_or_there_is_no_speaker(reader):
+    _load(reader)
+    _corner(reader)
+    reader.set_speaker_cue_options(False, True, "off", "bell", "top_right")
+    settle(reader, 20)
+    assert _tag(reader) is None
+    reader.set_speaker_cue_options(True, True, "off", "bell", "top_right")
+    settle(reader, 20)
+    assert _tag(reader) == "Ann"
+    _step(reader, 12)
+    assert reader.session.is_finished
+    assert _tag(reader) is None
+
+def test_the_corner_tag_is_dimmed_and_lights_up_for_the_flash(reader):
+    _load(reader)
+    _corner(reader)
+    assert reader.speaker_tag.cget("text_color") == _dim()
+    _step(reader, 3)
+    assert reader.speaker_tag.cget("text_color") == HIGHLIGHT
+    assert _background(reader) == _warm()
+    settle(reader, reader.SPEAKER_FLASH_MS + 150)
+    assert reader.speaker_tag.cget("text_color") == _dim()
+    assert _background(reader) == BACKGROUND
+
+def test_the_corner_tag_stays_while_paused_and_while_reading(reader, root):
+    _load(reader)
+    _corner(reader)
+    assert _tag(reader) == "Ann"
+    reader.toggle_pause()
+    settle(root, 30)
+    try:
+        assert _tag(reader) == "Ann"
+    finally:
+        reader.toggle_pause()
 
 
 # ---- The flash ----

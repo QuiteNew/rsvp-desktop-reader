@@ -7,6 +7,7 @@ from core.chime import CHIME_STYLES, ChimeGap, chime_length_ms, chime_notes, spe
 from core.colors import blend_colors
 from core.letter_spacing import GAP_UNIT_CHARS, NO_SPACING, PLAIN_SPACE, SpacingPlan, build_plan, clamp_level, space_chunk
 from core.scroll import scrollbar_fractions, pan_from_fraction, clamp_pan
+from core.settings_store import SPEAKER_CUE_TAG_POSITIONS
 from core.speakers import UNNAMED_SPEAKER
 from gui.icons import center_icon
 from gui.theme import FONT_HEADING, COCOA_INK, EMBER_GLOW, EMBER_GLOW_HOVER, HEARTH_PAPER
@@ -56,9 +57,12 @@ class ReaderDisplay(ctk.CTkFrame):
 
     Speaker cues (off unless the session has them on, see
     ReaderSession.speaker_cues_enabled) show who is speaking in a labelled
-    transcript. A name tag, small and dimmed like the ribbon, sits centred
-    above the word, just clear of the highest a guide mark can reach, and
-    stays while paused. When reading steps forward into a new speaker's turn,
+    transcript. A name tag, small and dimmed like the ribbon, stays on screen
+    while paused. By default it sits centred above the word, just clear of the
+    highest a guide mark can reach, and slides with the word when the reader
+    is panned. Or it can sit in the top right corner of the reader, where it
+    stays put however the reader is panned (see SPEAKER_CUE_TAG_POSITIONS in
+    core/settings_store.py). When reading steps forward into a new speaker's turn,
     the tag lights up in the highlight colour and the background warms toward
     it for a moment, and a chime plays through the chime player the app hands
     over (see set_chime_player() and gui/chime_player.py). Skipping, scrubbing,
@@ -128,6 +132,8 @@ class ReaderDisplay(ctk.CTkFrame):
                                         # same as the ribbon below the word
     SPEAKER_TAG_BOTTOM_MARGIN_PX = 8   # px between the tag and the highest point a guide mark reaches
     SPEAKER_TAG_MIN_TOP_PX = 4         # px the tag always keeps from the top edge of the reading row
+    SPEAKER_TAG_CORNER_MARGIN_PX = 12  # how far the tag keeps from the top and right edges when it sits in the
+                                        # top right corner, before display scaling
     SPEAKER_FLASH_MS = 330             # how long a new speaker's flash lasts, about a third of a second
     SPEAKER_FLASH_WARMTH = 0.18        # how far the background moves toward the highlight colour
                                         # during the flash (0 is no change, 1 the highlight itself)
@@ -183,6 +189,7 @@ class ReaderDisplay(ctk.CTkFrame):
         # the player that sounds them (set_chime_player()), and the pattern
         # each speaker of the current session gets.
         self._speaker_tag_enabled = True
+        self._speaker_tag_position = SPEAKER_CUE_TAG_POSITIONS[0]
         self._speaker_flash_enabled = True
         self._speaker_sound = "off"
         self._speaker_style = CHIME_STYLES[0]
@@ -624,14 +631,20 @@ class ReaderDisplay(ctk.CTkFrame):
             self._schedule_next()
         self._update_guide_marks()
 
-    def set_speaker_cue_options(self, name_tag: bool, flash: bool, sound: str, style: str) -> None:
-        """How Speaker cues show and sound: whether the name tag is shown,
-        whether a new speaker flashes, which chime plays (one of
-        core/settings_store.py's SPEAKER_CUE_SOUNDS) and in which style (one of
-        core/chime.py's CHIME_STYLES; anything else means the default). Applies
-        at once, including to a flash already under way. Whether there are
-        speaker cues at all is the session's (see set_speaker_cues())."""
+    def set_speaker_cue_options(
+        self, name_tag: bool, flash: bool, sound: str, style: str, tag_position: str = SPEAKER_CUE_TAG_POSITIONS[0],
+    ) -> None:
+        """How Speaker cues show and sound: whether the name tag is shown and
+        where (one of core/settings_store.py's SPEAKER_CUE_TAG_POSITIONS;
+        anything else means above the word), whether a new speaker flashes,
+        which chime plays (one of SPEAKER_CUE_SOUNDS there) and in which style
+        (one of core/chime.py's CHIME_STYLES; anything else means the default).
+        Applies at once, including to a flash already under way. Whether there
+        are speaker cues at all is the session's (see set_speaker_cues())."""
         self._speaker_tag_enabled = name_tag
+        self._speaker_tag_position = (
+            tag_position if tag_position in SPEAKER_CUE_TAG_POSITIONS else SPEAKER_CUE_TAG_POSITIONS[0]
+        )
         self._speaker_flash_enabled = flash
         self._speaker_sound = sound
         self._speaker_style = style if style in CHIME_STYLES else CHIME_STYLES[0]
@@ -1056,8 +1069,9 @@ class ReaderDisplay(ctk.CTkFrame):
             if self._ctx_after_shown:
                 self._place_physical(self.context_after, x=anchor_x + self._ctx_side_offset, y=self._ctx_ribbon_y, anchor="w")
 
-        # So does the name tag, at the height it was last placed at.
-        if self._tag_shown:
+        # So does the name tag, at the height it was last placed at, when it
+        # sits above the word. In the top right corner it stays where it is.
+        if self._tag_shown and self._speaker_tag_position == "above":
             self._place_physical(self.speaker_tag, x=anchor_x, y=self._tag_y, anchor="center")
 
     def _show_current_frame(self) -> None:
@@ -1356,16 +1370,20 @@ class ReaderDisplay(ctk.CTkFrame):
         self.context_after.place_forget()
 
     def _update_speaker_tag(self) -> None:
-        """Show the current speaker's name above the word, or hide it. Hidden
-        when the tag is switched off, before the first speaker, for a ">>"
-        change (no name to show), once the reading is finished, and before the
-        row has been sized. Otherwise shown while reading and while paused.
+        """Show the current speaker's name, above the word or in the top right
+        corner, or hide it. Hidden when the tag is switched off, before the
+        first speaker, for a ">>" change (no name to show), once the reading is
+        finished, and before the row has been sized. Otherwise shown while
+        reading and while paused.
 
-        It sits centred on the same anchor as the word, below the top of the
-        row and above the highest point a guide mark can reach (worked out the
-        same way _update_guide_marks() does, so the two never overlap whether
-        or not the marks are showing). Dimmed toward the background like the
-        ribbon, or in the highlight colour while a new speaker flashes."""
+        Above the word, it sits centred on the same anchor as the word, below
+        the top of the row and above the highest point a guide mark can reach
+        (worked out the same way _update_guide_marks() does, so the two never
+        overlap whether or not the marks are showing). In the corner, its top
+        right sits a fixed distance in from the row's top and right edges, and
+        it doesn't follow the word, so it holds still while reading and while
+        panning. Dimmed toward the background like the ribbon, or in the
+        highlight colour while a new speaker flashes."""
         # A finished session has no current speaker, so this covers that too.
         speaker = self.session.current_speaker if self.session is not None else None
         if (not self._speaker_tag_enabled or speaker is None or speaker == UNNAMED_SPEAKER
@@ -1385,8 +1403,13 @@ class ReaderDisplay(ctk.CTkFrame):
             self.speaker_tag.configure(text=speaker, text_color=color)
 
         self.speaker_tag.update_idletasks()
-        tag_height = self.speaker_tag.winfo_reqheight()
         scale = self._get_widget_scaling()
+        if self._speaker_tag_position == "top_right":
+            margin = self.SPEAKER_TAG_CORNER_MARGIN_PX * scale
+            self._place_physical(self.speaker_tag, x=self._row_width - margin, y=margin, anchor="ne")
+            self._tag_shown = True
+            return
+        tag_height = self.speaker_tag.winfo_reqheight()
         highest_mark_y = (self._focus_y - self._focus_half_height - self.GUIDE_MARK_MIN_GAP_PX
                           - self._guide_mark_length() * scale)
         tag_y = highest_mark_y - self.SPEAKER_TAG_BOTTOM_MARGIN_PX - tag_height / 2
