@@ -37,6 +37,9 @@ LETTER_SPACING_LEVEL_RANGE = (0, MAX_LEVEL)  # 0 is Off. The top level comes fro
 SPEAKER_CUE_SOUNDS = ("off", "change", "per_speaker")  # what Speaker cues plays when the speaker changes:
                                                          # nothing, one chime for any change, or a chime with
                                                          # its own pitch for each speaker. The first is the default.
+SPEAKER_CUE_TAG_POSITIONS = ("above", "top_right")  # where the speaker's name shows in the reader: small above
+                                                     # the word, or fixed in the top right corner of the reader.
+                                                     # The first is the default.
 
 @dataclass
 class AppSettings:
@@ -116,6 +119,9 @@ class AppSettings:
                                               # CHIME_STYLES (bell, soft, glass, wood). Bell by default.
     speaker_cue_name_tag_enabled: bool = True  # global: show the current speaker's name, small and dimmed,
                                                # above the flashing word. On by default.
+    speaker_cue_tag_position: str = SPEAKER_CUE_TAG_POSITIONS[0]  # global: where that name sits, one of
+                                                                  # SPEAKER_CUE_TAG_POSITIONS. Above the word by
+                                                                  # default. Only matters while the name is on.
     speaker_cue_flash_enabled: bool = True  # global: at a new speaker, light the name up and warm the
                                             # reading background for a moment. On by default.
     reopen_last_transcript: bool = True  # global: at launch, open the transcript that was open when the app was
@@ -440,6 +446,13 @@ class SettingsStore:
         return self._settings.speaker_cue_name_tag_enabled is not False
 
     @property
+    def speaker_cue_tag_position(self) -> str:
+        # A place this version doesn't know (a typo, one a newer version
+        # added) reads as the default, so the name still shows somewhere.
+        position = self._settings.speaker_cue_tag_position
+        return position if position in SPEAKER_CUE_TAG_POSITIONS else SPEAKER_CUE_TAG_POSITIONS[0]
+
+    @property
     def speaker_cue_flash_enabled(self) -> bool:
         # On unless it is strictly False, the same as the name tag above.
         return self._settings.speaker_cue_flash_enabled is not False
@@ -630,6 +643,10 @@ class SettingsStore:
 
     def set_speaker_cue_name_tag_enabled(self, enabled: bool) -> None:
         self._settings.speaker_cue_name_tag_enabled = enabled
+        self._save()
+
+    def set_speaker_cue_tag_position(self, position: str) -> None:
+        self._settings.speaker_cue_tag_position = position
         self._save()
 
     def set_speaker_cue_flash_enabled(self, enabled: bool) -> None:
