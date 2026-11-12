@@ -2,8 +2,8 @@
 
 This guide covers everything in RSVP Desktop Reader: how the reading itself
 works, organizing transcripts into Spaces, getting text in and editing it,
-the reader and its controls, the detached window, the keyboard shortcuts, every
-setting, and saved reading profiles.
+the reader and its controls, speaker cues for conversations, the detached
+window, the keyboard shortcuts, every setting, and saved reading profiles.
 
 ## How the reading works
 
@@ -143,7 +143,8 @@ bold. It is a look for the edit box and does not change the text, see
 You do not have to read a whole transcript. Select a portion of text in the
 edit box, right-click it, and choose **Play** to read just that selection, or
 **Detach** to open it in its own window. Both read the words in groups when the
-transcript has chunking on. Selection reading is independent, it never changes
+transcript has chunking on, and with [Speaker cues](#speaker-cues) on they use the
+transcript's speakers too. Selection reading is independent, it never changes
 the transcript's saved text, position, or stats. With the bold
 look on, the same menu also offers **Copy with bold**, described under
 [Bold word starts and copying with bold](#bold-word-starts-and-copying-with-bold).
@@ -472,6 +473,129 @@ them tested RSVP. The FAQ has the details, under
 and a note on the name under
 [Is this the same as Bionic Reading?](faq.md#is-this-the-same-as-bionic-reading).
 
+## Speaker cues
+
+Some transcripts mark who is talking, with a name at the start of a line:
+
+```text
+Interviewer: So how did it start?
+Speaker 2: In a garage, believe it or not.
+```
+
+Speaker cues is for transcripts like that. When it is on, the reader keeps track
+of who is speaking and gives you a nudge when the speaker changes, so a long
+conversation does not blur into one voice. It is **off by default**, and with it
+off the reader behaves exactly as it always has: no name, no extra pause, nothing
+different.
+
+### What you get
+
+- **A name tag.** The current speaker's name, small and dimmed like the
+  surrounding-words line, stays on screen while you read and while you are paused.
+  It sits either above the word or in the top right corner of the reader, your
+  choice. Above the word it is centred over the word and slides along with it if
+  you pan the reader sideways. In the corner it holds still, so your eyes can leave
+  it alone.
+- **A brief flash.** When reading carries on into a new speaker's turn, the name
+  lights up in your highlight colour and the reading background warms a little,
+  for about a third of a second.
+- **A chime** (Windows only for now). A short, soft sound when the speaker
+  changes. It can be one chime for any change, or a chime of its own for each
+  speaker, in a different shape of notes (one note, two going up, two going down,
+  one higher note, three going up, and so on in a loop), which is easier to tell
+  apart than a small change in pitch. There are four styles: Bell, Soft, Glass and
+  Wood.
+- **A longer pause.** The last word of a speaker's turn stays up about three and
+  a half times as long as normal, a little longer than the end of a sentence, so
+  the new voice does not arrive without warning. As with the other pauses, the
+  longest one wins rather than adding up, and the estimated time remaining
+  includes them. There is no separate switch for it.
+- **Groups stop at a change.** With [chunking](#reading-words-in-groups-chunking)
+  on, a group never runs from one speaker's turn into the next.
+
+Only reading on into a new speaker cues it. Skipping, dragging the progress bar,
+jumping to a bookmark and restarting move the name to the right speaker without a
+flash or a chime. Two chimes are never played closer together than about
+four-tenths of a second, so reading very fast with the speaker changing every few
+words does not turn into a rattle.
+
+The label word is still flashed like any other word ("Interviewer:" comes up as a
+word before the speech that follows it), so word numbers, your saved place and
+your bookmarks are the same whether Speaker cues is on or off.
+
+### What counts as a speaker name
+
+A name counts when it starts a line and is followed by a colon and then a space
+(or the end of the line). The name:
+
+- starts with a letter that is not a small letter, so "Interviewer:", "Speaker 2:",
+  "Q:" and "Dr. Smith:" count and "and then Bob:" does not. Writing systems without
+  capitals, such as Chinese or Arabic, are not affected
+- is at most four words and 30 characters long
+- may hold letters, digits, spaces, dots, apostrophes and hyphens, but not commas
+  or question marks, so "Wait, Bob:" and "Ready? Go:" do not count
+
+Capitals and extra spaces are ignored when comparing, so "Speaker 2:" and
+"speaker  2:" are the same speaker. Times such as "10:30" and web addresses are
+not names. The price of the small-letter rule is that an all-lowercase name like
+"bob:" is not found.
+
+Captions from YouTube often show a change of speaker as `>>` at the start of a
+line, with no name. That counts as a change, so it flashes and chimes, but there
+is no name to show. If a name follows it (`>> JOHN: hi`), the name is used.
+
+### Turning it on and choosing the cues
+
+Open **Settings**, under Defaults, and click **Configure speaker cues...**. The
+window has two parts. The top part is for the whole app:
+
+- **Speaker cues**, the on/off switch.
+- **The speaker's name**, a tick box for the name tag, with an **Above the word**
+  and **Top right** choice under it. The choice is greyed out while the name is
+  off, and is remembered for when you turn the name back on.
+- **A brief flash when the speaker changes**, a tick box.
+- **Sound**: **Off**, **One chime** or **Per speaker**, and under it the style
+  (Bell, Soft, Glass or Wood) with a **Listen** button that plays your choice
+  before you apply it. Sound is off by default. On macOS and Linux this part is
+  greyed out and says so, and the choice is kept as it was.
+
+**Apply** puts the choices to use straight away, in the reader you have open and
+in the detached window, and the window stays open so you can try another. **Close**
+(or Esc) leaves without applying anything more. These settings belong to the whole
+app, so they are not saved in a reading profile, the same as chunking.
+
+### Reviewing the speakers of a transcript
+
+The bottom part of the window is about the transcript open right now. It lists
+every name found in its text, each with a tick box, the name that is shown for it,
+and how many lines it starts ("seen 3 times"). Out of the box the list is
+**Automatic**: a name counts as a speaker when it starts at least two lines, which
+keeps a stray "Note:" or "Example:" out. A name that appears only once is still
+listed, unticked, in case it really is a speaker.
+
+You can change it for this transcript:
+
+- **Untick** a name to stop it counting as a speaker. Its lines then belong to
+  whoever was speaking before.
+- **Rename** a name to change what is shown. The text of the transcript is never
+  touched.
+- Type **the same name on two rows** to make them one speaker. "Dr. Smith" and
+  "Smith" can become a single voice, with a single chime.
+
+Two lines in a row from the same speaker are one turn, so there is no cue between
+them. Once you change anything the list says **Custom**, and **Back to automatic** puts
+every row back the way Automatic has it. If your changes end up the same as
+Automatic, it is saved as Automatic. The list is saved with the transcript, so it
+travels with an export. With no transcript open, the bottom part only says so.
+
+### Where it applies
+
+The detached window follows the app's choices as you apply them. A selection read
+with right-click **Play** or **Detach** uses the speakers of the whole transcript
+it came from, so the name is right from the selection's first label on (words
+before that have no name). The windows that read a selection keep the choices they
+opened with.
+
 ## The detached window
 
 The **Detach** button pops the current transcript out into its own standalone
@@ -583,6 +707,10 @@ A **Configure chunking...** button opens the chunking window described under
 [Reading words in groups](#reading-words-in-groups-chunking) above, where you
 set grouping for the current transcript or for new transcripts.
 
+A **Configure speaker cues...** button opens the window described under
+[Speaker cues](#speaker-cues) above, where you turn the cues on and choose them,
+and review the speakers of the open transcript.
+
 A **Reset to Original Defaults** button restores this tab.
 
 ### Layout
@@ -668,7 +796,7 @@ last:
 **What it never changes.** Applying a profile never touches a transcript: not
 its text, its position, or its own speed and size. It does not change your
 Defaults colours (font, highlight and background), the chunking settings, the
-layout, the data folder, the Light / Dark theme, or the OpenDyslexic font switch
+speaker cues settings, the layout, the data folder, the Light / Dark theme, or the OpenDyslexic font switch
 (a font only changes when the app starts). The bold word starts button is not
 part of a profile either, it is remembered on its own. Speed and Word size are the
 Defaults sliders, so they only decide where the next *new* transcript starts.
@@ -750,6 +878,9 @@ compare against the latest release on the project's Releases page.
   deleting a profile are saved at once, and applying one takes effect at once
   and closes Settings. Saving, updating and applying first apply any pending
   changes from the other tabs.
+- **When you press Apply in the Speaker cues window:** the cues change at once,
+  in the main window and the detached window, and are saved at once. See
+  [Speaker cues](#speaker-cues).
 - **When you click the bold button:** the look changes at once and is saved at
   once. See
   [Bold word starts and copying with bold](#bold-word-starts-and-copying-with-bold).

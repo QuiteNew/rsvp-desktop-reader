@@ -213,6 +213,54 @@ own keys and buttons always work on its own transcript. Open the detached
 transcript in the main window again (the "detached" placeholder shows) and the
 main window's keys go back to controlling the detached window.
 
+### How do I get the reader to show who is speaking?
+
+Open **Settings**, under Defaults, click **Configure speaker cues...**, turn on
+**Speaker cues** and press **Apply**. It works for transcripts that put a name at
+the start of a line, like "Interviewer:" or "Speaker 2:". The name shows above the
+word or in the top right corner, the reader flashes when the speaker changes,
+and on Windows it can play a soft chime. The
+[Speaker cues](usage.md#speaker-cues) section of the Usage page has the details.
+
+### Speaker cues is on, but no name shows or a speaker is missing
+
+The usual reasons, in order:
+
+- **The name has to start the line.** It must come right at the start of a line in
+  the edit box and be followed by a colon and a space. A name in the middle of a
+  line does not count, and neither does a transcript pasted as one long line.
+- **The name has to look like a name.** It starts with a letter that is not a
+  small letter, and it is at most four words and 30 characters, with no commas or
+  question marks. "Interviewer:" and "Dr. Smith:" count, "bob:" does not.
+- **In Automatic, a name has to start at least two lines.** That keeps a stray
+  "Note:" out. Open **Configure speaker cues...**, find the name in the list for
+  the open transcript (it is listed even when it appears once) and tick it.
+
+If the list says no names were found, none of the lines match the rules above.
+
+### Does Speaker cues change my word positions, bookmarks or speed?
+
+Positions and bookmarks, no. The name before each speaker's turn is still flashed
+as a word, so every word keeps its number. Speed changes only a little: the last
+word of a speaker's turn stays up about three and a half times as long as normal,
+so a new voice does not arrive without warning, and the estimated time remaining
+includes it. With Speaker cues off nothing changes at all.
+
+### I chose a sound but hear nothing
+
+The chime is Windows only for now, so on macOS and Linux that part of the
+window is greyed out, and the name and the flash work without it. On Windows,
+check that **Sound** is not **Off** (it is off by default), press **Listen** to
+hear your choice, and check the system volume. The app makes the chime itself, so
+there is nothing to install. Two chimes are never played closer together than
+about four-tenths of a second.
+
+### A speaker shows up under two names
+
+For example "Smith:" in one place and "Dr. Smith:" in another. Open **Configure
+speaker cues...** and type the same name on both rows of the list. They become one
+speaker, with one name and one chime. The text of the transcript is never changed.
+
 ## Settings and appearance
 
 ### How do I find a setting?

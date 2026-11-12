@@ -73,6 +73,7 @@ The top-level shape is:
 | `pre_normalize_text` | string | `""` | Undo data for the Normalize button: the text before normalizing. |
 | `normalized_text` | string | `""` | Undo data: the text normalizing produced. |
 | `bookmarks` | list | `[]` | Saved positions, each the object below. |
+| `speaker_custom` | object or `null` | `null` | The speakers you picked by hand for Speaker cues, or `null` for Automatic, where they are worked out from the text each time. The object maps a name as found in the text, in lower case with its spaces squeezed (`"dr. smith"`), to the name shown for it (`"Dr. Smith"`). A name that is not in it is not a speaker. Two names with the same shown name are one speaker, and an empty object means no speakers at all. |
 
 The color values above are the dataclass fallbacks. A transcript you create in
 the app is actually seeded with the colors from Settings, under Defaults, not
@@ -147,6 +148,19 @@ nothing has been saved yet. A saved position that would leave the window off
 every screen is ignored when the app starts, and the window opens where the
 system puts it.
 
+**Speaker cues** (all global)
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `speaker_cues_enabled` | false | Whether the reader shows who is speaking and gives a cue when the speaker changes. Only `true` turns it on, so anything else in the file reads as off. Which speakers a transcript has is kept on the transcript, in `speaker_custom`. |
+| `speaker_cue_name_tag_enabled` | true | Show the current speaker's name. Anything but `false` keeps it on. |
+| `speaker_cue_tag_position` | `above` | Where the name sits: `above` the word, or `top_right`, the top right corner of the reader. Anything else reads as `above`. |
+| `speaker_cue_flash_enabled` | true | Flash when the speaker changes. Anything but `false` keeps it on. |
+| `speaker_cue_sound` | `off` | What plays when the speaker changes: `off`, `change` (one chime for any change) or `per_speaker` (a chime of its own for each speaker). Anything else reads as `off`. Only Windows plays it for now. |
+| `speaker_cue_style` | `bell` | What the chime sounds like: `bell`, `soft`, `glass` or `wood`. Anything else reads as `bell`. |
+
+None of these are saved in a reading profile.
+
 **Guide marks** (global)
 
 | Field | Default | Meaning |
@@ -199,7 +213,7 @@ A profile can hold these settings: `highlight_offset_px`,
 `letter_spacing_level`. It never holds a transcript's own values, the Defaults
 colours, the chunking defaults, the window and layout sizes, the data
 directory, the theme, the `dyslexia_font_enabled` font switch, the
-`bold_starts_enabled` look, or the settings that pick up where you left off.
+`bold_starts_enabled` look, the speaker cues settings, or the settings that pick up where you left off.
 The font is left out because it is only read at startup, so a profile could not
 switch it on the spot the way it does everything else. The bold look is left
 out because it is a choice about how the edit box looks, not a reading setting,
@@ -233,8 +247,9 @@ by default named `rsvp-reader-export.json`, with this shape:
 - `data` is exactly the contents of `data.json`.
 - `settings` is everything from `settings.json` **except `data_directory`**,
   which is left out on purpose: it is a machine-specific path that would be
-  meaningless, or wrong, on another computer. Your saved reading profiles and
-  the bold word starts choice are part of it.
+  meaningless, or wrong, on another computer. Your saved reading profiles, the
+  bold word starts choice and the speaker cues settings are part of it. Each
+  transcript's own speaker list (`speaker_custom`) travels in `data`.
 - `bundle_format` is the format version, currently `1`. A bundle from a
   different format version is refused rather than misread.
 
