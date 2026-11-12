@@ -37,13 +37,17 @@ a test fails when a release tag is newer than the number written there.
    Leave that in: with pytest's default capture, Tk on Windows now and then
    failed to start at all, unable to read its own library files.
 
-3. **Make the docs commit.** Update the README (feature list, roadmap) and any
-   docs pages the release touches, and bump `APP_VERSION` in
-   `core/app_info.py`. This is the commit that gets tagged, and the version
-   bump is the last edit in it.
+3. **Make the docs commits.** Update the docs pages the release touches. Then,
+   in the last commit, update the README (feature list, roadmap), this file if
+   the steps changed, and bump `APP_VERSION` in `core/app_info.py`. That last
+   commit is the one that gets tagged, and the version bump is the last edit
+   in it.
 
-4. **Push `main` and wait.** Open the Actions tab and wait for **Tests** and
-   **Docs** to go green on that commit. Don't tag before they do.
+4. **Get it onto `main` and wait.** If the work was done on a branch, open a pull
+   request and merge it with **Create a merge commit** (not squash and not
+   rebase, so the commits keep their own dates), then update local `main`. If it
+   was done on `main`, just push. Open the Actions tab and wait for **Tests**
+   and **Docs** to go green on `main`. Don't tag before they do.
 
 5. **Optional dry run.** Go to Actions, then Build & Release, then Run
    workflow, on `main` and with "Create a draft GitHub release" left off. It
@@ -52,7 +56,8 @@ a test fails when a release tag is newer than the number written there.
    ones, start them, open Settings, press the **i** button and check that the
    version and the link look right.
 
-6. **Tag and push the tag.** The tag goes on the docs commit:
+6. **Tag and push the tag.** The tag goes on the tip of `main`, which is the
+   merge commit when a branch was merged:
 
 ```
    git tag vX.Y.Z
@@ -83,11 +88,12 @@ What it does, in plain words, from the point of view of someone using the app.
 Tests, refactors, tooling. Leave this out if there is nothing to say.
 
 ## Downloads
-Windows (.zip) and Linux (.tar.gz) builds are attached below.
+Windows (.zip) and Linux (.tar.gz) builds are attached below. The Linux build needs Ubuntu 24.04 or newer, or another distribution with glibc 2.39 or newer.
 The macOS build is not finished yet, so macOS users need to run from source.
 ```
 
-Update the macOS line once the macOS build is finished.
+Update the macOS line once the macOS build is finished, and the Linux line if
+the build machine changes.
 
 ## When something goes wrong
 

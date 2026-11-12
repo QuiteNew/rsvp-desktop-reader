@@ -46,6 +46,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         guide_mark_color: str = "#3B2E27",
         speaker_cues_enabled: bool = False,
         speaker_cue_name_tag_enabled: bool = True,
+        speaker_cue_tag_position: str = "above",
         speaker_cue_flash_enabled: bool = True,
         speaker_cue_sound: str = "off",
         speaker_cue_style: str = "bell",
@@ -141,6 +142,7 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.reader_display.set_letter_spacing(letter_spacing_level)
         self.reader_display.set_speaker_cue_options(
             speaker_cue_name_tag_enabled, speaker_cue_flash_enabled, speaker_cue_sound, speaker_cue_style,
+            speaker_cue_tag_position,
         )
         self.reader_display.set_chime_player(chime_player)
 
@@ -215,8 +217,10 @@ class DetachedTranscriptWindow(ctk.CTkToplevel):
         self.speaker_cues_enabled = enabled
         self.reader_display.set_speaker_cues(enabled, self.transcript.speaker_custom)
 
-    def set_speaker_cue_options(self, name_tag: bool, flash: bool, sound: str, style: str) -> None:
-        self.reader_display.set_speaker_cue_options(name_tag, flash, sound, style)
+    def set_speaker_cue_options(
+        self, name_tag: bool, flash: bool, sound: str, style: str, tag_position: str,
+    ) -> None:
+        self.reader_display.set_speaker_cue_options(name_tag, flash, sound, style, tag_position)
 
     def _render_current_state(self) -> None:
         self.control_row.pack_forget()

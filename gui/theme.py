@@ -475,13 +475,41 @@ def center_over_parent(window, width: int, height: int) -> None:
     construction, which is still strictly better than the top-left
     default, never worse. Clamps to (0, 0) so a parent sitting very close
     to a screen edge can't push the popup partially off-screen in the
-    other direction."""
+    other direction.
+
+    width and height are the popup's size before display scaling, the
+    same numbers every dialog has always passed. On a scaled display
+    (125%, 150%, 200% on Windows, or Linux with apply_linux_dpi_scaling())
+    CustomTkinter's geometry() makes the window that many times bigger on
+    screen but leaves the position alone, while the parent's position and
+    size read above are already in screen pixels. Centering with the
+    unscaled size put every popup too far right and too far down, by half
+    of the extra size: at 200% the 470 x 690 Chunking window landed 235
+    pixels right and 345 down from the middle of Settings and ran off the
+    bottom of the screen (seen on Windows, 12.11.2026, and worked out from
+    the screenshots). So the centering uses the size the window will
+    really have on screen."""
+    scale = _window_scaling(window)
+    on_screen_width = round(width * scale)
+    on_screen_height = round(height * scale)
     try:
         parent = window.master
         parent.update_idletasks()
-        x = parent.winfo_rootx() + (parent.winfo_width() - width) // 2
-        y = parent.winfo_rooty() + (parent.winfo_height() - height) // 2
+        x = parent.winfo_rootx() + (parent.winfo_width() - on_screen_width) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - on_screen_height) // 2
     except Exception:
-        x = (window.winfo_screenwidth() - width) // 2
-        y = (window.winfo_screenheight() - height) // 2
+        x = (window.winfo_screenwidth() - on_screen_width) // 2
+        y = (window.winfo_screenheight() - on_screen_height) // 2
     window.geometry(f"{width}x{height}+{max(x, 0)}+{max(y, 0)}")
+
+
+def _window_scaling(window) -> float:
+    """How many screen pixels CustomTkinter's geometry() will make of one
+    unit of a window's size: the display's scaling times the app's own
+    window scaling. 1 for a window CustomTkinter doesn't scale, or if it
+    can't be read, which is what center_over_parent() assumed before."""
+    try:
+        from customtkinter import ScalingTracker
+        return ScalingTracker.get_window_scaling(window)
+    except Exception:
+        return 1

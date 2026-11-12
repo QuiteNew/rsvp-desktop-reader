@@ -41,6 +41,7 @@ class Canvas(ctk.CTkFrame):
         bold_starts_enabled: bool = False,
         speaker_cues_enabled: bool = False,
         speaker_cue_name_tag_enabled: bool = True,
+        speaker_cue_tag_position: str = "above",
         speaker_cue_flash_enabled: bool = True,
         speaker_cue_sound: str = "off",
         speaker_cue_style: str = "bell",
@@ -80,6 +81,7 @@ class Canvas(ctk.CTkFrame):
         self._bold_starts_enabled = bold_starts_enabled
         self._speaker_cues_enabled = speaker_cues_enabled
         self._speaker_cue_name_tag_enabled = speaker_cue_name_tag_enabled
+        self._speaker_cue_tag_position = speaker_cue_tag_position
         self._speaker_cue_flash_enabled = speaker_cue_flash_enabled
         self._speaker_cue_sound = speaker_cue_sound
         self._speaker_cue_style = speaker_cue_style
@@ -162,7 +164,7 @@ class Canvas(ctk.CTkFrame):
         self.reader_display.set_letter_spacing(self._letter_spacing_level)
         self.reader_display.set_speaker_cue_options(
             self._speaker_cue_name_tag_enabled, self._speaker_cue_flash_enabled,
-            self._speaker_cue_sound, self._speaker_cue_style,
+            self._speaker_cue_sound, self._speaker_cue_style, self._speaker_cue_tag_position,
         )
         self.reader_display.set_chime_player(self._chime_player)
 
@@ -458,17 +460,21 @@ class Canvas(ctk.CTkFrame):
         if self._detached_window and self._detached_window.transcript.id == transcript_id:
             self._detached_window.set_speaker_cues_enabled(self._speaker_cues_enabled)
 
-    def set_speaker_cue_options(self, name_tag: bool, flash: bool, sound: str, style: str) -> None:
-        """How Speaker cues look and sound: the name tag, the flash, which
-        chime and in which style (see ReaderDisplay.set_speaker_cue_options).
-        For the whole app, so the detached window follows."""
+    def set_speaker_cue_options(
+        self, name_tag: bool, flash: bool, sound: str, style: str, tag_position: str,
+    ) -> None:
+        """How Speaker cues look and sound: the name tag and where it sits,
+        the flash, which chime and in which style (see
+        ReaderDisplay.set_speaker_cue_options). For the whole app, so the
+        detached window follows."""
         self._speaker_cue_name_tag_enabled = name_tag
+        self._speaker_cue_tag_position = tag_position
         self._speaker_cue_flash_enabled = flash
         self._speaker_cue_sound = sound
         self._speaker_cue_style = style
-        self.reader_display.set_speaker_cue_options(name_tag, flash, sound, style)
+        self.reader_display.set_speaker_cue_options(name_tag, flash, sound, style, tag_position)
         if self._detached_window:
-            self._detached_window.set_speaker_cue_options(name_tag, flash, sound, style)
+            self._detached_window.set_speaker_cue_options(name_tag, flash, sound, style, tag_position)
         # Open selection previews snapshot these at open time, like their
         # other styling (see open_selection_preview), so they aren't updated
         # here.
@@ -587,6 +593,7 @@ class Canvas(ctk.CTkFrame):
             speaker_cues_enabled=self._speaker_cues_enabled,
             speaker_custom=self._whole_transcript_speakers(),
             speaker_cue_name_tag_enabled=self._speaker_cue_name_tag_enabled,
+            speaker_cue_tag_position=self._speaker_cue_tag_position,
             speaker_cue_flash_enabled=self._speaker_cue_flash_enabled,
             speaker_cue_sound=self._speaker_cue_sound,
             speaker_cue_style=self._speaker_cue_style,
@@ -998,6 +1005,7 @@ class Canvas(ctk.CTkFrame):
             on_wpm_changed=self.on_detached_wpm_changed,
             speaker_cues_enabled=self._speaker_cues_enabled,
             speaker_cue_name_tag_enabled=self._speaker_cue_name_tag_enabled,
+            speaker_cue_tag_position=self._speaker_cue_tag_position,
             speaker_cue_flash_enabled=self._speaker_cue_flash_enabled,
             speaker_cue_sound=self._speaker_cue_sound,
             speaker_cue_style=self._speaker_cue_style,

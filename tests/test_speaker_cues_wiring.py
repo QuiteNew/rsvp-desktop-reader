@@ -30,12 +30,13 @@ SELECTION = "there\nBob: hello you\nAnn: and"
 AUTO_STARTS = (0, 3, 9, 12)
 
 
-def _saved(cues=True, name_tag=True, flash=True, sound="off", style="bell"):
+def _saved(cues=True, name_tag=True, flash=True, sound="off", style="bell", tag_position="above"):
     """A before_start for open_real_app that saves these speaker cue settings."""
     def save():
         store = settings_store.SettingsStore()
         store.set_speaker_cues_enabled(cues)
         store.set_speaker_cue_name_tag_enabled(name_tag)
+        store.set_speaker_cue_tag_position(tag_position)
         store.set_speaker_cue_flash_enabled(flash)
         store.set_speaker_cue_sound(sound)
         store.set_speaker_cue_style(style)
@@ -75,6 +76,11 @@ def _look(reader):
 
 def _starts(reader):
     return reader.session.speaker_turns.starts
+
+
+def _position(reader):
+    """Where a reader was told to put the speaker's name."""
+    return reader._speaker_tag_position
 
 
 # --- The main window ----------------------------------------------------------
@@ -134,7 +140,7 @@ def test_the_look_reaches_the_reader_on_screen(tmp_path, open_real_app):
     with open_real_app(tmp_path) as app:
         _open(app, _add(app))
 
-        app.canvas.set_speaker_cue_options(True, False, "change", "wood")
+        app.canvas.set_speaker_cue_options(True, False, "change", "wood", "above")
 
         assert _look(app.canvas.reader_display) == (True, False, "change", "wood")
 
@@ -144,7 +150,7 @@ def test_a_reader_opened_after_a_change_uses_it(tmp_path, open_real_app):
         transcript = _add(app)
 
         app.canvas.set_speaker_cues_enabled(True)
-        app.canvas.set_speaker_cue_options(False, True, "change", "glass")
+        app.canvas.set_speaker_cue_options(False, True, "change", "glass", "above")
         _open(app, transcript)
 
         reader = app.canvas.reader_display
@@ -183,7 +189,7 @@ def test_changes_reach_the_detached_window_whichever_transcript_it_holds(tmp_pat
         assert _starts(main) == AUTO_STARTS
         assert _starts(detached) == (6,), "the detached window keeps its own transcript's list"
 
-        app.canvas.set_speaker_cue_options(False, True, "per_speaker", "wood")
+        app.canvas.set_speaker_cue_options(False, True, "per_speaker", "wood", "above")
         assert _look(main) == _look(detached) == (False, True, "per_speaker", "wood")
 
 
@@ -206,11 +212,83 @@ def test_a_window_detached_after_a_change_gets_it(tmp_path, open_real_app):
         _open(app, _add(app))
 
         app.canvas.set_speaker_cues_enabled(True)
-        app.canvas.set_speaker_cue_options(False, True, "per_speaker", "glass")
+        app.canvas.set_speaker_cue_options(False, True, "per_speaker", "glass", "above")
         reader = _detach(app).reader_display
 
         assert _starts(reader) == AUTO_STARTS
         assert _look(reader) == (False, True, "per_speaker", "glass")
+
+
+# --- Where the name sits ------------------------------------------------------
+
+def test_the_saved_position_reaches_the_reader_on_screen_at_start(tmp_path, open_real_app):
+    with open_real_app(tmp_path, before_start=_saved(tag_position="top_right")) as app:
+        _open(app, _add(app))
+        assert _position(app.canvas.reader_display) == "top_right"
+
+
+def test_with_nothing_saved_the_name_sits_above_the_word(tmp_path, open_real_app):
+    with open_real_app(tmp_path) as app:
+        _open(app, _add(app))
+        assert _position(app.canvas.reader_display) == "above"
+
+
+def test_a_new_position_reaches_the_reader_on_screen(tmp_path, open_real_app):
+    with open_real_app(tmp_path, before_start=_saved()) as app:
+        _open(app, _add(app))
+        reader = app.canvas.reader_display
+
+        app.canvas.set_speaker_cue_options(True, True, "off", "bell", "top_right")
+
+        assert _position(reader) == "top_right"
+        assert _look(reader) == (True, True, "off", "bell"), "the rest is left as it was"
+
+
+def test_a_reader_opened_after_a_new_position_uses_it(tmp_path, open_real_app):
+    with open_real_app(tmp_path, before_start=_saved()) as app:
+        transcript = _add(app)
+        app.canvas.set_speaker_cue_options(True, True, "off", "bell", "top_right")
+
+        _open(app, transcript)
+
+        assert _position(app.canvas.reader_display) == "top_right"
+
+
+def test_the_detached_window_starts_with_the_saved_position(tmp_path, open_real_app):
+    with open_real_app(tmp_path, before_start=_saved(tag_position="top_right")) as app:
+        _open(app, _add(app))
+        assert _position(_detach(app).reader_display) == "top_right"
+
+
+def test_a_new_position_reaches_the_detached_window(tmp_path, open_real_app):
+    with open_real_app(tmp_path, before_start=_saved()) as app:
+        _open(app, _add(app))
+        detached = _detach(app).reader_display
+        assert _position(detached) == "above"
+
+        app.canvas.set_speaker_cue_options(True, True, "off", "bell", "top_right")
+
+        assert _position(detached) == _position(app.canvas.reader_display) == "top_right"
+
+
+def test_a_window_detached_after_a_new_position_gets_it(tmp_path, open_real_app):
+    with open_real_app(tmp_path, before_start=_saved()) as app:
+        _open(app, _add(app))
+        app.canvas.set_speaker_cue_options(True, True, "off", "bell", "top_right")
+        assert _position(_detach(app).reader_display) == "top_right"
+
+
+def test_a_detached_selection_opens_with_the_position_and_keeps_it(tmp_path, open_real_app):
+    with open_real_app(tmp_path, before_start=_saved(tag_position="top_right")) as app:
+        _open(app, _add(app, stopped=True))
+        app.canvas.open_selection_preview(SELECTION)
+        settle(app, 300)
+        window = app.canvas._selection_previews[-1][0]
+        assert _position(window.reader_display) == "top_right"
+
+        # Previews keep what they were opened with, like the rest of the look.
+        app.canvas.set_speaker_cue_options(True, True, "off", "bell", "above")
+        assert _position(window.reader_display) == "top_right"
 
 
 # --- A played selection (right-click Play) ------------------------------------
@@ -298,7 +376,7 @@ def test_a_detached_selection_keeps_what_it_was_opened_with(tmp_path, open_real_
         window = app.canvas._selection_previews[-1][0]
 
         app.canvas.set_speaker_cues_enabled(False)
-        app.canvas.set_speaker_cue_options(False, False, "change", "glass")
+        app.canvas.set_speaker_cue_options(False, False, "change", "glass", "above")
         click_button(window.input_view.start_button)
         settle(window, 200)
 

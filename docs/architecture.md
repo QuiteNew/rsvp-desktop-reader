@@ -69,9 +69,9 @@ of its own. The passage of time is the GUI's job.
   a write when a session ends.
 - `settings_store.py` does the same for application settings: the new-transcript
   defaults, layout sizes, data location, theme, the font switch, the letter
-  spacing level, the bold word starts choice, the saved reading profiles, and
-  what the app remembers between launches (the last open transcript, the
-  window's size and place, and the sidebar's sort order).
+  spacing level, the bold word starts choice, the speaker cues choices, the saved
+  reading profiles, and what the app remembers between launches (the last open
+  transcript, the window's size and place, and the sidebar's sort order).
 - `data_bundle.py` builds and applies the single-file export used to move
   transcripts, Spaces, and settings between machines, deliberately leaving the
   machine-specific data path out of the bundle.
@@ -208,6 +208,48 @@ Nearly every family is its own bold, but OpenDyslexic registers its Bold file as
 a different family from its Regular one, and asking for bold in the regular
 family would get a faked bold instead of the face the font ships with.
 
+### Speaker cues
+
+Speaker cues needs three small pieces in `core/`, and all of them are pure.
+
+`speakers.py` finds the speakers. `scan_speakers()` reads the raw text line by
+line and notes every name at the start of a line, such as "Interviewer:", along
+with the word each one begins at. The rules for what counts as a name live in
+one regular expression and two limits (at most four words and 30 characters),
+and a `>>` at the start of a line counts as a change of speaker with no name.
+From the scan, `speaker_candidates()` counts how often each name starts a line,
+and `auto_speakers()` keeps the ones that start at least two lines, so a stray
+"Note:" is left alone. A transcript can also carry its own list, `speaker_custom`
+on the `Transcript`. It maps a name, in lower case with its spaces squeezed
+(`label_key()`), to the name to show, and `clean_custom_speakers()` drops
+anything that does not fit when it is read back. `build_turns()` then joins the
+two into `SpeakerTurns`: where each turn starts and who has it. A name that is
+not a speaker is treated as ordinary text, and two lines in a row from one
+speaker fold into one turn. `speaker_rows()` and `speakers_to_save()` do the
+same work for the list in the window, so what the list shows and what is
+saved are worked out in the same place.
+
+The scan counts words the way `ReaderSession` does, and the name itself stays in
+the flashed words. That is why turning Speaker cues on or off never moves a word
+number, and bookmarks and positions stay where they were.
+
+`reader.py` takes the turns into `ReaderSession`. It is the only part of the
+engine that knows about them. The last word of a turn gets
+`SPEAKER_PAUSE_MULTIPLIER` from `timing.py`, which is used in place of that
+word's own pause when it is longer rather than added to it. A chunk never runs
+on into the next speaker's turn, and the pre-summed remaining time includes the
+extra pause, so the estimate stays honest. `current_speaker` says who has the
+current word. With the switch off no turns are built, and every delay, chunk
+and estimate is exactly what it was before the feature existed.
+
+`chime.py` makes the sound. `chime_wav()` builds the bytes of a WAV file with
+the standard library and never writes or plays anything, in one of four styles.
+Each speaker gets a short pattern of notes (`speaker_patterns()`), so they can
+be told apart by shape and not only by pitch, and a `>>` change gets a single
+plain note. `chime_notes()` picks what to play for the sound mode, and
+`ChimeGap` keeps two chimes from landing closer together than a short gap, and
+waits for a longer one to finish.
+
 ## The GUI layer
 
 ### App identity
@@ -302,6 +344,23 @@ A click on the button updates the main edit box and the detached window through
 `SettingsStore.set_bold_starts_enabled`. A window that plays a selection is given
 the look at the moment it opens and keeps it, so it is never touched by a click
 elsewhere.
+
+Speaker cues reaches the screen in four places. `gui/chime_player.py` plays the
+chimes: it writes each one to a file once and plays that with `winsound`, which
+only does it without holding up the app when the sound is a file. It is Windows
+only, so on other systems the player does nothing and the window greys out its
+sound controls. The name tag, the flash and the decision to chime live in
+`reader_display.py`. They run only when reading moves on into a new speaker,
+while skipping, scrubbing, a bookmark jump or a restart just move the tag
+without a flash or a sound, and the tag sits above the word or in the top right
+corner of the reader, as chosen. `gui/components/speaker_cues_window.py` is the
+window behind Settings' "Configure speaker cues..." button, with the choices at
+the top and the open transcript's speakers below. Like the profiles tab it only
+deals with what is on screen, and hands what was chosen to callbacks that
+`gui/app.py` provides. The app then saves the choices with `SettingsStore` and
+the transcript's speakers with the transcript, and passes them on through
+`Canvas`, which reaches the main reader, the detached window and the selection
+preview. These options are app-wide, so they are not part of a reading profile.
 
 Reading profiles reach the screen through the Profiles tab of the Settings
 window, `gui/components/profiles_tab.py`, with a name popup and a confirm popup

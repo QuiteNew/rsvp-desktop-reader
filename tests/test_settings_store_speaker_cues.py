@@ -1,5 +1,6 @@
 """Tests for the Speaker cues settings in SettingsStore: the on/off switch,
-the sound choice, the chime style, and the name tag and flash switches.
+the sound choice, the chime style, the name tag and flash switches, and
+where the name tag sits.
 
 How speakers are found is tested in test_speakers.py. This file only checks
 that the store keeps the settings, saves them, reads a damaged file
@@ -12,7 +13,7 @@ import pytest
 
 from core.chime import CHIME_STYLES
 from core.profiles import PROFILE_KEYS, value_is_valid
-from core.settings_store import SPEAKER_CUE_SOUNDS, AppSettings, SettingsStore
+from core.settings_store import SPEAKER_CUE_SOUNDS, SPEAKER_CUE_TAG_POSITIONS, AppSettings, SettingsStore
 
 
 @pytest.fixture
@@ -164,6 +165,54 @@ def test_the_two_switches_do_not_touch_each_other_or_the_rest(store):
     assert (store.speaker_cues_enabled, store.speaker_cue_sound, store.speaker_cue_style) == (True, "change", "wood")
 
 
+# ---- Where the name tag sits ----
+
+def test_the_tag_position_choices():
+    assert SPEAKER_CUE_TAG_POSITIONS == ("above", "top_right")
+
+def test_the_name_tag_sits_above_the_word_by_default(store):
+    assert store.speaker_cue_tag_position == "above"
+    assert AppSettings().speaker_cue_tag_position == SPEAKER_CUE_TAG_POSITIONS[0] == "above"
+
+@pytest.mark.parametrize("position", SPEAKER_CUE_TAG_POSITIONS)
+def test_each_position_can_be_chosen(store, position):
+    other = [p for p in SPEAKER_CUE_TAG_POSITIONS if p != position][0]
+    store.set_speaker_cue_tag_position(other)
+    store.set_speaker_cue_tag_position(position)
+    assert store.speaker_cue_tag_position == position
+
+@pytest.mark.parametrize("position", SPEAKER_CUE_TAG_POSITIONS)
+def test_the_position_persists_and_reloads(tmp_path, position):
+    first = SettingsStore(settings_directory=str(tmp_path))
+    first.set_speaker_cue_tag_position(position)
+    assert _settings_json(tmp_path)["speaker_cue_tag_position"] == position
+    second = SettingsStore(settings_directory=str(tmp_path))
+    assert second.speaker_cue_tag_position == position
+
+@pytest.mark.parametrize("damaged", ["middle", "Top_Right", "top right", "", " top_right", "top_right ", 1, True, None, ["top_right"], {}])
+def test_an_unknown_position_reads_as_above_the_word(tmp_path, damaged):
+    # The name still shows, in its usual place, and the rest of the file is
+    # still read.
+    _write_settings(tmp_path, {"default_wpm": 450, "speaker_cue_tag_position": damaged})
+    store = SettingsStore(settings_directory=str(tmp_path))
+    assert store.speaker_cue_tag_position == "above"
+    assert store.default_wpm == 450
+
+def test_the_position_does_not_touch_the_other_speaker_settings(store):
+    store.set_speaker_cues_enabled(True)
+    store.set_speaker_cue_sound("change")
+    store.set_speaker_cue_style("wood")
+    store.set_speaker_cue_flash_enabled(False)
+    store.set_speaker_cue_tag_position("top_right")
+    assert store.speaker_cue_name_tag_enabled is True
+    assert store.speaker_cue_flash_enabled is False
+    assert (store.speaker_cues_enabled, store.speaker_cue_sound, store.speaker_cue_style) == (True, "change", "wood")
+    store.set_speaker_cue_name_tag_enabled(False)
+    # Turning the name off leaves the chosen place alone, so turning it back
+    # on finds the name where it was.
+    assert store.speaker_cue_tag_position == "top_right"
+
+
 # ---- Independence ----
 
 def test_the_two_settings_do_not_touch_each_other(store):
@@ -212,6 +261,7 @@ def test_an_older_settings_file_without_them_loads_with_the_defaults(tmp_path):
     assert store.speaker_cue_style == "bell"
     assert store.speaker_cue_name_tag_enabled is True
     assert store.speaker_cue_flash_enabled is True
+    assert store.speaker_cue_tag_position == "above"
 
 def test_a_settings_file_that_has_them_is_read(tmp_path):
     _write_settings(tmp_path, {"speaker_cues_enabled": True, "speaker_cue_sound": "change"})
@@ -246,6 +296,7 @@ def test_the_export_includes_them_with_their_defaults(store):
     assert exported["speaker_cue_style"] == "bell"
     assert exported["speaker_cue_name_tag_enabled"] is True
     assert exported["speaker_cue_flash_enabled"] is True
+    assert exported["speaker_cue_tag_position"] == "above"
 
 def test_a_replace_import_carries_them_over(tmp_path):
     source = SettingsStore(settings_directory=str(tmp_path / "source"))
@@ -254,8 +305,10 @@ def test_a_replace_import_carries_them_over(tmp_path):
     source.set_speaker_cue_style("soft")
     source.set_speaker_cue_name_tag_enabled(False)
     source.set_speaker_cue_flash_enabled(False)
+    source.set_speaker_cue_tag_position("top_right")
     target = SettingsStore(settings_directory=str(tmp_path / "target"))
     target.replace_from_bundle(source.export_settings())
+    assert target.speaker_cue_tag_position == "top_right"
     assert target.speaker_cue_name_tag_enabled is False
     assert target.speaker_cue_flash_enabled is False
     assert target.speaker_cues_enabled is True
@@ -270,7 +323,9 @@ def test_a_bundle_from_before_speaker_cues_still_imports_with_the_defaults(tmp_p
     del bundle["speaker_cue_style"]
     del bundle["speaker_cue_name_tag_enabled"]
     del bundle["speaker_cue_flash_enabled"]
+    del bundle["speaker_cue_tag_position"]
     target = SettingsStore(settings_directory=str(tmp_path / "target"))
+    target.set_speaker_cue_tag_position("top_right")
     target.set_speaker_cue_name_tag_enabled(False)
     target.set_speaker_cue_flash_enabled(False)
     target.set_speaker_cues_enabled(True)
@@ -282,6 +337,7 @@ def test_a_bundle_from_before_speaker_cues_still_imports_with_the_defaults(tmp_p
     assert target.speaker_cue_style == "bell"
     assert target.speaker_cue_name_tag_enabled is True
     assert target.speaker_cue_flash_enabled is True
+    assert target.speaker_cue_tag_position == "above"
 
 
 # ---- Profiles ----
@@ -289,6 +345,7 @@ def test_a_bundle_from_before_speaker_cues_still_imports_with_the_defaults(tmp_p
 @pytest.mark.parametrize("key, value", [
     ("speaker_cues_enabled", True), ("speaker_cue_sound", "change"), ("speaker_cue_style", "glass"),
     ("speaker_cue_name_tag_enabled", False), ("speaker_cue_flash_enabled", False),
+    ("speaker_cue_tag_position", "top_right"),
 ])
 def test_they_are_never_part_of_a_profile(key, value):
     # Speaker cues have their own window, like chunking, so applying a
@@ -300,6 +357,7 @@ def test_a_profile_cannot_hold_them_even_when_asked_to(store):
     profile = store.add_profile("Plain", {
         "speaker_cues_enabled": True, "speaker_cue_sound": "change", "speaker_cue_style": "glass",
         "speaker_cue_name_tag_enabled": False, "speaker_cue_flash_enabled": False,
+        "speaker_cue_tag_position": "top_right",
         "default_wpm": 300,
     })
     assert profile.values == {"default_wpm": 300}
