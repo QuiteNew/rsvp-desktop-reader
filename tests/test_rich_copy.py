@@ -255,14 +255,24 @@ def test_random_text_reads_back_the_same_and_keeps_its_offsets():
             assert "  " not in written
             assert not written.startswith(" ") and not written.endswith(" ")
 
+# How long a whole book may take to turn into clipboard HTML. It normally takes
+# about a second. The limit is there to catch the work growing much faster than
+# the text (doubling the text and taking four times as long, say), which would
+# take minutes here, not to time a busy machine: 5 seconds failed once on a
+# laptop running on battery with a game open.
+WHOLE_BOOK_SECONDS = 15
+
+
 def test_a_whole_book_is_quick():
     import time
 
     words = "the quick brown fox jumps over the lazy dog ".split()
     line = " ".join(words * 12)
     segments = [(line + "\n", i % 2 == 0) for i in range(8000)]   # about a million characters
-    started = time.perf_counter()
+    # The time this process spent working, so other programs running at the
+    # same time don't count against it the way they would on a wall clock.
+    started = time.process_time()
     data = cf_html(segments)
-    elapsed = time.perf_counter() - started
+    elapsed = time.process_time() - started
     assert read_header(data)["EndHTML"] == len(data)
-    assert elapsed < 5
+    assert elapsed < WHOLE_BOOK_SECONDS
