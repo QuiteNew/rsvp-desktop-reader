@@ -4,11 +4,30 @@ name: Tests
 # then checks the code with pyflakes. The release workflow also calls this one
 # before it builds anything, so a tag can't produce a release from a commit
 # whose tests are failing or that pyflakes finds a problem in.
+#
+# A push or pull request that only touches the files in paths-ignore doesn't
+# start the run, because the suite takes about 15 minutes and none of those
+# files can change its result. A change that also touches anything else still
+# runs it. README.md, mkdocs.yml and LICENSE stay out of the list on purpose,
+# because a test reads each of them (tests/test_app_info.py). So does this
+# file, so a change to the list itself gets tested. Starting the workflow by
+# hand and the release workflow calling it are not affected, they always run
+# the whole suite.
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - 'RELEASING.md'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/build-release.yml'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'RELEASING.md'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/build-release.yml'
   workflow_dispatch:
   workflow_call:
 
