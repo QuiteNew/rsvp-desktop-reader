@@ -21,6 +21,12 @@ theme:
     - navigation.sections
     - content.code.copy
 
+# Without this, a link to a heading that does not exist is only logged at INFO
+# level, so `mkdocs build --strict` lets it through. As a warning it fails
+# the strict build, the same as a link to a page that does not exist.
+validation:
+  anchors: warn
+
 markdown_extensions:
   - admonition
   - pymdownx.highlight

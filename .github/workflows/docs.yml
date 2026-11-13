@@ -1,19 +1,19 @@
 name: Docs
 
+# On a pull request this only builds the site, with warnings counted as
+# errors, so a broken link fails before the merge and not after it. On a push
+# to main (or a hand-started run) it builds and then publishes the site.
 on:
   push:
     branches:
       - main
+  pull_request:
   workflow_dispatch:
 
+# Everything can read the code. Publishing needs more than that, so only the
+# deploy job asks for it, further down.
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   build:
@@ -36,13 +36,27 @@ jobs:
         run: mkdocs build --strict
 
       - name: Upload Pages artifact
+        # A pull request only needs to know the build worked. Nothing is
+        # published from it, so there is nothing to upload.
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
     needs: build
+    # Nothing is ever published from a pull request.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    # Publishes one at a time, in order. This is on the deploy job and not on
+    # the whole workflow on purpose: a pull request build should never have to
+    # wait for a deploy, or push a waiting deploy out of the queue.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
