@@ -7,13 +7,13 @@
 ![cryptography](https://img.shields.io/badge/cryptography-5C3D8C?style=for-the-badge)
 ![lxml](https://img.shields.io/badge/lxml-2E6DB4?style=for-the-badge)
 ![python-docx](https://img.shields.io/badge/python--docx-2B579A?style=for-the-badge)
-![darkdetect](https://img.shields.io/badge/darkdetect-222222?style=for-the-badge)
-![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-4C4C4C?style=for-the-badge)
-![Offline](https://img.shields.io/badge/100%25%20offline-2E7D32?style=for-the-badge)
 <br>
-  [![Build & Release](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml)
-  [![Docs](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml)
-  [![Tests](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/tests.yml/badge.svg)](https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/tests.yml)
+<img src="https://img.shields.io/badge/darkdetect-222222?style=for-the-badge" alt="darkdetect" align="middle">
+<img src="https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-4C4C4C?style=for-the-badge" alt="Platforms" align="middle">
+<img src="https://img.shields.io/badge/100%25%20offline-2E7D32?style=for-the-badge" alt="Offline" align="middle">
+<a href="https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/build-release.yml"><img src="https://img.shields.io/github/actions/workflow/status/QuiteNew/rsvp-desktop-reader/build-release.yml?branch=main&amp;style=flat-square&amp;label=Build%20%26%20Release&amp;labelColor=222222" alt="Build &amp; Release status" align="middle"></a>
+<a href="https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/docs.yml"><img src="https://img.shields.io/github/actions/workflow/status/QuiteNew/rsvp-desktop-reader/docs.yml?branch=main&amp;style=flat-square&amp;label=Docs&amp;labelColor=222222" alt="Docs status" align="middle"></a>
+<a href="https://github.com/QuiteNew/rsvp-desktop-reader/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/QuiteNew/rsvp-desktop-reader/tests.yml?branch=main&amp;style=flat-square&amp;label=Tests&amp;labelColor=222222" alt="Tests status" align="middle"></a>
 
 A lightweight, fully offline speed-reading app that flashes transcript text
 one word at a time - eliminating eye movement so you can read faster without

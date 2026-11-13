@@ -1,24 +1,61 @@
 name: Build & Release
 
+# A release only ever comes from a pushed v* tag. Starting this workflow by
+# hand (Actions, Run workflow) is a dry run: it tests and builds all three
+# platforms and keeps the files as artifacts, and that is all. It can't make
+# a release, because a hand-started run has a branch name where the tag
+# should be, and a release named after a branch is a mess to clean up.
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      create_release:
-        description: 'Create a draft GitHub release with the built assets'
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 jobs:
+  # Looks at the tag before anything slow starts, so a wrong tag fails in a few
+  # seconds instead of after the whole test run. The checks only apply to a
+  # pushed tag. On a hand-started run this job does nothing and passes, so the
+  # jobs after it still go ahead.
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # Every branch and tag, so the tagged commit can be looked up on main.
+          fetch-depth: 0
+
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(tr -d '\r' < core/app_info.py | sed -n 's/^APP_VERSION = "\([^"]*\)".*/\1/p')
+          if [ -z "$version" ]; then
+            echo "::error::Could not read APP_VERSION from core/app_info.py."
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::The tag is $GITHUB_REF_NAME but APP_VERSION in core/app_info.py is $version. Fix the version, then delete the tag and tag again."
+            exit 1
+          fi
+
+      - name: Check the tagged commit is on main
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::The commit behind $GITHUB_REF_NAME is not on main. Get it onto main first, then tag the tip of main."
+            exit 1
+          fi
+
   # Runs the same test workflow the pushes and pull requests use. The build
   # below waits for it, so a failing test stops the release before anything
   # gets built or uploaded.
   test:
+    needs: verify
     uses: ./.github/workflows/tests.yml
 
   build:
@@ -99,7 +136,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+    # Only a pushed v* tag gets this far. Nothing else can start a release.
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
