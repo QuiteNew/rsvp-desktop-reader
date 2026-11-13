@@ -1,0 +1,40 @@
+name: Tests on Windows
+
+# An experiment, started by hand only (Actions, Run workflow). It runs the
+# whole pytest suite on a Windows runner, the system most readers use, while
+# the regular Tests workflow runs on Linux. Nothing calls it and nothing waits
+# for it. If it turns out slow or unreliable on the runner, this file goes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    # The suite takes about 18 minutes on a desktop PC. This is a safety net
+    # so a stuck run doesn't use up the runner for hours.
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # The release tags, for the test that compares APP_VERSION with them.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run the tests
+        # -rs lists the skipped tests with their reasons, so it's visible
+        # which ones Windows skips.
+        run: python -m pytest -rs

@@ -8,8 +8,8 @@ name: Tests
 # A push or pull request that only touches the files in paths-ignore doesn't
 # start the run, because the suite takes about 15 minutes and none of those
 # files can change its result. That covers the docs, RELEASING.md and the
-# workflows and scripts that only build or check the packaged app. A change
-# that also touches anything else still runs it.
+# workflows and scripts that only build the app or try it out on other
+# systems. A change that also touches anything else still runs it.
 #
 # README.md, mkdocs.yml and LICENSE stay out of the list on purpose, because a
 # test reads each of them (tests/test_app_info.py). So does this file, so a
@@ -26,6 +26,7 @@ on:
       - '.github/workflows/docs.yml'
       - '.github/workflows/build-release.yml'
       - '.github/workflows/packaged-check.yml'
+      - '.github/workflows/tests-windows.yml'
       - '.github/scripts/**'
   pull_request:
     paths-ignore:
@@ -34,6 +35,7 @@ on:
       - '.github/workflows/docs.yml'
       - '.github/workflows/build-release.yml'
       - '.github/workflows/packaged-check.yml'
+      - '.github/workflows/tests-windows.yml'
       - '.github/scripts/**'
   workflow_dispatch:
   workflow_call:
