@@ -66,8 +66,10 @@ jobs:
         include:
           - os: windows-latest
             platform: windows
+            app: dist/RSVPReader/RSVPReader.exe
           - os: macos-latest
             platform: macos
+            app: dist/RSVPReader.app/Contents/MacOS/RSVPReader
           # Linux is built on a fixed Ubuntu release, not on ubuntu-latest. A
           # build only starts on systems with the same glibc as the machine
           # that made it, or a newer one, and "latest" moves on by itself. A
@@ -75,6 +77,7 @@ jobs:
           # is the oldest release this one needs to run on.
           - os: ubuntu-24.04
             platform: linux
+            app: dist/RSVPReader/RSVPReader
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
@@ -109,6 +112,27 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller RSVPReader.spec --noconfirm --clean
 
+      # Starts the packaged app with --self-check before anything is packaged
+      # or uploaded. The tests run from source, so they can't see a build that
+      # left out a library or a file. If the app reports a problem, or doesn't
+      # finish, this fails the job and the release never gets created. The
+      # report is printed in the log.
+      - name: Install a virtual display
+        # The packaged app opens a real window, and the Linux runner has no
+        # screen. Windows and macOS runners have one.
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Check the packaged app works (Linux)
+        if: matrix.platform == 'linux'
+        run: xvfb-run -a --server-args="-screen 0 1280x1024x24" python .github/scripts/run_packaged_check.py "${{ matrix.app }}"
+
+      - name: Check the packaged app works
+        if: matrix.platform != 'linux'
+        run: python .github/scripts/run_packaged_check.py "${{ matrix.app }}"
+
       - name: Package (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -136,17 +160,4 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    # Only a pushed v* tag gets this far. Nothing else can start a release.
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create draft release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: artifacts/**/RSVPReader-*
+    #
