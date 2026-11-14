@@ -1,0 +1,35 @@
+# Lets GitHub open a pull request when something the project depends on has a
+# new version: the actions the workflows use, and the packages pinned in
+# requirements.txt and docs/requirements.txt. Nothing changes by itself. Each
+# update is a pull request that runs the tests, and it is merged or closed by
+# hand. Checking once a month and grouping the packages keeps it to a few
+# pull requests at a time.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - '*'
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      app-packages:
+        patterns:
+          - '*'
+
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: monthly
+    groups:
+      docs-packages:
+        patterns:
+          - '*'
