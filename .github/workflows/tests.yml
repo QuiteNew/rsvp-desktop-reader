@@ -41,6 +41,14 @@ on:
 permissions:
   contents: read
 
+# Pushing again while a run is still going stops the older run, since only the
+# newest commit matters and the suite takes 15 minutes. That is limited to
+# pushes to a branch and pull requests. A run started by hand, and the run the
+# release workflow starts for a tag, are never stopped by a newer one.
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ (github.event_name == 'push' && github.ref_type == 'branch') || github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
