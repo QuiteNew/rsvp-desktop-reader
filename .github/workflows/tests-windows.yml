@@ -1,11 +1,14 @@
 name: Tests on Windows
 
-# An experiment, started by hand only (Actions, Run workflow). It runs the
-# whole pytest suite on a Windows runner, the system most readers use, while
-# the regular Tests workflow runs on Linux. Nothing calls it and nothing waits
-# for it. If it turns out slow or unreliable on the runner, this file goes.
+# Runs the whole pytest suite on a Windows runner, the system most readers
+# use, while the regular Tests workflow runs on Linux. The release workflow
+# calls it next to the Linux run, so a tag can't produce a release from a
+# commit that fails on Windows. It can also be started by hand (Actions, Run
+# workflow). It is not part of the checks on every push, because it is slow
+# and a failure that only shows up here shouldn't block ordinary work.
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
