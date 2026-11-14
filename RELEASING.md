@@ -29,9 +29,11 @@ a test fails when a release tag is newer than the number written there.
 ```
 
    Every test should pass and pyflakes should print nothing. This run
-   includes the GUI tests and covers Windows, which GitHub's run does not (it
-   runs on Linux). On Windows 8 tests are skipped, because Windows reports the
-   number pad Enter as the ordinary Return key; that is expected.
+   includes the GUI tests and covers Windows. GitHub's everyday run is on Linux
+   only, but a release also runs the suite on Windows (step 7), and finding a
+   failure here is quicker than finding it after the tag. On Windows 8 tests
+   are skipped, because Windows reports the number pad Enter as the ordinary
+   Return key; that is expected.
 
    `pyproject.toml` tells pytest to capture output with `--capture=sys`.
    Leave that in: with pytest's default capture, Tk on Windows now and then
@@ -49,12 +51,19 @@ a test fails when a release tag is newer than the number written there.
    was done on `main`, just push. Open the Actions tab and wait for **Tests**
    and **Docs** to go green on `main`. Don't tag before they do.
 
+   A push that only touches the docs, this file or the build and release files
+   doesn't start **Tests**, because the 15 minute run can't change anything
+   for those. That is fine: nothing is waiting for a run that never starts.
+   Pushing again while **Tests** is still running stops the older run.
+
 5. **Optional dry run.** Go to Actions, then Build & Release, then Run
-   workflow, on `main` and with "Create a draft GitHub release" left off. It
-   builds all three platforms without releasing anything, and the files come
-   out named `RSVPReader-main-<platform>`. Download the Windows and Linux
-   ones, start them, open Settings, press the **i** button and check that the
-   version and the link look right.
+   workflow, on `main`. There is nothing to tick. A run started by hand never
+   makes a release, only a pushed tag does. It runs the tests on Linux and
+   Windows, builds all three platforms and starts each packaged app to check
+   it (see below), and it takes about half an hour. The files come out named
+   `RSVPReader-main-<platform>`. Download the Windows and Linux ones, start
+   them, open Settings, press the **i** button and check that the version and
+   the link look right.
 
 6. **Tag and push the tag.** The tag goes on the tip of `main`, which is the
    merge commit when a branch was merged:
@@ -64,12 +73,19 @@ a test fails when a release tag is newer than the number written there.
    git push origin vX.Y.Z
 ```
 
-7. **Watch Build & Release.** It runs the tests first, then builds Windows,
-   macOS and Linux, then creates a draft release. If the tests fail, nothing
-   is built.
+   The first thing the workflow does is look at the tag. It fails within
+   seconds, before anything slow starts, if the tag doesn't match
+   `APP_VERSION` or if the tagged commit isn't on `main`.
+
+7. **Watch Build & Release.** In order, it checks the tag, runs the tests on
+   Linux and on Windows at the same time, builds Windows, macOS and Linux, and
+   starts each built app with `--self-check` to see that it really works.
+   Only then does it create a draft release. If the tests or a check fail,
+   nothing is released.
 
 8. **Fill in the draft.** Under Releases, open the draft, set the title and
-   description (see below), check the attached files, and publish.
+   description (see below), check the attached files, and publish. Besides the
+   three downloads there is a `SHA256SUMS.txt` with one line per download.
 
 ## Release notes
 
@@ -92,22 +108,53 @@ Windows (.zip) and Linux (.tar.gz) builds are attached below. The Linux build ne
 The macOS build is not finished yet, so macOS users need to run from source.
 ```
 
+Mention `SHA256SUMS.txt` in the Downloads section when the release has it, for
+example "`SHA256SUMS.txt` lists a checksum for each download". To check a
+download, run this in the folder with the file and the list. It only looks at
+the files that are there:
+
+```
+sha256sum -c SHA256SUMS.txt --ignore-missing
+```
+
+On Windows PowerShell, `Get-FileHash -Algorithm SHA256 <file>` prints the
+checksum to compare with that file's line in the list.
+
 Update the macOS line once the macOS build is finished, and the Linux line if
 the build machine changes.
 
 ## When something goes wrong
 
+**The tag check fails.** The run stops in the first job, within seconds. The
+message says which of the two it is: the tag doesn't match `APP_VERSION`
+(the version bump was forgotten or mistyped), or the tagged commit isn't on
+`main`. Fix it, then move the tag as described below.
+
 **The tests fail on the tag.** Nothing gets built or uploaded. Open the failed
 run and read the message. If it says `APP_VERSION is X but the newest release
-tag is vY`, the version bump was forgotten.
+tag is vY`, the version bump was forgotten. The tests run on both Linux and
+Windows, so a test can fail on one of them only.
+
+**The check of the built app fails.** The build job for that platform stops
+before anything is packaged, so no draft appears. Open the step called "Check
+the packaged app works" (on Linux its name ends in "(Linux)"). It prints the
+report, one line per check, and the line that says `FAIL` names what is wrong,
+for example a library or a font file the build left out. If the app was still
+running after two minutes it was stopped, which is what an error window that
+nobody clicks away looks like.
 
 **A build fails on one platform.** The draft is only created once all three
 builds succeed, so no draft appears. The other two builds still finish, which
 helps to tell whether the problem is one platform or all of them.
 
-**Moving the tag.** In both cases the fix is the same. Fix the problem, commit
-it, push `main`, wait for green, then move the tag so it sits on the fixed
-commit:
+**A release page named after a branch.** This can't happen any more. A run
+started by hand has no release step, and the release step only runs for a
+pushed `v` tag. If one ever turns up anyway, delete the release and the stray
+tag it made.
+
+**Moving the tag.** In every one of these cases the fix is the same. Fix the
+problem, commit it, push `main`, wait for green, then move the tag so it sits
+on the fixed commit:
 
 ```
 git tag -d vX.Y.Z
@@ -123,3 +170,13 @@ forward with a new patch version instead.
 The executable is damaged or incomplete. In the one case so far it was an
 incomplete copy of the download, not the build. Download the archive again and
 extract it with `tar xzf`, which should finish without any errors.
+
+## Dependency updates
+
+Once a month Dependabot opens pull requests for the actions the workflows use
+and the packages pinned in `requirements.txt` and `docs/requirements.txt`.
+They are grouped, so there are only a few at a time. Each one runs the tests
+before it can be merged. Merge one when the tests are green, or close it. A
+new version of PyInstaller, Pillow or cryptography can break the built app
+without breaking a test, so after merging one of those, do the dry run in step
+5 before the next release.

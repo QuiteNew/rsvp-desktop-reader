@@ -449,8 +449,65 @@ every test, and on Windows that made Tk fail to start now and then, unable to
 read its own library files although they were there. Capturing at the Python
 level keeps the output tidy without touching those handles.
 
-The release workflow runs that same workflow first and builds nothing unless
-it passes, so a tag can't turn a failing commit into a release. The steps for
-making a release are written down in
+### The workflows
+
+The workflows live in `.github/workflows/`.
+
+**Tests** runs the suite on Linux, as described above. A push or pull request
+that only touches the docs, `RELEASING.md` or the build and release files
+doesn't start it, because it takes about 15 minutes and none of those files can
+change its result. `README.md`, `mkdocs.yml` and `LICENSE` still start it,
+because a test reads each of them. Pushing again while a run is going stops the
+older run.
+
+**Tests on Windows** runs the same suite on a Windows runner, which is where
+most readers are. It isn't part of every push. It can be started by hand, and
+the release workflow runs it next to the Linux run.
+
+**Docs** builds the documentation site with `mkdocs build --strict`, which
+counts every warning as a failure. That covers a link to a page or image that
+doesn't exist and a link to a heading that doesn't exist (`mkdocs.yml` turns
+that check on). On a pull request it only builds, so a broken link fails before
+the merge. On `main` it also publishes the site to GitHub Pages.
+
+**Build & Release** makes the release. It starts from a pushed `v*` tag, or by
+hand as a dry run that can't release anything, because only a tag can reach the
+release step. Its first job checks the tag: it has to match `APP_VERSION` in
+`core/app_info.py`, and the tagged commit has to be on `main`. Then it runs both
+test workflows, builds the app with PyInstaller on Windows, macOS and Linux,
+checks each built app, packages it, and creates a draft release with a
+`SHA256SUMS.txt` that lists a checksum for each download. Nothing is built
+unless the tests pass, so a tag can't turn a failing commit into a release.
+
+**Dependabot** (`.github/dependabot.yml`) opens a pull request once a month when
+an action or a pinned package has a new version. Each one runs the tests and is
+merged or closed by hand.
+
+### Checking the built app
+
+The tests run from source, so they can't see what PyInstaller left out of a
+built app: a library, a font file, a helper module that is only imported when
+it is needed. The app has a `--self-check` flag for that. `main.py` does its
+normal start-up, and when it sees the flag it hands over to `gui/self_check.py`
+instead of showing the window for use.
+
+That half opens the real window, checks that the icons and fonts the build was
+meant to bundle are there, and that Tk can show a picture, then closes the
+window the way a person would. `core/self_check.py` does the rest, which needs
+no window: it imports every library the app depends on, checks that pypdf is
+using `cryptography` (without it, encrypted PDFs fail to open), and imports a
+small PDF, an AES-128 and an AES-256 encrypted PDF, a Word file and an HTML
+page, comparing the text that comes out. The checks use a temporary data
+folder, so they never touch anyone's real settings or transcripts.
+
+The result is a report with one line per check, and an exit code of 0 only
+when every check passed. `.github/scripts/run_packaged_check.py` starts the
+built app, waits up to two minutes, and counts a non-zero exit, a missing
+report or an app that never finishes as a failure. That last case matters on
+Windows, where a crashed app shows an error window and waits for a click. The
+split between the two modules follows the rest of the project: what needs no
+window stays in `core/`, and the tests for it need no display either.
+
+The steps for making a release are written down in
 [RELEASING.md](https://github.com/QuiteNew/rsvp-desktop-reader/blob/main/RELEASING.md)
 in the repository.

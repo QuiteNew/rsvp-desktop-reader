@@ -161,7 +161,10 @@ For the full walkthrough, including keyboard shortcuts, see [docs/usage.md](docs
 
 ````
 rsvp-desktop-reader/
-├── .github/workflows/       # GitHub Actions: tests, build & release, docs site
+├── .github/
+│   ├── workflows/           # GitHub Actions: tests (Linux and Windows), build & release, docs site
+│   ├── scripts/             # run_packaged_check.py starts a built app with --self-check and judges its report
+│   └── dependabot.yml       # Monthly pull requests for new versions of the actions and the pinned packages
 ├── assets/
 │   ├── fonts/               # Bundled Fredoka, Quicksand & OpenDyslexic font files, with their licenses
 │   └── icons/               # Custom made icon
@@ -188,6 +191,7 @@ rsvp-desktop-reader/
 │   ├── profiles.py          # Reading profiles: which settings a profile holds, name rules, loading saved ones
 │   ├── profile_apply.py     # Works out what applying a profile does (clamping, guide mark colour vs. theme)
 │   ├── app_info.py          # The app's name, version, license and project link, shown in the About dialog
+│   ├── self_check.py        # The checks behind --self-check that need no window: libraries, PDF encryption and the file importers
 │   ├── text_fit.py          # Shortens a line of text with an ellipsis to fit a width (the header's title)
 │   ├── reopen.py            # Which transcript to open again at launch
 │   ├── window_placement.py  # Where the main window goes at launch: size, position, maximized
@@ -203,6 +207,7 @@ rsvp-desktop-reader/
 │   ├── icons.py             # Hand-drawn icons (avoids font-glyph rendering issues)
 │   ├── rich_clipboard.py    # Puts text and its bold on the Windows clipboard together, so Word keeps the bold
 │   ├── chime_player.py      # Plays the speaker cue chimes on Windows, from files it makes in the background
+│   ├── self_check.py        # The window half of --self-check: opens the real app, checks its bundled icons and fonts, writes the report
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
 ├── tests/                   # Automated test suite: the core engine, and the GUI through its real windows
 │   ├── conftest.py          # Shared fixtures: a real app with its data in a temp folder, a Tk root, scaling
@@ -264,6 +269,9 @@ rsvp-desktop-reader/
 │   ├── test_seeking.py
 │   ├── test_seeking_in_the_windows.py
 │   ├── test_selection_preview.py
+│   ├── test_self_check.py
+│   ├── test_self_check_command_line.py
+│   ├── test_self_check_window.py
 │   ├── test_separator_line.py
 │   ├── test_settings_apply.py
 │   ├── test_settings_pickers_and_resets.py
@@ -303,7 +311,7 @@ rsvp-desktop-reader/
 │   ├── test_window_placement.py
 │   ├── test_wpm_keys.py
 │   └── test_wrapping_label.py
-├── main.py                  # Entry point
+├── main.py                  # Entry point (also handles --self-check)
 ├── RELEASING.md             # How a release is made, step by step
 └── requirements.txt         # Python dependencies
 ````
@@ -398,6 +406,7 @@ project on GitHub.
 - ~~Bold word starts in the edit box, with copying the bold into Word~~
 - ~~Upgrading the test suite 2.0~~
 - ~~Speaker cues~~
+- ~~CI/CD pipeline upgrade~~
 
 
 ## License
