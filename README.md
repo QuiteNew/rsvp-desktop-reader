@@ -407,6 +407,12 @@ project on GitHub.
 - ~~Upgrading the test suite 2.0~~
 - ~~Speaker cues~~
 - ~~CI/CD pipeline upgrade~~
+- Microsoft Store release, in progress:
+  - A privacy policy, on the docs site and linked from the README and the app
+  - A Store package (MSIX), the format the Store installs from
+  - New screenshots at the Store's minimum size of 1366 x 768
+  - A larger app icon for the Store tile
+  - The Store listing: the name, the age rating and the description
 
 
 ## License
