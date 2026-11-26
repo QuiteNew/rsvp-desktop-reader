@@ -1,11 +1,12 @@
-"""Tests for core/app_info.py, the app's name, version, licence and project
-link shown in the About dialog.
+"""Tests for core/app_info.py, the app's name, version, licence, project link
+and privacy policy link shown in the About dialog.
 
 The constants are only data, so most of what can go wrong is them drifting
 away from the places they have to agree with: the docs config, the README, the
-LICENSE file, the main window's title, and the release tags. These tests read
-those files and compare, so a rename, a new repository address or a forgotten
-version bump shows up here instead of in a released build."""
+LICENSE file, the main window's title, the privacy policy page, and the release
+tags. These tests read those files and compare, so a rename, a new repository
+address, a moved docs site or a forgotten version bump shows up here instead of
+in a released build."""
 
 import re
 import shutil
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from core.app_info import APP_NAME, APP_VERSION, LICENSE_NAME, REPO_URL
+from core.app_info import APP_NAME, APP_VERSION, LICENSE_NAME, PRIVACY_URL, REPO_URL
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -72,8 +73,12 @@ def test_repo_url_is_a_plain_github_project_address():
     assert not REPO_URL.endswith(("/", ".git"))
 
 
+def test_privacy_url_is_a_plain_https_page_address():
+    assert re.fullmatch(r"https://[\w.-]+(/[\w.-]+)*/", PRIVACY_URL)
+
+
 def test_shown_values_are_not_empty_or_padded():
-    for value in (APP_NAME, APP_VERSION, LICENSE_NAME, REPO_URL):
+    for value in (APP_NAME, APP_VERSION, LICENSE_NAME, REPO_URL, PRIVACY_URL):
         assert value
         assert value == value.strip()
 
@@ -88,6 +93,25 @@ def test_repo_url_matches_the_docs_config():
 
 def test_repo_url_is_the_one_the_readme_links_to():
     assert REPO_URL in _read("README.md")
+
+
+def test_privacy_url_is_the_privacy_page_on_the_docs_site():
+    """MkDocs turns docs/privacy.md into a privacy/ folder under the site's
+    address, so the link has to be exactly that, and the page has to exist and
+    be in the site's menu for the build to publish it where people can find
+    it. The Microsoft Store listing points at the same address."""
+    config = _read("mkdocs.yml")
+    match = re.search(r"^site_url:\s*(\S+)\s*$", config, flags=re.MULTILINE)
+    assert match, "mkdocs.yml has no site_url line"
+    assert PRIVACY_URL == match.group(1).rstrip("/") + "/privacy/"
+    assert (ROOT / "docs" / "privacy.md").is_file()
+    assert re.search(r"^\s*-\s*[^:]+:\s*privacy\.md\s*$", config, flags=re.MULTILINE), (
+        "docs/privacy.md is not in the nav in mkdocs.yml"
+    )
+
+
+def test_readme_links_to_the_privacy_policy():
+    assert "(docs/privacy.md)" in _read("README.md")
 
 
 def test_licence_name_matches_the_licence_file():

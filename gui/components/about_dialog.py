@@ -4,7 +4,7 @@ import webbrowser
 import customtkinter as ctk
 from PIL import Image
 
-from core.app_info import APP_NAME, APP_VERSION, LICENSE_NAME, REPO_URL
+from core.app_info import APP_NAME, APP_VERSION, LICENSE_NAME, PRIVACY_URL, REPO_URL
 from core.colors import blend_colors
 from gui.components.dialog_keys import bind_dialog_keys
 from gui.theme import (
@@ -19,18 +19,19 @@ from gui.theme import _ICON_PNG as APP_ICON_PNG
 
 class AboutDialog(ctk.CTkToplevel):
     """The small "About" popup behind the info button in the Settings window:
-    the app icon on the left, and on the right its name, version, licence and
-    a link to the GitHub project. What it says comes from core/app_info.py, so
-    there is one place to update at release time.
+    the app icon on the left, and on the right its name, version, licence, a
+    link to the GitHub project and, last, a link to the privacy policy. What it
+    says comes from core/app_info.py, so there is one place to update at
+    release time.
 
     Every colour here comes from the theme tokens in gui/theme.py (or is
     blended from them), so the dialog follows the light or dark theme the app
     started with, the same as the other popups. Two colours are not plain
     tokens: the quieter grey for the version and licence lines, and the link
-    blue. Both are blended from the theme's own colours instead of being
-    hard-coded, because a fixed grey or blue that reads well on the light
-    paper looks wrong on the dark one, and the raw DUSK_BLUE is a bit too
-    faint for small text on the light theme.
+    blue that both links share. Both are blended from the theme's own colours
+    instead of being hard-coded, because a fixed grey or blue that reads well
+    on the light paper looks wrong on the dark one, and the raw DUSK_BLUE is a
+    bit too faint for small text on the light theme.
 
     on_close, if given, is called once after the dialog goes away, whether it
     was closed by the button or by the window's own close control (both go
@@ -50,7 +51,9 @@ class AboutDialog(ctk.CTkToplevel):
 
         self.title("About")
         apply_app_icon(self)
-        center_over_parent(self, 460, 230)
+        # Tall enough for the privacy link under the project link, with the
+        # same bit of room to spare at the bottom the dialog had before it.
+        center_over_parent(self, 460, 262)
         self.resizable(False, False)
         self.configure(fg_color=HEARTH_PAPER)
         self.on_close = on_close
@@ -106,6 +109,18 @@ class AboutDialog(ctk.CTkToplevel):
         self._link.bind("<Enter>", self._show_link_hovered)
         self._link.bind("<Leave>", self._show_link_resting)
 
+        # The privacy policy goes last, under the project link, which is where
+        # people tend to look for it in an About box. It looks and behaves just
+        # like the link above, so the two read as a pair.
+        self._privacy_link = ctk.CTkLabel(
+            details, text="Privacy policy", text_color=self._link_color,
+            font=link_font, anchor="w", cursor="hand2",
+        )
+        self._privacy_link.pack(anchor="w", pady=(4, 0))
+        self._privacy_link.bind("<Button-1>", self._open_privacy_policy)
+        self._privacy_link.bind("<Enter>", self._show_privacy_link_hovered)
+        self._privacy_link.bind("<Leave>", self._show_privacy_link_resting)
+
         ctk.CTkButton(
             self, text="Close", width=90, corner_radius=10,
             fg_color=EMBER_GLOW, hover_color=EMBER_GLOW_HOVER, text_color=COCOA_INK,
@@ -142,9 +157,15 @@ class AboutDialog(ctk.CTkToplevel):
         )
 
     def _open_repo(self, _event=None) -> None:
-        """Opens the project page in the user's own browser. The only thing in
-        the app that reaches outside it, and only when this link is clicked."""
+        """Opens the project page in the user's own browser. This link and the
+        privacy link under it are the only things in the app that reach outside
+        it, and only when one of them is clicked."""
         webbrowser.open(REPO_URL)
+
+    def _open_privacy_policy(self, _event=None) -> None:
+        """Opens the privacy policy on the docs site in the user's own browser,
+        the same way the project link opens GitHub."""
+        webbrowser.open(PRIVACY_URL)
 
     def _show_link_hovered(self, _event=None) -> None:
         """Darkens the link to the ink colour while the pointer is over it."""
@@ -153,6 +174,15 @@ class AboutDialog(ctk.CTkToplevel):
     def _show_link_resting(self, _event=None) -> None:
         """Puts the link back to its own blue once the pointer leaves it."""
         self._link.configure(text_color=self._link_color)
+
+    def _show_privacy_link_hovered(self, _event=None) -> None:
+        """The privacy link's half of the same hover: ink while the pointer is
+        over it."""
+        self._privacy_link.configure(text_color=COCOA_INK)
+
+    def _show_privacy_link_resting(self, _event=None) -> None:
+        """And back to the link blue once the pointer leaves it."""
+        self._privacy_link.configure(text_color=self._link_color)
 
     def _reveal_now(self) -> None:
         self.update_idletasks()

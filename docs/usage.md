@@ -860,10 +860,11 @@ Settings.
 
 The small round **i** button in the top-right corner of the Settings window
 opens an About dialog. It shows the app's icon, its name and version, the
-license it is released under, and a link to the project on GitHub; clicking
-the link opens the project page in your browser. That link is the only thing
-in the app that reaches outside it, and only when you click it. **Close**, or
-the window's own close button, takes you back to Settings.
+license it is released under, a link to the project on GitHub, and under it a
+link to the [privacy policy](privacy.md). Clicking a link opens that page in
+your browser. These two links are the only things in the app that reach
+outside it, and only when you click one. **Close**, or the window's own close
+button, takes you back to Settings.
 
 The version shown there is the one to quote when you report a problem, or to
 compare against the latest release on the project's Releases page.

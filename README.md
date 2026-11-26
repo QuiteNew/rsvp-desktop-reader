@@ -52,6 +52,7 @@ reading this way (including where it helps and where it does not), see [The scie
 - [Built With](#built-with)
 - [Settings and Configuration](#settings-and-configuration)
 - [Roadmap](#roadmap)
+- [Privacy](#privacy)
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 
@@ -81,7 +82,8 @@ reading this way (including where it helps and where it does not), see [The scie
 - Searchable settings: the Defaults tab has a live search that filters by a
   setting's name or, when you turn on the toggle beside it, its description
 - An About dialog behind the small round **i** button at the top right of
-  Settings, showing the app's version, its license, and a link to the project
+  Settings, showing the app's version, its license, a link to the project and
+  a link to the privacy policy
 - Reading profiles: save how the reader feels (guide marks, pacing, rewind on
   resume, surrounding words, skipping, the +/- step, the scrubber and paragraph
   switches, the letter spacing, and the Speed and Word size defaults) under a
@@ -190,7 +192,7 @@ rsvp-desktop-reader/
 │   ├── settings_search.py   # Pure matching for the Settings search (name, keywords, description)
 │   ├── profiles.py          # Reading profiles: which settings a profile holds, name rules, loading saved ones
 │   ├── profile_apply.py     # Works out what applying a profile does (clamping, guide mark colour vs. theme)
-│   ├── app_info.py          # The app's name, version, license and project link, shown in the About dialog
+│   ├── app_info.py          # The app's name, version, license, project link and privacy policy link, shown in the About dialog
 │   ├── self_check.py        # The checks behind --self-check that need no window: libraries, PDF encryption and the file importers
 │   ├── text_fit.py          # Shortens a line of text with an ellipsis to fit a width (the header's title)
 │   ├── reopen.py            # Which transcript to open again at launch
@@ -213,6 +215,7 @@ rsvp-desktop-reader/
 │   ├── conftest.py          # Shared fixtures: a real app with its data in a temp folder, a Tk root, scaling
 │   ├── tk_helpers.py        # Shared helpers for driving Tk: settle, real clicks, finding widgets
 │   ├── edit_box_helpers.py  # Shared helpers for the edit box tests: the clipboard and Tk's real main loop
+│   ├── test_about_privacy_link.py
 │   ├── test_adding_a_transcript.py
 │   ├── test_app_info.py
 │   ├── test_bold_family.py
@@ -361,8 +364,8 @@ Settings are organized into six tabs:
   rather than while you're paused
 
 The small round **i** button at the top right of the Settings window opens an
-About dialog with the app's icon, name, version, license, and a link to the
-project on GitHub.
+About dialog with the app's icon, name, version, license, a link to the
+project on GitHub, and a link to the privacy policy.
 
 ## Roadmap
 
@@ -408,12 +411,20 @@ project on GitHub.
 - ~~Speaker cues~~
 - ~~CI/CD pipeline upgrade~~
 - Microsoft Store release, in progress:
-  - A privacy policy, on the docs site and linked from the README and the app
+  - ~~A privacy policy, on the docs site and linked from the README and the app~~
   - A Store package (MSIX), the format the Store installs from
   - New screenshots at the Store's minimum size of 1366 x 768
   - A larger app icon for the Store tile
   - The Store listing: the name, the age rating and the description
 
+
+## Privacy
+
+The app doesn't collect, send or share anything about you. Your transcripts and
+settings stay in plain files on your own computer, and it never goes online by
+itself. The only links out of it are the two in the About dialog, and they open
+in your browser when you click them. The [privacy policy](docs/privacy.md) says
+exactly what the app saves, where it saves it, and how to remove it.
 
 ## License
 
