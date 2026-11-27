@@ -296,6 +296,7 @@ rsvp-desktop-reader/
 │   ├── test_speakers.py
 │   ├── test_start_reading.py
 │   ├── test_storage.py
+│   ├── test_store_icons.py
 │   ├── test_suite_isolation.py
 │   ├── test_text_fit.py
 │   ├── test_theme_following_colours.py
@@ -319,6 +320,7 @@ rsvp-desktop-reader/
 ├── main.py                  # Entry point (also handles --self-check)
 ├── RELEASING.md             # How a release is made, step by step
 ├── requirements.txt         # Python dependencies
+├── store/                   # Draws the app icon at any size, for the Microsoft Store listing
 ├── THIRD_PARTY_NOTICES.md   # What the app is built with, what each part is for, and its license
 └── third_party_licenses.py  # Which license texts go into the build; RSVPReader.spec uses it
 ````
@@ -419,7 +421,7 @@ project on GitHub, and a link to the privacy policy.
   - ~~Third-party license notices, shipped inside the build~~
   - A Store package (MSIX), the format the Store installs from
   - New screenshots at the Store's minimum size of 1366 x 768
-  - A larger app icon for the Store tile
+  - ~~A larger app icon for the Store tile~~
   - The Store listing: the name, the age rating and the description
 
 
