@@ -211,6 +211,7 @@ rsvp-desktop-reader/
 │   ├── chime_player.py      # Plays the speaker cue chimes on Windows, from files it makes in the background
 │   ├── self_check.py        # The window half of --self-check: opens the real app, checks its bundled icons and fonts, writes the report
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
+├── licenses/                # The Roboto font's Apache license, the one third-party text that isn't copied in at build time
 ├── tests/                   # Automated test suite: the core engine, and the GUI through its real windows
 │   ├── conftest.py          # Shared fixtures: a real app with its data in a temp folder, a Tk root, scaling
 │   ├── tk_helpers.py        # Shared helpers for driving Tk: settle, real clicks, finding widgets
@@ -299,6 +300,7 @@ rsvp-desktop-reader/
 │   ├── test_text_fit.py
 │   ├── test_theme_following_colours.py
 │   ├── test_theme_fonts.py
+│   ├── test_third_party_licenses.py
 │   ├── test_timing.py
 │   ├── test_tokenizer.py
 │   ├── test_transcript_input_bold_live.py
@@ -316,7 +318,9 @@ rsvp-desktop-reader/
 │   └── test_wrapping_label.py
 ├── main.py                  # Entry point (also handles --self-check)
 ├── RELEASING.md             # How a release is made, step by step
-└── requirements.txt         # Python dependencies
+├── requirements.txt         # Python dependencies
+├── THIRD_PARTY_NOTICES.md   # What the app is built with, what each part is for, and its license
+└── third_party_licenses.py  # Which license texts go into the build; RSVPReader.spec uses it
 ````
 <br>
 
@@ -412,6 +416,7 @@ project on GitHub, and a link to the privacy policy.
 - ~~CI/CD pipeline upgrade~~
 - Microsoft Store release, in progress:
   - ~~A privacy policy, on the docs site and linked from the README and the app~~
+  - ~~Third-party license notices, shipped inside the build~~
   - A Store package (MSIX), the format the Store installs from
   - New screenshots at the Store's minimum size of 1366 x 768
   - A larger app icon for the Store tile
@@ -434,6 +439,13 @@ The bundled Fredoka, Quicksand and OpenDyslexic fonts are each released under
 the SIL Open Font License, not the MIT license. A copy of each font's license
 sits next to the font files in [assets/fonts](assets/fonts), and the fonts are
 credited under Acknowledgments. The MIT license covers the project's own code.
+
+Everything else the app is built on is listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), with what each part is for and
+the license it's shared under. The builds carry the full text of each of those
+licenses, so they come along with every download. The Linux and macOS builds
+also pick up a few libraries from the machine they're built on, and the
+notices page says which ones still need their texts added.
 
 The bold word starts look is similar to the one sold as Bionic Reading, a
 trademark of BRCG Casutt GmbH. This project is not affiliated with or endorsed by

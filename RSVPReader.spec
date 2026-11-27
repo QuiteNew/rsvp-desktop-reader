@@ -25,6 +25,18 @@ datas += [
     ('assets/icons', 'assets/icons'),
 ]
 
+# The licence texts for everything the app ships with: the app's own LICENSE,
+# THIRD_PARTY_NOTICES.md, and the licences of Python and of every package the
+# build includes, copied from the versions installed right now.
+# third_party_licenses.py works out the list and stops the build with an
+# error if any text is missing, so a release can't go out without one. The
+# spec's own folder goes on the import path first, because PyInstaller runs
+# this file without it.
+sys.path.insert(0, SPECPATH)
+from third_party_licenses import bundle_datas
+
+datas += bundle_datas()
+
 a = Analysis(
     ['main.py'],
     pathex=[],
