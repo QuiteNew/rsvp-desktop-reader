@@ -16,14 +16,22 @@ they always match what's inside.
 | Component | What it's for | Licence | Full text |
 | --- | --- | --- | --- |
 | [Python](https://www.python.org/) | Runs the app | Python Software Foundation License | `licenses/python/LICENSE.txt` |
+| Software built into Python | Smaller parts of Python, each named in the list | Several, each given in full in the list | `licenses/Python-incorporated-software.txt` |
+| [expat](https://libexpat.github.io/), built into Python | Python's XML reader | MIT | `licenses/expat-MIT.txt` |
+| [libmpdec](https://www.bytereef.org/mpdecimal/), built into Python | Python's decimal arithmetic | BSD 2-Clause | `licenses/libmpdec-BSD-2-Clause.txt` |
 
 On Windows, Python's licence file also holds the terms for the parts it brings
 with it, one after another: the Microsoft C runtime files, bzip2, libffi,
 OpenSSL, and Tcl and Tk, which draw the app's windows. Three of them don't
 carry their names. OpenSSL's is the Apache License 2.0 text that comes after
 libffi's, and Tcl's and Tk's are the two texts from the University of
-California at the end. Licences for the smaller pieces built into Python
-itself are listed on the
+California at the end.
+
+Python also has smaller pieces of other people's code built into it. Its
+documentation lists them with their licences, and the build carries that
+list as it stood in Python 3.13.2. The list gives older copyright lines for
+expat and libmpdec than the versions Python now uses, so their current texts
+come along too. The newest version of the list is on the
 [Python licence page](https://docs.python.org/3/license.html).
 
 ## Packages

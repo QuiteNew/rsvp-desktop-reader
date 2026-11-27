@@ -211,7 +211,7 @@ rsvp-desktop-reader/
 │   ├── chime_player.py      # Plays the speaker cue chimes on Windows, from files it makes in the background
 │   ├── self_check.py        # The window half of --self-check: opens the real app, checks its bundled icons and fonts, writes the report
 │   └── components/          # Every individual UI piece: header, canvas, dialogs, etc.
-├── licenses/                # The Roboto font's Apache license, the one third-party text that isn't copied in at build time
+├── licenses/                # Third-party license texts nothing installed carries: the Roboto font's, and those of the code built into Python
 ├── tests/                   # Automated test suite: the core engine, and the GUI through its real windows
 │   ├── conftest.py          # Shared fixtures: a real app with its data in a temp folder, a Tk root, scaling
 │   ├── tk_helpers.py        # Shared helpers for driving Tk: settle, real clicks, finding widgets

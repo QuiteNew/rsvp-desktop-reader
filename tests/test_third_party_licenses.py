@@ -26,6 +26,7 @@ import third_party_licenses as licences
 ROOT = Path(__file__).resolve().parent.parent
 NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 ROBOTO_LICENCE = ROOT / licences.LICENSES_FOLDER / "Roboto-Apache-2.0.txt"
+PYTHON_BUILT_IN = ROOT / licences.LICENSES_FOLDER / "Python-incorporated-software.txt"
 
 
 def _canonical(name: str) -> str:
@@ -168,7 +169,7 @@ def test_the_spec_adds_the_licences_to_the_build():
     assert "datas += bundle_datas()" in spec
 
 
-# ---- Roboto, the one text kept in the repository ----
+# ---- The texts kept in the repository ----
 
 def test_the_roboto_licence_is_the_apache_licence():
     text = ROBOTO_LICENCE.read_text(encoding="utf-8")
@@ -192,7 +193,37 @@ def test_the_roboto_fonts_customtkinter_ships_still_say_apache():
         assert phrase.encode("ascii") in data or phrase.encode("utf-16-be") in data, font.name
 
 
+def test_pythons_list_of_built_in_code_names_expat_and_libmpdec():
+    """The Windows build carries pyexpat.pyd and _decimal.pyd, built from
+    expat and libmpdec, and Python's LICENSE.txt has neither licence. Python's
+    own list from its documentation is where they're credited."""
+    lines = PYTHON_BUILT_IN.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "Licenses and Acknowledgements for Incorporated Software"
+    for heading in ("expat", "libmpdec"):
+        assert heading in lines, heading
+        assert lines[lines.index(heading) + 1] == "-" * len(heading), heading
+
+
+def test_the_current_expat_and_libmpdec_texts_name_their_holders():
+    """Python's list gives older copyright lines for these two, so the
+    current ones are kept as well, from the versions Python 3.13 builds with."""
+    expat = (ROOT / licences.LICENSES_FOLDER / "expat-MIT.txt").read_text(encoding="utf-8")
+    assert "Expat maintainers" in expat
+    assert "Permission is hereby granted, free of charge" in expat
+    libmpdec = (ROOT / licences.LICENSES_FOLDER / "libmpdec-BSD-2-Clause.txt").read_text(encoding="utf-8")
+    assert "Stefan Krah" in libmpdec
+    assert "Redistributions in binary form must reproduce" in libmpdec
+
+
 # ---- The notices page ----
+
+def test_every_text_kept_in_the_licenses_folder_is_on_the_notices_page():
+    """The whole licenses/ folder goes into the build, so anything put there
+    should be named on the notices page, or nobody will know what it's for."""
+    text = NOTICES.read_text(encoding="utf-8")
+    for file in sorted((ROOT / licences.LICENSES_FOLDER).iterdir()):
+        assert f"`{licences.LICENSES_FOLDER}/{file.name}`" in text, f"{file.name} isn't on THIRD_PARTY_NOTICES.md"
+
 
 def test_the_notices_page_names_every_bundled_package():
     text = NOTICES.read_text(encoding="utf-8")

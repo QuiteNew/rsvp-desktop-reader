@@ -7,9 +7,11 @@ not just the source repository.
 
 Most of the texts are copied at build time from the packages installed on the
 build machine, so they always match the versions actually being shipped, even
-after Dependabot moves one on. The one text kept in the repository is the
-Apache licence for the Roboto fonts that CustomTkinter brings along, because
-CustomTkinter doesn't ship it.
+after Dependabot moves one on. The rest live in the licenses/ folder of the
+repository, because nothing installed carries them: the Apache licence for
+the Roboto fonts that CustomTkinter brings along, and the licences of the
+code built into Python itself, which Python's installer leaves out of its own
+LICENSE.txt. The whole folder goes into the build.
 
 RSVPReader.spec calls bundle_datas() to add everything to the build, and
 tests/test_third_party_licenses.py checks the lists here against what is
