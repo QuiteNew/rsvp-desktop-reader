@@ -423,6 +423,7 @@ project on GitHub, and a link to the privacy policy.
   - New screenshots at the Store's minimum size of 1366 x 768
   - ~~A larger app icon for the Store tile~~
   - The Store listing: the name, the age rating and the description
+- Smoother scrolling in the settings window
 
 
 ## Privacy

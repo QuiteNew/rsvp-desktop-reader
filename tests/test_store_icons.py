@@ -5,8 +5,8 @@ The one picture that exists is assets/icons/app.png at 256 pixels, and the
 script's numbers were measured from it. The check that matters most is the
 first one: the icon drawn at 256 has to land on top of that picture. If a
 number is changed by accident, or the drawing is changed so a shape moves,
-that comparison catches it. The rest check the colours, the corners, the SVG
-and the files the script writes."""
+that comparison catches it. The rest check the colours, the corners, the SVG,
+the files the script writes and the logo set for the Store package."""
 
 import importlib.util
 import math
@@ -293,6 +293,96 @@ def test_without_a_folder_it_writes_under_build(tmp_path, monkeypatch, capsys):
 def test_with_a_folder_it_writes_there(tmp_path, capsys):
     assert icons.main(["make_icons.py", str(tmp_path / "somewhere")]) == 0
     assert (tmp_path / "somewhere" / "app-icon.svg").is_file()
+
+
+# ---- The logos inside the Store package ----
+
+# Written out in full on purpose. The manifest names "Square44x44Logo.png" and
+# Windows finds the rest by these exact names, so a rename in the script has to
+# show up here as a failing test and not slip through.
+EXPECTED_LOGOS = {
+    "StoreLogo.scale-100.png": 50,
+    "StoreLogo.scale-125.png": 63,
+    "StoreLogo.scale-150.png": 75,
+    "StoreLogo.scale-200.png": 100,
+    "StoreLogo.scale-400.png": 200,
+    "Square44x44Logo.scale-100.png": 44,
+    "Square44x44Logo.scale-125.png": 55,
+    "Square44x44Logo.scale-150.png": 66,
+    "Square44x44Logo.scale-200.png": 88,
+    "Square44x44Logo.scale-400.png": 176,
+    "Square150x150Logo.scale-100.png": 150,
+    "Square150x150Logo.scale-125.png": 188,
+    "Square150x150Logo.scale-150.png": 225,
+    "Square150x150Logo.scale-200.png": 300,
+    "Square150x150Logo.scale-400.png": 600,
+    "Square44x44Logo.targetsize-16.png": 16,
+    "Square44x44Logo.targetsize-24.png": 24,
+    "Square44x44Logo.targetsize-32.png": 32,
+    "Square44x44Logo.targetsize-48.png": 48,
+    "Square44x44Logo.targetsize-256.png": 256,
+    "Square44x44Logo.targetsize-16_altform-unplated.png": 16,
+    "Square44x44Logo.targetsize-24_altform-unplated.png": 24,
+    "Square44x44Logo.targetsize-32_altform-unplated.png": 32,
+    "Square44x44Logo.targetsize-48_altform-unplated.png": 48,
+    "Square44x44Logo.targetsize-256_altform-unplated.png": 256,
+}
+
+
+def test_the_package_logos_are_the_ones_windows_looks_for_at_the_sizes_it_wants():
+    assert icons.msix_logo_sizes() == EXPECTED_LOGOS
+
+
+@pytest.mark.parametrize("base_name, base_size", [("StoreLogo", 50), ("Square44x44Logo", 44), ("Square150x150Logo", 150)])
+def test_each_scale_is_the_base_size_times_the_percentage_to_the_nearest_pixel(base_name, base_size):
+    sizes = icons.msix_logo_sizes()
+    for percent in (100, 125, 150, 200, 400):
+        expected = math.floor(base_size * percent / 100 + 0.5)
+        assert sizes[f"{base_name}.scale-{percent}.png"] == expected
+
+
+def test_every_exact_size_comes_plain_and_unplated():
+    sizes = icons.msix_logo_sizes()
+    for size in (16, 24, 32, 48, 256):
+        assert sizes[f"Square44x44Logo.targetsize-{size}.png"] == size
+        assert sizes[f"Square44x44Logo.targetsize-{size}_altform-unplated.png"] == size
+
+
+def test_it_writes_every_package_logo_at_its_size(tmp_path):
+    written = icons.write_msix_logos(tmp_path / "Assets")
+    assert sorted(path.name for path in written) == sorted(EXPECTED_LOGOS)
+    for name, size in EXPECTED_LOGOS.items():
+        with Image.open(tmp_path / "Assets" / name) as logo:
+            assert logo.size == (size, size), name
+            assert logo.mode == "RGBA", name
+
+
+def test_the_package_logos_are_the_icon_drawn_at_that_size(tmp_path):
+    """Same picture as render() gives, not a stretched copy of a bigger one, so
+    the small ones are drawn small and stay crisp."""
+    icons.write_msix_logos(tmp_path)
+    for name, size in EXPECTED_LOGOS.items():
+        with Image.open(tmp_path / name) as logo:
+            assert logo.tobytes() == icons.render(size).tobytes(), name
+
+
+def test_the_package_logos_have_see_through_corners_and_the_amber_bar(tmp_path):
+    icons.write_msix_logos(tmp_path)
+    for name, size in EXPECTED_LOGOS.items():
+        with Image.open(tmp_path / name) as logo:
+            assert logo.getpixel((0, 0))[3] == 0, name
+            assert logo.getpixel((size - 1, size - 1))[3] == 0, name
+            if size >= 44:  # below that the bar is about a pixel wide and blends
+                bar_x = round(icons.BAR_CENTRES_X[1] / icons.CANVAS * size)
+                assert _close(logo.getpixel((bar_x, size // 2)), icons.AMBER, tolerance=12), name
+
+
+def test_the_package_logos_are_not_written_with_the_listing_pictures(tmp_path):
+    """The listing files and the package files are separate sets: the Store
+    listing takes the 300 pixel tile on its own, and the package must not end
+    up with a stray copy of it or of the SVG."""
+    icons.write_all(tmp_path / "listing")
+    assert not any(path.name.startswith(("Square", "StoreLogo")) for path in (tmp_path / "listing").iterdir())
 
 
 # ---- It stays out of the app ----

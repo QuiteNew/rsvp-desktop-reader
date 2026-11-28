@@ -15,8 +15,10 @@ Run it from the project root:
     python store/make_icons.py [folder]
 
 It writes app-icon.svg, app-icon-1024.png and store-tile-300.png into the
-folder, which is build/store-assets if none is given. The app itself never
-imports this file, and the build doesn't copy it."""
+folder, which is build/store-assets if none is given. The Store package's own
+logos (write_msix_logos) are written by the packaging script, into the
+package's Assets folder. The app itself never imports this file, and the build
+doesn't copy it."""
 
 import sys
 from pathlib import Path
@@ -52,6 +54,21 @@ OUTPUTS = {
     "app-icon-1024.png": 1024,
     "store-tile-300.png": 300,
 }
+
+
+# The logos inside the Store package. Windows looks for each one by its name
+# and takes the picture that suits the screen: the ".scale-NNN" ones for a
+# display set to NNN percent, the ".targetsize-NN" ones where it needs an icon
+# of exactly NN pixels (the taskbar, the Start menu's list, Alt+Tab). The
+# manifest only names the plain file, "Square44x44Logo.png", and Windows adds
+# the rest itself, so the names here have to follow its pattern exactly.
+LOGO_SCALES = (100, 125, 150, 200, 400)
+LOGO_BASE_SIZES = {
+    "StoreLogo": 50,  # the package's own logo, used by the Store and Settings
+    "Square44x44Logo": 44,  # the app list, the taskbar, the title bar
+    "Square150x150Logo": 150,  # the Start menu tile
+}
+APP_LIST_SIZES = (16, 24, 32, 48, 256)  # exact sizes Windows asks the small logo for
 
 
 def eye_circle_radius() -> float:
@@ -140,6 +157,38 @@ def render(size: int) -> Image.Image:
     # Pillow shrinks see-through pictures with the colour and the see-through
     # part kept apart, so the corners don't pick up a dark edge.
     return picture.resize((size, size), Image.BOX)
+
+
+def msix_logo_sizes() -> dict[str, int]:
+    """Every logo file the Store package carries, by file name, with its size
+    in pixels. A size is the base size times the scale, rounded to the nearest
+    pixel, which is how Windows works it out (50 x 125% is 63, not 62)."""
+    sizes = {}
+    for base_name, base_size in LOGO_BASE_SIZES.items():
+        for percent in LOGO_SCALES:
+            sizes[f"{base_name}.scale-{percent}.png"] = (base_size * percent + 50) // 100
+    # The small logo also comes at exact sizes, once as it is and once with
+    # "unplated", which tells Windows to draw it straight onto the taskbar
+    # without the coloured square it would otherwise put behind it.
+    for size in APP_LIST_SIZES:
+        sizes[f"Square44x44Logo.targetsize-{size}.png"] = size
+        sizes[f"Square44x44Logo.targetsize-{size}_altform-unplated.png"] = size
+    return sizes
+
+
+def write_msix_logos(folder: Path) -> list[Path]:
+    """Writes every logo the Store package carries into folder (the package's
+    Assets folder) and returns the files."""
+    folder.mkdir(parents=True, exist_ok=True)
+    drawn: dict[int, Image.Image] = {}  # several files share a size
+    written = []
+    for name, size in msix_logo_sizes().items():
+        if size not in drawn:
+            drawn[size] = render(size)
+        path = folder / name
+        drawn[size].save(path)
+        written.append(path)
+    return written
 
 
 def write_all(folder: Path) -> list[Path]:
