@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The manifest for the Microsoft Store package. store/build_msix.py copies it
+  into the package and fills in the version, which comes from APP_VERSION in
+  core/app_info.py, so the number is only ever written down in one place.
+
+  The three identity values (Name, Publisher, PublisherDisplayName) are the
+  ones Partner Center gave the reserved name "RSVP Reader", under Product
+  identity. They have to match it exactly or the Store turns the upload down.
+
+  The app is an ordinary desktop program, built by PyInstaller into the
+  RSVPReader folder, so it runs as a full trust app (runFullTrust) and not
+  inside the Store's sandbox. It keeps its data in ~/.rsvp_reader as it always
+  has, which is outside the package, so the data stays put across updates.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="QuiteNew.RSVPReader"
+    Publisher="CN=B3731F9D-170C-4DED-8F8B-5051D9BDE67E"
+    Version="__VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>RSVP Reader</DisplayName>
+    <PublisherDisplayName>QuiteNew</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="RSVPReader" Executable="RSVPReader\RSVPReader.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="RSVP Reader"
+        Description="Reads a transcript to you one word at a time, with the letter your eye lands on marked."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
