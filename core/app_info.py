@@ -15,7 +15,7 @@ submitted, so if the docs site ever moves, this and the Store listing both
 need the new one."""
 
 APP_NAME = "RSVP Reader"
-APP_VERSION = "4.1.1"
+APP_VERSION = "4.2.0"
 REPO_URL = "https://github.com/QuiteNew/rsvp-desktop-reader"
 PRIVACY_URL = "https://quitenew.github.io/rsvp-desktop-reader/privacy/"
 LICENSE_NAME = "MIT"
